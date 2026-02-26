@@ -1,0 +1,62 @@
+# Tiny config — GPT-2 Small (124M params)
+# Single A10G GPU (24GB VRAM)
+
+model:
+  name: "gpt2"                    # HuggingFace model ID
+  n_layer: 12
+  n_head: 12
+  n_embd: 768
+  vocab_size: 50257
+  block_size: 1024                # max sequence length
+  dropout: 0.1
+  confidence_head_hidden: 256     # hidden dim for confidence MLP
+
+training:
+  # Optimization
+  batch_size: 8
+  gradient_accumulation_steps: 4  # effective batch = 32
+  max_steps: 50000
+  learning_rate: 3.0e-4
+  weight_decay: 0.1
+  warmup_steps: 2000
+  min_learning_rate: 3.0e-5       # cosine decay floor
+  max_grad_norm: 1.0
+  dtype: "bfloat16"
+
+  # Loss weighting
+  ar_loss_weight: 1.0
+  diff_loss_weight: 1.0
+  conf_loss_weight: 0.1
+
+  # Diffusion
+  mask_token_id: 50256             # GPT-2 <|endoftext|> repurposed as [MASK]
+  min_mask_ratio: 0.1
+  max_mask_ratio: 1.0
+
+  # Confidence
+  confidence_threshold: 0.8       # escalate to System 2 below this
+
+  # Checkpointing
+  checkpoint_every: 5000
+  checkpoint_dir: "checkpoints/"
+
+  # Logging
+  log_every: 100
+  eval_every: 1000
+  eval_steps: 50
+  wandb_project: "dual-process-lm"
+  wandb_run_name: "tiny-v1"
+
+data:
+  dataset: "openwebtext"
+  num_workers: 4
+  max_length: 1024
+
+smoke_test:
+  max_steps: 100
+  batch_size: 2
+  gradient_accumulation_steps: 1
+  log_every: 10
+  eval_every: 50
+  eval_steps: 5
+  checkpoint_every: 50
