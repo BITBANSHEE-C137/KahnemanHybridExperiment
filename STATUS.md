@@ -44,6 +44,31 @@
 - [x] `test_training.py` — LR schedule (5 tests)
 - [x] `test_evaluation.py` — AUROC, ECE, full evaluate pipeline (20 tests -- note: 5 overlap from metrics)
 
+## Infrastructure
+
+| Component | Status | Details |
+|---|---|---|
+| S3 bucket | Migrated | `s3://ml-lab-004507070771/dual-system-research-data/` |
+| Instance type | Active | g5.2xlarge — NVIDIA A10G (24GB VRAM) |
+| EBS root volume | 100GB | OS + Python 3.12 + ML stack (37GB used) |
+| Ephemeral NVMe | 419GB | `/opt/dlami/nvme` — runtime data (HF cache, checkpoints) |
+| Deploy scripts | Updated | bootstrap.sh, sync-checkpoints.sh, dashboard.py in S3 |
+
+## Environment (baked into AMI)
+
+| Package | Version |
+|---|---|
+| Python | 3.12.10 |
+| PyTorch | 2.6.0+cu124 |
+| CUDA | 12.4 (driver 580.126.09) |
+| transformers | 5.2.0 |
+| datasets | 4.6.0 |
+| accelerate | 1.12.0 |
+| wandb | 0.25.0 |
+| safetensors | 0.7.0 |
+| einops | 0.8.2 |
+| scipy | 1.17.1 |
+
 ## What's Not Built Yet
 
 ### Config

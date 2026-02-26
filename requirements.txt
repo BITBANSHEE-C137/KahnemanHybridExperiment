@@ -1,8 +1,23 @@
+# Core ML
 torch>=2.5.0
+torchvision
+torchaudio
+
+# HuggingFace
 transformers>=4.40.0
-datasets>=2.19.0
-wandb>=0.17.0
+datasets>=3.0.0
+accelerate>=1.0.0
+safetensors>=0.4.0
+tokenizers>=0.20.0
+huggingface-hub>=0.25.0
+
+# Experiment tracking
+wandb>=0.18.0
+
+# Utilities
+einops>=0.8.0
 pyyaml>=6.0
-pytest>=8.0.0
-numpy>=1.26.0
 tqdm>=4.66.0
+scipy>=1.14.0
+numpy>=1.26.0
+pytest>=8.0.0
