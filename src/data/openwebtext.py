@@ -1,6 +1,6 @@
 """Data loading for OpenWebText via HuggingFace datasets.
 
-Tokenizes and chunks text into fixed-length sequences for training.
+Tokenizes and chunks text into fixed-length sequences for training and evaluation.
 """
 
 import torch
@@ -96,6 +96,42 @@ def create_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
         dataset,
         batch_size=train_cfg["batch_size"],
         shuffle=True,
+        num_workers=data_cfg.get("num_workers", 4),
+        pin_memory=True,
+        drop_last=True,
+    )
+
+
+def create_eval_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
+    """Create a DataLoader for evaluation.
+
+    Uses the last N documents of OpenWebText as a held-out eval set.
+    OpenWebText only has a 'train' split, so we use HuggingFace slice syntax
+    to take a deterministic tail slice that doesn't overlap with training data
+    (which loads from the beginning).
+
+    Args:
+        config: Full configuration dictionary.
+        smoke_test: If True, use a smaller eval set.
+
+    Returns:
+        DataLoader yielding batches of token ID tensors.
+    """
+    data_cfg = config["data"]
+    train_cfg = config["smoke_test"] if smoke_test else config["training"]
+
+    eval_samples = 500 if smoke_test else 5000
+
+    dataset = OpenWebTextDataset(
+        max_length=data_cfg.get("max_length", 1024),
+        split=f"train[-{eval_samples}:]",
+        max_samples=None,
+    )
+
+    return DataLoader(
+        dataset,
+        batch_size=train_cfg["batch_size"],
+        shuffle=False,
         num_workers=data_cfg.get("num_workers", 4),
         pin_memory=True,
         drop_last=True,
