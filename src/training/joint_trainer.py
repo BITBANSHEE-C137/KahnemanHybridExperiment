@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import math
 import time
@@ -24,6 +25,13 @@ from src.model.dual_process_gpt2 import DualProcessGPT2
 from src.model.masking import create_mask
 from src.data.openwebtext import create_dataloader, create_eval_dataloader
 from src.evaluation.evaluator import evaluate
+from src.utils.s3_sync import (
+    upload_checkpoint,
+    upload_metrics,
+    upload_training_log,
+    SpotTerminationHandler,
+    DATA_DIR,
+)
 
 
 def get_lr(step: int, warmup_steps: int, max_steps: int, max_lr: float, min_lr: float) -> float:
@@ -123,8 +131,17 @@ def train(
     conf_weight = train_cfg["conf_loss_weight"]
     log_every = train_cfg["log_every"]
     checkpoint_every = train_cfg["checkpoint_every"]
-    checkpoint_dir = Path(train_cfg["checkpoint_dir"])
+    checkpoint_dir = Path(os.environ.get("CHECKPOINT_DIR", train_cfg["checkpoint_dir"]))
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    # Register spot termination handler for SIGTERM
+    spot_handler = SpotTerminationHandler(checkpoint_dir)
+    spot_handler.register()
+
+    # Training log
+    log_dir = DATA_DIR / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    training_log: list[dict] = []
 
     # Gradient scaler for mixed precision
     scaler = torch.amp.GradScaler("cuda", enabled=(dtype == torch.bfloat16))
@@ -210,6 +227,14 @@ def train(
                     "conf_loss": total_conf_loss,
                     "lr": lr,
                 }, step=step)
+            training_log.append({
+                "step": step,
+                "ar_loss": total_ar_loss,
+                "diff_loss": total_diff_loss,
+                "conf_loss": total_conf_loss,
+                "lr": lr,
+                "time": elapsed,
+            })
 
         # Evaluation
         if step % eval_every == 0:
@@ -227,6 +252,7 @@ def train(
                 wandb_run.log({
                     f"eval/{k}": v for k, v in eval_metrics.items()
                 }, step=step)
+            upload_metrics(eval_metrics, step)
 
         # Checkpoint
         if step % checkpoint_every == 0:
@@ -238,8 +264,18 @@ def train(
                 "config": config,
             }, ckpt_path)
             print(f"Saved checkpoint: {ckpt_path}")
+            upload_checkpoint(ckpt_path, step)
 
     print(f"Training complete. {step} steps in {time.time() - t0:.1f}s")
+
+    # Save and upload training log
+    try:
+        log_path = log_dir / f"training_log_{int(time.time())}.json"
+        log_path.write_text(json.dumps(training_log, indent=2))
+        upload_training_log(log_path)
+        print(f"Training log saved: {log_path}")
+    except Exception as e:
+        print(f"Failed to save training log: {e}")
 
     if wandb_run:
         wandb_run.finish()

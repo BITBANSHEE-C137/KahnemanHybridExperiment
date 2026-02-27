@@ -8,8 +8,11 @@ Usage:
 """
 
 import argparse
+import json
 import math
+import os
 import time
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
@@ -18,6 +21,7 @@ from datasets import load_dataset
 from transformers import GPT2Tokenizer
 
 from src.model.dual_process_gpt2 import DualProcessGPT2
+from src.utils.s3_sync import upload_benchmark_results, DATA_DIR
 
 
 def load_model(config: dict, checkpoint_path: str | None = None) -> DualProcessGPT2:
@@ -318,6 +322,23 @@ def main() -> None:
     print(f"  WikiText-103 done in {time.time() - t0:.1f}s")
 
     print_results(lambada, wikitext, step)
+
+    # Save results JSON and upload to S3
+    try:
+        benchmarks_dir = DATA_DIR / "benchmarks"
+        benchmarks_dir.mkdir(parents=True, exist_ok=True)
+        results_path = benchmarks_dir / f"benchmark_step_{step}_{int(time.time())}.json"
+        results = {
+            "step": step,
+            "timestamp": time.time(),
+            "lambada": lambada,
+            "wikitext": wikitext,
+        }
+        results_path.write_text(json.dumps(results, indent=2))
+        upload_benchmark_results(results_path)
+        print(f"Benchmark results saved: {results_path}")
+    except Exception as e:
+        print(f"Failed to save benchmark results: {e}")
 
     if not args.no_wandb:
         log_to_wandb(lambada, wikitext, step)
