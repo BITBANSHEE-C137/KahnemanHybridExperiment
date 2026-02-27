@@ -19,16 +19,21 @@ echo "Pulling operational files from S3..."
 aws s3 cp "s3://$S3_BUCKET/deploy/dashboard.py" "$PROJECT/dashboard.py" --region "$REGION"
 aws s3 cp "s3://$S3_BUCKET/deploy/STATUS.md" "$PROJECT/STATUS.md" --region "$REGION" || true
 
+# ── Fetch W&B API key from Secrets Manager ──
+echo "Fetching W&B API key from Secrets Manager..."
+WANDB_API_KEY=$(aws secretsmanager get-secret-value --secret-id "ml-lab/wandb-api-key" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
+
 # ── Ubuntu user environment ──
 echo "Configuring ubuntu user environment..."
-sudo -u ubuntu bash -c "
+sudo -u ubuntu bash << ENVBLOCK
   # Clean old env vars
-  sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d' ~/.bashrc
+  sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /WANDB_API_KEY/d' ~/.bashrc
 
   # Inject env vars
-  echo 'export GH_TOKEN=\"$GH_TOKEN\"' >> ~/.bashrc
+  echo 'export GH_TOKEN="$GH_TOKEN"' >> ~/.bashrc
   echo 'export HF_HOME=$DATA_DIR/hf_cache' >> ~/.bashrc
   echo 'export CHECKPOINT_DIR=$DATA_DIR/checkpoints' >> ~/.bashrc
+  echo 'export WANDB_API_KEY="$WANDB_API_KEY"' >> ~/.bashrc
 
   # Git credentials
   echo 'https://x-access-token:$GH_TOKEN@github.com' > ~/.git-credentials
@@ -37,7 +42,7 @@ sudo -u ubuntu bash -c "
   # Pull latest code
   cd $PROJECT
   git pull --ff-only || true
-"
+ENVBLOCK
 
 # ── Pull and start checkpoint sync ──
 echo "Setting up checkpoint sync to S3..."
