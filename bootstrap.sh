@@ -11,7 +11,7 @@ echo "=== Bootstrap.sh started at $(date -u) ==="
 
 # ── Ephemeral NVMe setup ──
 echo "Setting up ephemeral NVMe at $DATA_DIR..."
-sudo mkdir -p "$DATA_DIR"/{hf_cache,checkpoints,logs,benchmarks,eval_metrics}
+sudo mkdir -p "$DATA_DIR"/{hf_cache,checkpoints,logs,benchmarks,eval_metrics,preprocessed}
 sudo chown -R ubuntu:ubuntu "$DATA_DIR"
 
 # ── Fetch W&B API key from Secrets Manager ──
@@ -22,7 +22,7 @@ WANDB_API_KEY=$(aws secretsmanager get-secret-value --secret-id "ml-lab/wandb-ap
 echo "Configuring ubuntu user environment..."
 sudo -u ubuntu bash << ENVBLOCK
   # Clean old env vars
-  sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /WANDB_API_KEY/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d' ~/.bashrc
+  sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /WANDB_API_KEY/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d' ~/.bashrc
 
   # Inject env vars
   echo 'export GH_TOKEN="$GH_TOKEN"' >> ~/.bashrc
@@ -32,6 +32,7 @@ sudo -u ubuntu bash << ENVBLOCK
   echo 'export S3_BUCKET="$S3_BUCKET"' >> ~/.bashrc
   echo 'export DATA_DIR="$DATA_DIR"' >> ~/.bashrc
   echo 'export AWS_DEFAULT_REGION="$REGION"' >> ~/.bashrc
+  echo 'export PREPROCESSED_DATA_DIR="$DATA_DIR/preprocessed"' >> ~/.bashrc
 
   # Git credentials
   echo 'https://x-access-token:$GH_TOKEN@github.com' > ~/.git-credentials
@@ -56,6 +57,12 @@ aws s3 sync "s3://$S3_BUCKET/eval_metrics/" "$DATA_DIR/eval_metrics/" --region "
 aws s3 sync "s3://$S3_BUCKET/benchmarks/" "$DATA_DIR/benchmarks/" --region "$REGION" || true
 echo "Restored artifacts:"
 ls -la "$DATA_DIR/checkpoints/" 2>/dev/null || echo "  (no checkpoints)"
+
+# ── Sync pre-processed training data from S3 ──
+echo "Syncing pre-processed data from S3..."
+aws s3 sync "s3://$S3_BUCKET/preprocessed/" "$DATA_DIR/preprocessed/" --region "$REGION" || true
+echo "Pre-processed data:"
+ls -lh "$DATA_DIR/preprocessed/" 2>/dev/null || echo "  (no preprocessed data)"
 
 # ── Pull and start artifact sync daemon ──
 echo "Setting up artifact sync to S3..."

@@ -1,13 +1,79 @@
-"""Data loading for OpenWebText via HuggingFace datasets.
+"""Data loading for OpenWebText.
 
-Tokenizes and chunks text into fixed-length sequences for training and evaluation.
+Supports two backends:
+1. Pre-processed uint16 binary files (fast, zero-copy via numpy memmap)
+2. HuggingFace datasets streaming fallback (slow, used for smoke tests)
+
+The binary format is produced by scripts/prepare_openwebtext.py.
 """
 
+import os
+from pathlib import Path
+
+import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import GPT2Tokenizer
 from datasets import load_dataset
 from typing import Optional
+
+PREPROCESSED_DATA_DIR = os.environ.get(
+    "PREPROCESSED_DATA_DIR", "/opt/dlami/nvme/ml-lab/preprocessed"
+)
+
+
+def _preprocessed_available(split: str = "train") -> Optional[Path]:
+    """Check if preprocessed binary file exists for the given split.
+
+    Args:
+        split: "train" or "eval".
+
+    Returns:
+        Path to the .bin file if it exists, None otherwise.
+    """
+    filename = f"openwebtext_{split}.bin"
+    path = Path(PREPROCESSED_DATA_DIR) / filename
+    if path.exists() and path.stat().st_size > 0:
+        return path
+    return None
+
+
+class MemmapTokenDataset(Dataset):
+    """Dataset backed by a pre-tokenized uint16 binary file.
+
+    Uses numpy memmap for zero-copy, lazy-loading access. The binary file
+    is a flat array of uint16 token IDs produced by prepare_openwebtext.py.
+
+    Args:
+        bin_path: Path to the .bin file (uint16 flat array).
+        max_length: Tokens per sample (chunk size).
+        max_chunks: Optional cap on number of chunks.
+    """
+
+    def __init__(
+        self,
+        bin_path: str | Path,
+        max_length: int = 1024,
+        max_chunks: Optional[int] = None,
+    ) -> None:
+        self.max_length = max_length
+        self.data = np.memmap(bin_path, dtype=np.uint16, mode="r")
+        self.num_chunks = len(self.data) // max_length
+        if max_chunks is not None:
+            self.num_chunks = min(self.num_chunks, max_chunks)
+        print(
+            f"[data] Using pre-processed binary: {bin_path} "
+            f"({len(self.data):,} tokens, {self.num_chunks:,} chunks)"
+        )
+
+    def __len__(self) -> int:
+        return self.num_chunks
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        start = idx * self.max_length
+        end = start + self.max_length
+        chunk = self.data[start:end].astype(np.int64)
+        return torch.from_numpy(chunk)
 
 
 class OpenWebTextDataset(Dataset):
@@ -74,6 +140,10 @@ class OpenWebTextDataset(Dataset):
 def create_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
     """Create a DataLoader from config.
 
+    Uses pre-processed binary if available, otherwise falls back to
+    HuggingFace streaming. Smoke tests always use HuggingFace fallback
+    (no S3 dependency).
+
     Args:
         config: Full configuration dictionary.
         smoke_test: If True, load a small subset for quick testing.
@@ -83,14 +153,21 @@ def create_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
     """
     data_cfg = config["data"]
     train_cfg = config["smoke_test"] if smoke_test else config["training"]
+    max_length = data_cfg.get("max_length", 1024)
 
-    max_samples = 1000 if smoke_test else None
-
-    dataset = OpenWebTextDataset(
-        max_length=data_cfg.get("max_length", 1024),
-        split="train",
-        max_samples=max_samples,
-    )
+    bin_path = _preprocessed_available("train")
+    if bin_path is not None and not smoke_test:
+        dataset = MemmapTokenDataset(
+            bin_path=bin_path,
+            max_length=max_length,
+        )
+    else:
+        max_samples = 1000 if smoke_test else None
+        dataset = OpenWebTextDataset(
+            max_length=max_length,
+            split="train",
+            max_samples=max_samples,
+        )
 
     return DataLoader(
         dataset,
@@ -105,10 +182,9 @@ def create_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
 def create_eval_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
     """Create a DataLoader for evaluation.
 
-    Uses the last N documents of OpenWebText as a held-out eval set.
-    OpenWebText only has a 'train' split, so we use HuggingFace slice syntax
-    to take a deterministic tail slice that doesn't overlap with training data
-    (which loads from the beginning).
+    Uses pre-processed eval binary if available, otherwise falls back to
+    HuggingFace (last N documents of OpenWebText). Smoke tests always use
+    HuggingFace fallback.
 
     Args:
         config: Full configuration dictionary.
@@ -119,14 +195,21 @@ def create_eval_dataloader(config: dict, smoke_test: bool = False) -> DataLoader
     """
     data_cfg = config["data"]
     train_cfg = config["smoke_test"] if smoke_test else config["training"]
+    max_length = data_cfg.get("max_length", 1024)
 
-    eval_samples = 500 if smoke_test else 5000
-
-    dataset = OpenWebTextDataset(
-        max_length=data_cfg.get("max_length", 1024),
-        split=f"train[-{eval_samples}:]",
-        max_samples=None,
-    )
+    bin_path = _preprocessed_available("eval")
+    if bin_path is not None and not smoke_test:
+        dataset = MemmapTokenDataset(
+            bin_path=bin_path,
+            max_length=max_length,
+        )
+    else:
+        eval_samples = 500 if smoke_test else 5000
+        dataset = OpenWebTextDataset(
+            max_length=max_length,
+            split=f"train[-{eval_samples}:]",
+            max_samples=None,
+        )
 
     return DataLoader(
         dataset,
