@@ -12,7 +12,7 @@ pricing is fed externally via POST /api/spot-price or a JSON file at
 Usage:
     pip install flask pyyaml pyopenssl
     python web_dashboard.py                # http://0.0.0.0:5000
-    python web_dashboard.py --https        # https with adhoc self-signed cert
+    python web_dashboard.py --https        # https (experimental, requires pyopenssl)
     python web_dashboard.py --port 8080
 """
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# monitor.sh — Terminal training dashboard
+# monitor.sh — Terminal training dashboard (Claude Code theme)
 # Mirrors the web dashboard (web_dashboard.py) as a terminal UI.
 # Same data sources, same section order, same metrics.
 #
@@ -34,15 +34,29 @@ declare -A OD_PRICES=( ["g6.xlarge"]="0.8048" ["g6.2xlarge"]="0.9776" ["g5.xlarg
 # Find W&B log
 WANDB_LOG=$(ls -td "$PROJECT_DIR"/wandb/run-*/files/output.log 2>/dev/null | head -1)
 
-# ── Colors ────────────────────────────────────────────────────────────────
-R="\e[0m"; B="\e[1m"; D="\e[2m"
-Fg="\e[32m"; Fy="\e[33m"; Fr="\e[31m"; Fc="\e[36m"
-Fw="\e[97m"; Fk="\e[90m"; Fm="\e[35m"
-Bg="\e[42m"; Br="\e[41m"
+# ── Claude Code Theme ────────────────────────────────────────────────────
+# Terracotta/coral accent (Claude brand), muted semantic colors
+R="\e[0m"
+B="\e[1m"
+D="\e[2m"
+
+# 256-color palette — warm, minimal, Claude-like
+A="\e[38;5;173m"     # accent: terracotta/coral (Claude brand)
+T="\e[38;5;255m"     # text: bright white
+S="\e[38;5;245m"     # secondary: medium gray
+DM="\e[38;5;240m"    # dim: dark gray
+G="\e[38;5;114m"     # green: muted sage
+Y="\e[38;5;221m"     # yellow: soft amber
+RD="\e[38;5;167m"    # red: muted coral-red
+C="\e[38;5;110m"     # cyan: muted blue
 
 W=78
 
-hline() { printf "  ${Fk}"; printf '%*s' "$W" '' | tr ' ' '─'; printf "${R}\n"; }
+sep() {
+    printf "  ${DM}"
+    printf '%*s' "$W" '' | tr ' ' '─'
+    printf "${R}\n"
+}
 
 # ── Drawing helpers ───────────────────────────────────────────────────────
 sparkline() {
@@ -61,22 +75,26 @@ sparkline() {
         local iv=$(echo "$v * 100000" | bc 2>/dev/null | cut -d. -f1)
         [ -z "$iv" ] && continue
         local idx=$(( (iv - min) * 7 / range ))
-        printf "${Fc}${ticks[$idx]}${R}"
+        printf "${A}${ticks[$idx]}${R}"
     done
 }
 
-bar() {
-    local cur=$1 mx=$2 w=$3
+pbar() {
+    # Progress bar: pbar <value> <max> <width> <color>
+    local cur=$1 mx=$2 w=$3 clr=${4:-$G}
     [ "$mx" -eq 0 ] && mx=1
     local filled=$((cur * w / mx)) empty=$((w - filled))
     [ "$filled" -gt "$w" ] && filled=$w && empty=0
-    printf "${Fg}"; for ((i=0; i<filled; i++)); do printf "█"; done
-    printf "${Fk}"; for ((i=0; i<empty; i++)); do printf "░"; done
+    printf "${clr}"
+    for ((i=0; i<filled; i++)); do printf "▓"; done
+    printf "${DM}"
+    for ((i=0; i<empty; i++)); do printf "░"; done
     printf "${R}"
 }
 
-vbar() {
-    local pct=$1 color=$2 w=${3:-8}
+gauge() {
+    # Compact gauge: gauge <pct> <color> <width>
+    local pct=$1 color=$2 w=${3:-10}
     local blocks=(" " "▏" "▎" "▍" "▌" "▋" "▊" "▉" "█")
     local full=$((pct * w / 100)) part=$((pct * w % 100 * 8 / 100))
     [ "$full" -gt "$w" ] && full=$w && part=0
@@ -84,7 +102,8 @@ vbar() {
     for ((i=0; i<full; i++)); do printf "█"; done
     [ "$part" -gt 0 ] && [ "$full" -lt "$w" ] && printf "${blocks[$part]}"
     local total=$((full + (part > 0 ? 1 : 0))) rem=$((w - total))
-    printf "${Fk}"; for ((i=0; i<rem; i++)); do printf "·"; done
+    printf "${DM}"
+    for ((i=0; i<rem; i++)); do printf "░"; done
     printf "${R}"
 }
 
@@ -99,22 +118,12 @@ fmt_time() {
     fi
 }
 
-trend_arrow() {
+trend() {
     local -n arr=$1
     if [ ${#arr[@]} -ge 2 ]; then
         local cmp=$(echo "${arr[-1]} < ${arr[-2]}" | bc -l 2>/dev/null)
-        [ "$cmp" = "1" ] && printf " ${Fg}↓${R}" || printf " ${Fr}↑${R}"
+        [ "$cmp" = "1" ] && printf " ${G}↓${R}" || printf " ${RD}↑${R}"
     fi
-}
-
-right_align() {
-    # Print text right-aligned to column W+2
-    local text="$1" stripped
-    stripped=$(echo -e "$text" | sed 's/\x1b\[[0-9;]*m//g')
-    local len=${#stripped}
-    local pad=$((W + 2 - len))
-    [ "$pad" -gt 0 ] && printf '%*s' "$pad" ''
-    printf "%b" "$text"
 }
 
 # ── Main draw ─────────────────────────────────────────────────────────────
@@ -123,10 +132,11 @@ draw() {
     local now=$(date -u '+%H:%M:%S UTC')
 
     # ── Header ──
-    printf "  ${B}${Fw}ML TRAINING DASHBOARD${R}  ${Fk}${now}${R}"
-    printf "%*s" $((W - 36)) ""
-    printf "${Fk}q${R}=quit  ${Fk}r${R}=refresh\n"
-    hline
+    printf "\n"
+    printf "  ${A}${B}◆${R} ${B}${T}ML Training Dashboard${R}  ${DM}${now}${R}"
+    printf "%*s" $((W - 40)) ""
+    printf "${DM}q${R}${S}=quit  ${DM}r${R}${S}=refresh${R}\n"
+    printf "\n"
 
     # ── 1. Training Progress ──
     local step=0 ar="" diff="" conf="" lr_val="" elapsed="0"
@@ -141,7 +151,6 @@ draw() {
             conf=$(echo "$last_line" | grep -oP 'conf_acc: \K[0-9.]+')
             lr_val=$(echo "$last_line" | grep -oP 'lr: \K[0-9.e+-]+')
             elapsed=$(echo "$last_line" | grep -oP 'time: \K[0-9.]+' | cut -d. -f1)
-            # Collect history for sparklines (last 30)
             local tail_lines=$(echo "$lines" | tail -30)
             while IFS= read -r line; do
                 local a=$(echo "$line" | grep -oP 'ar_loss: \K[0-9.]+')
@@ -156,10 +165,10 @@ draw() {
         fi
     fi
 
-    printf "  ${B}PROGRESS${R}  "
+    printf "  ${A}◆${R} ${B}Progress${R}\n"
     if [ "$step" -gt 0 ]; then
         local pct=$((step * 100 / MAX_STEPS))
-        local phase="cosine_decay"
+        local phase="cosine decay"
         [ "$step" -le "$WARMUP" ] && phase="warmup"
         local eta_secs=""
         if [ "$elapsed" -gt 0 ]; then
@@ -167,32 +176,30 @@ draw() {
             eta_secs=$(echo "($MAX_STEPS - $step) / $sps" | bc 2>/dev/null | cut -d. -f1)
         fi
 
-        printf "Step ${B}${Fw}%s${R}${Fk}/%s${R}" "$step" "$MAX_STEPS"
-        printf "  Phase: ${B}%s${R}" "$phase"
-        printf "  Elapsed: ${Fc}$(fmt_time "$elapsed")${R}"
-        [ -n "$eta_secs" ] && printf "  Remaining: ${Fy}$(fmt_time "$eta_secs")${R}"
+        printf "    ${T}${B}%s${R}${DM}/%s${R}" "$step" "$MAX_STEPS"
+        printf "  ${S}%s${R}" "$phase"
+        printf "  ${C}$(fmt_time "$elapsed")${R}${S} elapsed${R}"
+        [ -n "$eta_secs" ] && printf "  ${Y}$(fmt_time "$eta_secs")${R}${S} remaining${R}"
         printf "\n"
-        printf "  ["; bar "$step" "$MAX_STEPS" 54; printf "] ${B}%d%%${R}\n" "$pct"
+        printf "    "; pbar "$step" "$MAX_STEPS" 60 "$G"; printf " ${B}%d%%${R}\n" "$pct"
     else
-        printf "${Fy}Waiting for first training step...${R}\n"
+        printf "    ${S}Waiting for first step...${R}\n"
     fi
-    hline
+    printf "\n"
 
-    # ── 2. Live Metrics ──
+    # ── 2. Metrics ──
     if [ "$step" -gt 0 ]; then
-        printf "  ${B}METRICS${R}\n"
-        printf "  AR Loss  ${Fw}%-8s${R} " "$ar"
+        printf "  ${A}◆${R} ${B}Metrics${R}\n"
+        printf "    ${S}AR Loss${R}   ${T}${B}%-8s${R} " "$ar"
         sparkline "${ar_vals[@]}"
-        trend_arrow ar_vals
-        printf "     Conf Acc  ${Fw}%s${R}" "$conf"
-        [ "$conf" = "0.0000" ] && printf " ${Fk}(waiting)${R}"
+        trend ar_vals
+        printf "      ${S}Conf Acc${R}  ${T}%s${R}" "$conf"
         printf "\n"
-
-        printf "  Diff Loss ${Fw}%-8s${R} " "$diff"
+        printf "    ${S}Diff Loss${R} ${T}${B}%-8s${R} " "$diff"
         sparkline "${diff_vals[@]}"
-        trend_arrow diff_vals
-        printf "     LR       ${Fw}%s${R}\n" "$lr_val"
-        hline
+        trend diff_vals
+        printf "      ${S}LR${R}        ${T}%s${R}\n" "$lr_val"
+        printf "\n"
     fi
 
     # ── 3. GPU ──
@@ -207,19 +214,21 @@ draw() {
         local mem_gb=$(echo "scale=1; $gmem_u / 1024" | bc 2>/dev/null)
         local tot_gb=$(echo "scale=0; $gmem_t / 1024" | bc 2>/dev/null)
         local pow_pct=$((${gpow%.*} * 100 / ${gpow_lim%.*}))
-        local mc="$Fg"; [ "$mem_pct" -gt 80 ] && mc="$Fy"; [ "$mem_pct" -gt 90 ] && mc="$Fr"
-        local tc="$Fg"; [ "${gtemp%.*}" -gt 75 ] && tc="$Fy"; [ "${gtemp%.*}" -gt 85 ] && tc="$Fr"
-        local uc="$Fg"; [ "$gutil" -gt 90 ] && uc="$Fy"
 
-        printf "  ${B}GPU${R}  ${Fk}%s${R}\n" "$gname"
-        printf "  Util ["; vbar "$gutil" "$uc"; printf "] ${B}%s%%${R}" "$gutil"
-        printf "     VRAM ["; vbar "$mem_pct" "$mc"; printf "] ${B}%s${R}/%sG\n" "$mem_gb" "$tot_gb"
-        printf "  Temp ["; vbar "${gtemp%.*}" "$tc"; printf "] %b%s°C%b" "$tc" "$gtemp" "$R"
-        printf "     Power ["; vbar "$pow_pct" "$Fg"; printf "] ${B}%s${R}/%sW\n" "${gpow%.*}" "${gpow_lim%.*}"
-        hline
+        # Color thresholds
+        local uc="$G"; [ "$gutil" -gt 90 ] && uc="$Y"
+        local mc="$G"; [ "$mem_pct" -gt 80 ] && mc="$Y"; [ "$mem_pct" -gt 90 ] && mc="$RD"
+        local tc="$G"; [ "${gtemp%.*}" -gt 75 ] && tc="$Y"; [ "${gtemp%.*}" -gt 85 ] && tc="$RD"
+
+        printf "  ${A}◆${R} ${B}GPU${R}  ${DM}%s${R}\n" "$gname"
+        printf "    ${S}Util${R}  "; gauge "$gutil" "$uc"; printf " ${B}%s%%${R}" "$gutil"
+        printf "      ${S}VRAM${R}  "; gauge "$mem_pct" "$mc"; printf " ${B}%s${R}${DM}/%sG${R}\n" "$mem_gb" "$tot_gb"
+        printf "    ${S}Temp${R}  "; gauge "${gtemp%.*}" "$tc"; printf " %b%s°C%b" "$tc" "$gtemp" "$R"
+        printf "      ${S}Power${R} "; gauge "$pow_pct" "$G"; printf " ${B}%s${R}${DM}/%sW${R}\n" "${gpow%.*}" "${gpow_lim%.*}"
+        printf "\n"
     fi
 
-    # ── 4. Loss Curves / Eval (charts equivalent) ──
+    # ── 4. Eval ──
     local latest_eval=$(ls -t "$EVAL_DIR"/*.json 2>/dev/null | head -1)
     if [ -n "$latest_eval" ]; then
         local ej=$(cat "$latest_eval")
@@ -230,40 +239,39 @@ draw() {
         local e_ece=$(echo "$ej" | python3 -c "import sys,json; print(f\"{json.load(sys.stdin)['conf_ece']:.4f}\")" 2>/dev/null)
         local e_dloss=$(echo "$ej" | python3 -c "import sys,json; print(f\"{json.load(sys.stdin)['diff_loss']:.4f}\")" 2>/dev/null)
         local auroc_pct=$(echo "$e_auroc * 100" | bc 2>/dev/null | cut -d. -f1)
-        local ac="$Fr"; [ "$auroc_pct" -gt 55 ] && ac="$Fy"; [ "$auroc_pct" -gt 70 ] && ac="$Fg"
+        local ac="$RD"; [ "$auroc_pct" -gt 55 ] && ac="$Y"; [ "$auroc_pct" -gt 70 ] && ac="$G"
 
-        printf "  ${B}EVAL${R} ${Fk}@step %s${R}\n" "$e_step"
-        printf "  AR PPL ${B}${Fw}%s${R}  " "$e_ppl"
-        printf "S1 Acc ${B}%s%%${R}  " "$e_s1"
-        printf "AUROC ${B}%s${R} [" "$e_auroc"
-        vbar "$auroc_pct" "$ac" 6
-        printf "]  ECE ${B}%s${R}  " "$e_ece"
-        printf "Diff ${B}%s${R}\n" "$e_dloss"
+        printf "  ${A}◆${R} ${B}Eval${R}  ${DM}step %s${R}\n" "$e_step"
+        printf "    ${S}AR PPL${R} ${T}${B}%s${R}" "$e_ppl"
+        printf "   ${S}S1 Acc${R} ${T}${B}%s%%${R}" "$e_s1"
+        printf "   ${S}AUROC${R} ${T}${B}%s${R} " "$e_auroc"
+        gauge "$auroc_pct" "$ac" 6
+        printf "   ${S}ECE${R} ${T}%s${R}" "$e_ece"
+        printf "   ${S}Diff${R} ${T}%s${R}\n" "$e_dloss"
     else
-        printf "  ${B}EVAL${R}  ${Fk}no eval data yet${R}\n"
+        printf "  ${A}◆${R} ${B}Eval${R}  ${DM}no data yet${R}\n"
     fi
-    hline
+    printf "\n"
 
-    # ── 5. Instance & Cost ──
-    local itype=$(curl -sf -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 30" \
-        http://169.254.169.254/latest/api/token 2>/dev/null | \
-        xargs -I{} curl -sf -H "X-aws-ec2-metadata-token: {}" \
-        http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null)
-    local lifecycle=$(curl -sf -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 30" \
-        http://169.254.169.254/latest/api/token 2>/dev/null | \
-        xargs -I{} curl -sf -H "X-aws-ec2-metadata-token: {}" \
-        http://169.254.169.254/latest/meta-data/instance-life-cycle 2>/dev/null)
-    local az=$(curl -sf -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 30" \
-        http://169.254.169.254/latest/api/token 2>/dev/null | \
-        xargs -I{} curl -sf -H "X-aws-ec2-metadata-token: {}" \
-        http://169.254.169.254/latest/meta-data/placement/availability-zone 2>/dev/null)
+    # ── 5. Cost ──
+    local imds_token=$(curl -sf -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 30" \
+        http://169.254.169.254/latest/api/token 2>/dev/null)
+    local itype lifecycle az
+    if [ -n "$imds_token" ]; then
+        itype=$(curl -sf -H "X-aws-ec2-metadata-token: $imds_token" \
+            http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null)
+        lifecycle=$(curl -sf -H "X-aws-ec2-metadata-token: $imds_token" \
+            http://169.254.169.254/latest/meta-data/instance-life-cycle 2>/dev/null)
+        az=$(curl -sf -H "X-aws-ec2-metadata-token: $imds_token" \
+            http://169.254.169.254/latest/meta-data/placement/availability-zone 2>/dev/null)
+    fi
 
     local boot_s=$(date -d "$(uptime -s)" +%s 2>/dev/null)
     local now_s=$(date +%s)
     local uptime_s=$((now_s - boot_s))
     local od_rate="${OD_PRICES[$itype]:-}"
 
-    printf "  ${B}COST${R}  ${Fk}%s  %s  %s${R}  up ${Fw}$(fmt_time "$uptime_s")${R}\n" \
+    printf "  ${A}◆${R} ${B}Cost${R}  ${DM}%s · %s · %s · up $(fmt_time "$uptime_s")${R}\n" \
         "${itype:-?}" "${lifecycle:-?}" "${az:-?}"
 
     if [ -n "$od_rate" ]; then
@@ -271,9 +279,9 @@ draw() {
         local od_proj=""
         [ "$step" -gt 0 ] && od_proj=$(echo "scale=6; x=$od_cost / $step * $MAX_STEPS; scale=2; x/1" | bc 2>/dev/null)
 
-        printf "  %-10s ${Fk}Rate${R} \$%-10s ${Fk}Cost${R} " "On-Demand" "${od_rate}/hr"
-        printf "${Fy}\$%-8s${R}" "$od_cost"
-        [ -n "$od_proj" ] && printf " ${Fk}Proj${R} \$%s" "$od_proj"
+        printf "    ${S}On-Demand${R}  \$%s/hr  " "$od_rate"
+        printf "${Y}\$%s${R}" "$od_cost"
+        [ -n "$od_proj" ] && printf "  ${DM}proj${R} \$%s" "$od_proj"
         printf "\n"
 
         # Spot
@@ -302,71 +310,68 @@ print(f'{total:.2f}')
                 local sav_pct=""
                 [ "$(echo "$od_cost > 0" | bc)" = "1" ] && sav_pct=$(echo "scale=1; (1 - $spot_cost / $od_cost) * 100" | bc 2>/dev/null)
 
-                printf "  %-10s ${Fk}Rate${R} \$%-10s ${Fk}Cost${R} " "Spot" "${spot_rate}/hr"
-                printf "${Fg}\$%-8s${R}" "$spot_cost"
-                [ -n "$spot_proj" ] && printf " ${Fk}Proj${R} \$%s" "$spot_proj"
+                printf "    ${S}Spot${R}       \$%s/hr  " "$spot_rate"
+                printf "${G}\$%s${R}" "$spot_cost"
+                [ -n "$spot_proj" ] && printf "  ${DM}proj${R} \$%s" "$spot_proj"
                 printf "\n"
-                printf "  ${Fg}%-10s${R}" "Savings"
-                [ -n "$sav_pct" ] && printf " ${Fg}%s%%${R}%*s" "$sav_pct" 13 ""
-                printf " ${Fg}\$%-8s${R}" "$savings"
+
+                printf "    ${G}Savings${R}    "
+                [ -n "$sav_pct" ] && printf "${G}%s%%${R}         " "$sav_pct"
+                printf "${G}\$%s${R}" "$savings"
                 if [ -n "$od_proj" ] && [ -n "$spot_proj" ]; then
                     local proj_sav=$(echo "scale=2; $od_proj - $spot_proj" | bc 2>/dev/null)
-                    printf " ${Fk}Proj${R} ${Fg}\$%s${R}" "$proj_sav"
+                    printf "  ${DM}proj${R} ${G}\$%s${R}" "$proj_sav"
                 fi
                 printf "\n"
             fi
         else
-            printf "  ${Fk}Spot       run update-spot-price.sh to seed spot data${R}\n"
+            printf "    ${DM}Spot: run update-spot-price.sh to seed data${R}\n"
         fi
     fi
-    hline
+    printf "\n"
 
     # ── 6. Infrastructure ──
     local tpid=$(pgrep -f joint_trainer 2>/dev/null | head -1)
     local spid=$(pgrep -f sync-checkpoint 2>/dev/null | head -1)
-    local ck_n=$(ls "$CKPT_DIR"/*.pt 2>/dev/null | wc -l)
     local ck_list=$(ls "$CKPT_DIR"/*.pt 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
 
-    printf "  ${B}INFRA${R}  "
-    [ -n "$tpid" ] && printf "${Bg}${B} Trainer ON ${R} " || printf "${Br}${B} Trainer OFF ${R} "
-    [ -n "$spid" ] && printf "${Bg}${B} Sync ON ${R}" || printf "${Br}${B} Sync OFF ${R}"
+    printf "  ${A}◆${R} ${B}Infra${R}  "
+    [ -n "$tpid" ] && printf "${G}● trainer${R} " || printf "${RD}○ trainer${R} "
+    [ -n "$spid" ] && printf "${G}● sync${R}" || printf "${RD}○ sync${R}"
     printf "\n"
 
-    # Milestones
     if [ "$step" -gt 0 ]; then
         local next_eval=$(( ((step / EVAL_EVERY) + 1) * EVAL_EVERY ))
         local next_ckpt=$(( ((step / CKPT_EVERY) + 1) * CKPT_EVERY ))
-        printf "  ${Fk}Next:${R} eval @${Fc}%s${R} ${Fk}(in %s)${R}" "$next_eval" "$((next_eval - step))"
-        printf "  ckpt @${Fc}%s${R} ${Fk}(in %s)${R}" "$next_ckpt" "$((next_ckpt - step))"
-        [ "$step" -le "$WARMUP" ] && printf "  warmup ends @${Fc}%s${R} ${Fk}(in %s)${R}" "$WARMUP" "$((WARMUP - step))"
+        printf "    ${DM}next${R} ${S}eval${R} ${C}%s${R} ${DM}in %s${R}" "$next_eval" "$((next_eval - step))"
+        printf "  ${S}ckpt${R} ${C}%s${R} ${DM}in %s${R}" "$next_ckpt" "$((next_ckpt - step))"
+        [ "$step" -le "$WARMUP" ] && printf "  ${S}warmup ends${R} ${C}%s${R} ${DM}in %s${R}" "$WARMUP" "$((WARMUP - step))"
         printf "\n"
     fi
 
-    # Checkpoints
-    printf "  ${Fk}Ckpts:${R} "
-    [ -n "$ck_list" ] && printf "%s" "$ck_list" || printf "${Fk}none${R}"
+    printf "    ${DM}ckpts${R} "
+    [ -n "$ck_list" ] && printf "${S}%s${R}" "$ck_list" || printf "${DM}none${R}"
+    printf "\n"
+    printf "    ${DM}config${R} ${S}%s · bs=%s×%s · lr=%s · warmup=%s · eval@%s · ckpt@%s${R}\n" \
+        "$MODEL" "$BS" "$GA" "$LR" "$WARMUP" "$EVAL_EVERY" "$CKPT_EVERY"
     printf "\n"
 
-    # Config
-    printf "  ${Fk}Config:${R} %s | bs=%s×%s | lr=%s | warmup=%s | eval@%s | ckpt@%s\n" \
-        "$MODEL" "$BS" "$GA" "$LR" "$WARMUP" "$EVAL_EVERY" "$CKPT_EVERY"
-    hline
-
     # ── 7. Log Tail ──
-    printf "  ${B}LOG${R}\n"
+    sep
+    printf "  ${A}◆${R} ${B}Log${R}\n"
     if [ -n "$WANDB_LOG" ] && [ -f "$WANDB_LOG" ]; then
         tail -10 "$WANDB_LOG" | while IFS= read -r line; do
             if [[ "$line" == \[eval\]* ]]; then
-                printf "  ${Fy}%s${R}\n" "$line"
+                printf "    ${A}%s${R}\n" "$line"
             else
-                printf "  %s\n" "$line"
+                printf "    ${DM}%s${R}\n" "$line"
             fi
         done
     else
-        printf "  ${Fk}No log file found${R}\n"
+        printf "    ${DM}No log file found${R}\n"
     fi
-    hline
-    printf "  ${Fk}Refresh: ${INTERVAL}s${R}\n"
+    sep
+    printf "  ${DM}refresh ${INTERVAL}s${R}\n"
 }
 
 # ── Key handling ──────────────────────────────────────────────────────────
