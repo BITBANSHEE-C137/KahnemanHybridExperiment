@@ -35,7 +35,7 @@ DATA_DIR = "/opt/dlami/nvme/ml-lab"
 EVAL_DIR = os.path.join(DATA_DIR, "eval_metrics")
 CONFIG_PATH = os.path.join(PROJECT_DIR, "configs/tiny.yaml")
 WANDB_DIR = os.path.join(PROJECT_DIR, "wandb")
-CHECKPOINT_DIR = os.path.join(PROJECT_DIR, "checkpoints")
+CHECKPOINT_DIR = os.path.join(DATA_DIR, "checkpoints")
 SPOT_PRICE_FILE = "/tmp/spot_price.json"
 
 # Regex for training step lines
@@ -361,26 +361,48 @@ def build_status():
         inst["savings"] = round(od_cost - spot_cost, 2)
         inst["savings_pct"] = round((1 - spot_cost / od_cost) * 100, 1)
 
+    # Training time
+    elapsed_s = latest["elapsed_s"] if latest else None
+    remaining_s = round(eta_s, 0) if eta_s else None
+
+    # Next milestones
+    tcfg = config.get("training", {})
+    ckpt_every = tcfg.get("checkpoint_every", 5000)
+    eval_every = tcfg.get("eval_every", 1000)
+    milestones = []
+    if current_step > 0:
+        next_eval = ((current_step // eval_every) + 1) * eval_every
+        next_ckpt = ((current_step // ckpt_every) + 1) * ckpt_every
+        milestones.append({"label": "next eval", "step": next_eval})
+        milestones.append({"label": "next checkpoint", "step": next_ckpt})
+        if current_step <= warmup_steps:
+            milestones.append({"label": "warmup ends", "step": warmup_steps})
+        milestones.sort(key=lambda x: x["step"])
+
     return {
         "timestamp": now.isoformat(),
         "current_step": current_step,
         "max_steps": max_steps,
         "progress_pct": round(progress_pct, 2),
         "phase": phase,
-        "eta_seconds": round(eta_s, 0) if eta_s else None,
+        "eta_seconds": remaining_s,
+        "elapsed_seconds": round(elapsed_s, 0) if elapsed_s else None,
         "latest_train": latest,
         "latest_eval": latest_eval,
         "gpu": gpu,
         "infra": infra,
+        "milestones": milestones,
         "instance": inst,
         "log_tail": log_tail,
         "config_summary": {
             "model": config.get("model", {}).get("name", "?"),
-            "batch_size": config.get("training", {}).get("batch_size"),
-            "grad_accum": config.get("training", {}).get("gradient_accumulation_steps"),
-            "lr": config.get("training", {}).get("learning_rate"),
+            "batch_size": tcfg.get("batch_size"),
+            "grad_accum": tcfg.get("gradient_accumulation_steps"),
+            "lr": tcfg.get("learning_rate"),
             "warmup_steps": warmup_steps,
             "max_steps": max_steps,
+            "checkpoint_every": ckpt_every,
+            "eval_every": eval_every,
         },
     }
 
@@ -799,7 +821,8 @@ body {
     <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size:12px">
       <span>Step <strong id="cur-step">--</strong> / <span id="max-step">--</span></span>
       <span>Phase: <strong id="phase">--</strong></span>
-      <span>ETA: <strong id="eta">--</strong></span>
+      <span>Elapsed: <strong id="elapsed">--</strong></span>
+      <span>Remaining: <strong id="eta">--</strong></span>
     </div>
     <div class="progress-outer">
       <div class="progress-inner" id="progress-bar" style="width:0%">0%</div>
@@ -879,6 +902,10 @@ body {
       <div style="margin-bottom:6px">
         <span class="badge" id="badge-trainer">Trainer: ?</span>
         <span class="badge" id="badge-sync">Sync: ?</span>
+      </div>
+      <div style="margin-bottom:6px">
+        <span style="font-size:11px;color:var(--dim)">Next milestones:</span>
+        <div id="milestones" style="font-size:11px;margin-top:2px">--</div>
       </div>
       <div style="margin-bottom:6px">
         <span style="font-size:11px;color:var(--dim)">Checkpoints:</span>
@@ -1034,6 +1061,7 @@ function updateUI(data) {
   $('cur-step').textContent = data.current_step.toLocaleString();
   $('max-step').textContent = data.max_steps.toLocaleString();
   $('phase').textContent = data.phase;
+  $('elapsed').textContent = fmtTime(data.elapsed_seconds);
   $('eta').textContent = fmtTime(data.eta_seconds);
   const pct = data.progress_pct;
   const bar = $('progress-bar');
@@ -1142,10 +1170,23 @@ function updateUI(data) {
     setBadge('badge-sync', 'Sync', inf.sync_running);
     const ckptEl = $('ckpt-list');
     if (inf.checkpoints && inf.checkpoints.length > 0) {
-      ckptEl.innerHTML = inf.checkpoints.map(c => '<span>' + c + '</span>').join(' ');
+      ckptEl.innerHTML = inf.checkpoints.map(c => '<span>' + esc(c) + '</span>').join(' ');
     } else {
       ckptEl.textContent = 'None yet';
     }
+  }
+
+  // Milestones
+  const msEl = $('milestones');
+  if (data.milestones && data.milestones.length > 0) {
+    msEl.innerHTML = data.milestones.map(m => {
+      const delta = m.step - data.current_step;
+      return '<span style="margin-right:12px"><span style="color:var(--accent)">' +
+        esc(m.label) + '</span> step ' + m.step.toLocaleString() +
+        ' <span style="color:var(--dim)">(in ' + delta.toLocaleString() + ')</span></span>';
+    }).join('');
+  } else {
+    msEl.textContent = '--';
   }
 
   // Config
@@ -1153,7 +1194,8 @@ function updateUI(data) {
   if (cfg) {
     $('config-info').textContent =
       cfg.model + ' | bs=' + cfg.batch_size + '\u00d7' + cfg.grad_accum +
-      ' | lr=' + cfg.lr + ' | warmup=' + cfg.warmup_steps;
+      ' | lr=' + cfg.lr + ' | warmup=' + cfg.warmup_steps +
+      ' | eval@' + cfg.eval_every + ' | ckpt@' + cfg.checkpoint_every;
   }
 
   // Log tail
