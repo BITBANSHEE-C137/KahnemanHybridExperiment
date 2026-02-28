@@ -38,7 +38,12 @@ PRICES=$(aws ec2 describe-spot-price-history \
   --availability-zone "$AZ" \
   --region "$REGION" \
   --max-items 50 \
-  --output json 2>/dev/null)
+  --output json 2>/dev/null) || true
+
+if [ -z "$PRICES" ]; then
+  echo "No spot price data returned for $INST in $AZ" >&2
+  exit 0
+fi
 
 PAYLOAD=$(echo "$PRICES" | python3 -c "
 import json, sys

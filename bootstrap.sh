@@ -171,9 +171,10 @@ curl -sf http://127.0.0.1:5000/api/status > /dev/null && echo "  web dashboard: 
 
 # ── 7. Spot price updater — run now + cron every 5 minutes ──
 echo "Setting up spot price updater..."
-sudo -u ubuntu bash -c "cd $PROJECT && bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1" &
-CRON_LINE="*/5 * * * * cd $PROJECT && SPOT_TOKEN='$SPOT_TOKEN' bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1"
-( sudo -u ubuntu crontab -l 2>/dev/null | grep -v update-spot-price; echo "$CRON_LINE" ) | sudo -u ubuntu crontab -
+sudo -u ubuntu bash -c "cd $PROJECT && bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1" || true &
+CRON_LINE="*/5 * * * * cd $PROJECT && bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1"
+EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
+echo "$EXISTING" | grep -v update-spot-price | { cat; echo "$CRON_LINE"; } | sudo -u ubuntu crontab -
 echo "  spot price: cron installed (every 5 min)"
 
 # ── 8. Launch training in tmux (resumes from latest checkpoint) ──
