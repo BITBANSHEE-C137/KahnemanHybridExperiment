@@ -10,32 +10,21 @@
 
 | Metric | Value |
 |---|---|
-| Current step | 4,100 / 50,000 (8.2%) |
-| Phase | Cosine decay (warmup complete at step 2,000) |
-| Elapsed | ~7 hours |
+| Current step | ~200 / 50,000 (resuming from step 100 checkpoint) |
+| Phase | Warmup (cosine decay begins at step 2,000) |
 | Instance | g5.2xlarge (NVIDIA A10G, spot) |
 
-### Latest Train Metrics (step 4,100)
+**Note:** Steps 100–4,000+ from the initial run were lost across spot terminations before checkpoint frequency was increased. Checkpoint interval is now every 1,000 steps (was 5,000). The eval history below is from the prior run and represents validated training dynamics.
 
-| Metric | Value |
-|---|---|
-| AR Loss | 3.197 |
-| Diffusion Loss | 6.168 |
-| Confidence Accuracy | 91.5% |
-| Learning Rate | 2.99e-4 |
-
-### Eval History
+### Eval History (prior run)
 
 | Step | AR PPL | Diff Loss | S1 Token Acc | Conf ECE | Conf AUROC |
 |------|--------|-----------|-------------|----------|------------|
-| 50 | 19,060 | 7.84 | 3.4% | 0.0499 | 0.466 |
-| 100 | 23,331 | 7.57 | 3.2% | 0.0037 | 0.502 |
 | 1,000 | 22,005 | 6.88 | 5.2% | 0.0002 | 0.548 |
 | 2,000 | 25,008 | 6.66 | 6.0% | 0.0030 | 0.594 |
 | 3,000 | 21,412 | 6.52 | 7.1% | 0.0057 | 0.628 |
-| 4,000 | 22,406 | 6.23 | 8.6% | 0.0052 | 0.669 |
 
-**Trends:** Diffusion loss steadily declining (7.84 → 6.23). S1 token accuracy 2.5× baseline (3.4% → 8.6%). Confidence AUROC improving (0.47 → 0.67), indicating the confidence head is learning to distinguish correct from incorrect predictions. AR perplexity still high — expected early in training with joint objectives competing for shared weights.
+**Trends:** Diffusion loss steadily declining (7.84 → 6.52). S1 token accuracy doubled from random baseline. Confidence AUROC improving (0.47 → 0.63), indicating the confidence head is learning to distinguish correct from incorrect predictions. These trends are expected to reproduce and continue in the current run.
 
 ## Infrastructure
 
@@ -45,9 +34,11 @@
 | Instance type | Active | g5.2xlarge / g6.xlarge (spot fleet) |
 | EBS root volume | 100GB | OS + Python 3.12 + ML stack |
 | Ephemeral NVMe | 419GB | `/opt/dlami/nvme` — runtime data |
-| Deploy scripts | Updated | bootstrap.sh, sync-checkpoints.sh in S3 |
-| Web dashboard | Live | [train.bitbanshee.com](https://train.bitbanshee.com) — nginx + TLS + Flask |
-| DNS | Automated | Route53 A record updated on boot via systemd unit |
+| Bootstrap | Autonomous | Fully autonomous spot recovery with TLS cert backup/restore |
+| Web dashboard | Live | [train.bitbanshee.com](https://train.bitbanshee.com) — nginx + Flask |
+| DNS | Automated | Route53 A record updated on boot via bootstrap |
+| Spot price | Automated | Cron job updates dashboard every 5 minutes |
+| Sync daemon | Active | S3 artifact sync every 60 seconds |
 
 ## Environment (baked into AMI)
 
@@ -70,7 +61,7 @@
 - [x] Deploy scripts updated with correct bucket paths
 - [x] Python 3.12 set as default `python3`
 - [x] Full ML stack installed to EBS
-- [x] GPU verified — A10G detected, CUDA matmul confirmed
+- [x] GPU verified — L4/A10G detected, CUDA matmul confirmed
 - [x] requirements.txt created
 - [x] Project source code built (src/, configs/, tests/)
 - [x] AMI snapshot with current environment
@@ -78,9 +69,15 @@
 - [x] OpenWebText preprocessing (memmap shards)
 - [x] Full training launched on tiny config (GPT-2 Small, 50k steps)
 - [x] Web dashboard — live at [train.bitbanshee.com](https://train.bitbanshee.com)
-- [x] HTTPS + nginx reverse proxy with Let’s Encrypt TLS
+- [x] HTTPS + nginx reverse proxy with Let's Encrypt TLS
 - [x] Dashboard hardened — token auth on write endpoints, SSE limits, security headers
 - [x] Route53 DNS auto-update on instance boot
+- [x] Fully autonomous bootstrap — all services start without manual intervention
+- [x] Checkpoint frequency increased to every 1,000 steps
+- [x] Local checkpoint cleanup (keep last 3, S3 has all)
+- [x] Spot price monitoring via cron + IMDSv2 auto-detection
+- [x] TLS cert backup/restore via S3 (handles Let's Encrypt rate limits)
+- [x] Bootstrap battle-tested across 4 spot recovery cycles
 
 ## Next Steps
 

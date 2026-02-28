@@ -87,29 +87,48 @@ if ! command -v certbot &> /dev/null; then
 fi
 
 # ── 4. Configure nginx + TLS certificate ──
-# HTTP-only config first (for certbot challenge)
-cat > /etc/nginx/sites-available/dashboard << 'NGINX_HTTP'
+ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/dashboard
+rm -f /etc/nginx/sites-enabled/default
+
+# Try to restore TLS cert from S3 first
+if [ ! -f /etc/letsencrypt/live/train.bitbanshee.com/fullchain.pem ]; then
+    echo "  Restoring TLS certificate from S3..."
+    aws s3 cp "s3://$S3_BUCKET/deploy/tls/letsencrypt.tar.gz" /tmp/letsencrypt.tar.gz --region "$REGION" 2>/dev/null && \
+        tar xzf /tmp/letsencrypt.tar.gz -C /etc/ 2>/dev/null && \
+        echo "  TLS cert restored from S3" || \
+        echo "  No TLS backup in S3"
+fi
+
+# If still no cert, try certbot (may hit rate limits)
+if [ ! -f /etc/letsencrypt/live/train.bitbanshee.com/fullchain.pem ]; then
+    # HTTP-only config for certbot challenge
+    cat > /etc/nginx/sites-available/dashboard << 'NGINX_HTTP'
 server {
     listen 80;
     server_name train.bitbanshee.com;
     location /.well-known/acme-challenge/ { root /var/www/html; }
-    location / { return 301 https://$host$request_uri; }
+    location / { proxy_pass http://127.0.0.1:5000; proxy_set_header Host $host; }
 }
 NGINX_HTTP
-ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/dashboard
-rm -f /etc/nginx/sites-enabled/default
-systemctl start nginx 2>/dev/null || systemctl reload nginx
+    systemctl start nginx 2>/dev/null || systemctl reload nginx
 
-# Get cert if we don't have one
-if [ ! -f /etc/letsencrypt/live/train.bitbanshee.com/fullchain.pem ]; then
     echo "  Obtaining TLS certificate..."
     sleep 5  # brief wait for DNS propagation
-    certbot certonly --webroot -w /var/www/html -d train.bitbanshee.com \
-        --non-interactive --agree-tos -m glenn@bitbanshee.com 2>&1 | tail -3
+    if certbot certonly --webroot -w /var/www/html -d train.bitbanshee.com \
+        --non-interactive --agree-tos -m glenn@bitbanshee.com 2>&1 | tail -3; then
+        # Backup cert to S3 for future instances
+        echo "  Backing up TLS cert to S3..."
+        tar czf /tmp/letsencrypt.tar.gz -C /etc letsencrypt
+        aws s3 cp /tmp/letsencrypt.tar.gz "s3://$S3_BUCKET/deploy/tls/letsencrypt.tar.gz" --region "$REGION" 2>/dev/null || true
+    else
+        echo "  WARNING: certbot failed (rate limit?) — running HTTP-only"
+    fi
 fi
 
-# Full TLS config
-cat > /etc/nginx/sites-available/dashboard << 'NGINX_TLS'
+# Configure nginx based on whether we have a cert
+if [ -f /etc/letsencrypt/live/train.bitbanshee.com/fullchain.pem ]; then
+    # Full TLS config
+    cat > /etc/nginx/sites-available/dashboard << 'NGINX_TLS'
 limit_req_zone $binary_remote_addr zone=general:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=sse:1m rate=2r/s;
 
@@ -157,8 +176,44 @@ server {
     }
 }
 NGINX_TLS
-nginx -t 2>&1 && systemctl reload nginx
-echo "  nginx + TLS: CONFIGURED"
+    nginx -t 2>&1 && systemctl reload nginx
+    echo "  nginx + TLS: CONFIGURED"
+else
+    # HTTP-only fallback (no TLS cert available)
+    cat > /etc/nginx/sites-available/dashboard << 'NGINX_HTTP_ONLY'
+limit_req_zone $binary_remote_addr zone=general:10m rate=30r/s;
+limit_req_zone $binary_remote_addr zone=sse:1m rate=2r/s;
+
+server {
+    listen 80;
+    server_name train.bitbanshee.com;
+
+    location / {
+        limit_req zone=general burst=20 nodelay;
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /stream {
+        limit_req zone=sse burst=5 nodelay;
+        proxy_pass http://127.0.0.1:5000/stream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header X-Accel-Buffering no;
+        proxy_set_header Connection "";
+        proxy_http_version 1.1;
+        proxy_read_timeout 86400s;
+    }
+}
+NGINX_HTTP_ONLY
+    nginx -t 2>&1 && systemctl reload nginx
+    echo "  nginx: CONFIGURED (HTTP-only, no TLS cert available)"
+fi
 
 # ── 5. Install Flask if missing ──
 sudo -u ubuntu python3 -c "import flask" 2>/dev/null || sudo -u ubuntu pip install --user flask > /dev/null 2>&1
