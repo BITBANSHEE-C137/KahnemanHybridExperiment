@@ -132,9 +132,14 @@ draw() {
     local now=$(date -u '+%H:%M:%S UTC')
 
     # ── Header ──
+    local cols=$(tput cols 2>/dev/null || echo 80)
+    local hdr="  ◆ ML Training Dashboard  ${now}"
+    local keys="q=quit  r=refresh"
+    local pad=$((cols - ${#hdr} - ${#keys} - 2))
+    [ "$pad" -lt 2 ] && pad=2
     printf "\n"
     printf "  ${A}${B}◆${R} ${B}${T}ML Training Dashboard${R}  ${DM}${now}${R}"
-    printf "%*s" $((W - 40)) ""
+    printf "%*s" "$pad" ""
     printf "${DM}q${R}${S}=quit  ${DM}r${R}${S}=refresh${R}\n"
     printf "\n"
 
@@ -359,12 +364,47 @@ print(f'{total:.2f}')
     # ── 7. Log Tail ──
     sep
     printf "  ${A}◆${R} ${B}Log${R}\n"
+    local log_w=$((cols - 6))  # 4 indent + 2 margin
     if [ -n "$WANDB_LOG" ] && [ -f "$WANDB_LOG" ]; then
-        tail -10 "$WANDB_LOG" | while IFS= read -r line; do
+        tail -12 "$WANDB_LOG" | while IFS= read -r line; do
             if [[ "$line" == \[eval\]* ]]; then
-                printf "    ${A}%s${R}\n" "$line"
+                # Wrap eval lines at pipe delimiters to fit terminal
+                if [ ${#line} -gt "$log_w" ]; then
+                    local first=true remaining="$line"
+                    while [ -n "$remaining" ]; do
+                        if [ ${#remaining} -le "$log_w" ]; then
+                            if [ "$first" = true ]; then
+                                printf "    ${A}%s${R}\n" "$remaining"
+                            else
+                                printf "    ${A}      %s${R}\n" "$remaining"
+                            fi
+                            break
+                        fi
+                        # Find last pipe within width
+                        local chunk="${remaining:0:$log_w}"
+                        local cut_at=$(echo "$chunk" | grep -ob ' | ' | tail -1 | cut -d: -f1)
+                        if [ -n "$cut_at" ] && [ "$cut_at" -gt 0 ]; then
+                            local piece="${remaining:0:$cut_at}"
+                            remaining="${remaining:$((cut_at + 1))}"
+                            remaining="${remaining# }"  # trim leading space
+                        else
+                            piece="$chunk"
+                            remaining="${remaining:$log_w}"
+                        fi
+                        if [ "$first" = true ]; then
+                            printf "    ${A}%s${R}\n" "$piece"
+                            first=false
+                            log_w=$((cols - 12))  # narrower for continuation
+                        else
+                            printf "    ${A}      %s${R}\n" "$piece"
+                        fi
+                    done
+                    log_w=$((cols - 6))  # reset for next line
+                else
+                    printf "    ${A}%s${R}\n" "$line"
+                fi
             else
-                printf "    ${DM}%s${R}\n" "$line"
+                printf "    ${DM}%.${log_w}s${R}\n" "$line"
             fi
         done
     else
