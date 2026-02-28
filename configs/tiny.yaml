@@ -13,8 +13,8 @@ model:
 
 training:
   # Optimization
-  batch_size: 8
-  gradient_accumulation_steps: 4  # effective batch = 32
+  batch_size: 4
+  gradient_accumulation_steps: 8  # effective batch = 32
   max_steps: 50000
   learning_rate: 3.0e-4
   weight_decay: 0.1

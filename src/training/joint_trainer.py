@@ -142,6 +142,10 @@ def train(
         betas=(0.9, 0.95),
     )
 
+    # Checkpoint dir (needed for resume logic below)
+    checkpoint_dir = Path(os.environ.get("CHECKPOINT_DIR", train_cfg["checkpoint_dir"]))
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
     # Resume from checkpoint if available
     start_step = 0
     if not smoke_test:
@@ -189,8 +193,6 @@ def train(
     conf_weight = train_cfg["conf_loss_weight"]
     log_every = train_cfg["log_every"]
     checkpoint_every = train_cfg["checkpoint_every"]
-    checkpoint_dir = Path(os.environ.get("CHECKPOINT_DIR", train_cfg["checkpoint_dir"]))
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     # Register spot termination handler for SIGTERM
     spot_handler = SpotTerminationHandler(checkpoint_dir)
