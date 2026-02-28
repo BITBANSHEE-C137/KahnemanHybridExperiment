@@ -10,8 +10,9 @@ pricing is fed externally via POST /api/spot-price or a JSON file at
 /tmp/spot_price.json.  A helper one-liner is printed at startup.
 
 Usage:
-    pip install flask pyyaml
-    python web_dashboard.py          # http://0.0.0.0:5000
+    pip install flask pyyaml pyopenssl
+    python web_dashboard.py                # http://0.0.0.0:5000
+    python web_dashboard.py --https        # https with adhoc self-signed cert
     python web_dashboard.py --port 8080
 """
 
@@ -886,12 +887,12 @@ body {
       </div>
     </div>
 
-    <!-- Log tail -->
-    <div class="card">
-      <h2>Log Tail</h2>
-      <div class="log-box" id="log-tail">--</div>
-    </div>
+  </div>
 
+  <!-- Log tail (full width, outside grid) -->
+  <div class="card" style="margin-top:12px">
+    <h2>Log Tail</h2>
+    <div class="log-box" id="log-tail">--</div>
   </div>
 </div>
 
@@ -1266,6 +1267,9 @@ init();
 </html>
 """
 
+# ── TLS helpers ───────────────────────────────────────────────────────────────
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -1273,27 +1277,22 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--https", action="store_true",
+                        help="Enable HTTPS with a self-signed certificate")
     args = parser.parse_args()
 
-    print(f"Starting dashboard on http://{args.host}:{args.port}")
+    ssl_ctx = None
+    scheme = "http"
+    if args.https:
+        ssl_ctx = "adhoc"
+        scheme = "https"
+
+    print(f"Starting dashboard on {scheme}://{args.host}:{args.port}")
     print(f"  Project dir: {PROJECT_DIR}")
     print(f"  Data dir:    {DATA_DIR}")
-    print()
-    print("To seed spot price data from a machine with AWS CLI access:")
-    print("  INST=g6.xlarge AZ=us-east-1b HOST=<ip>:5000")
-    print("  PRICES=$(aws ec2 describe-spot-price-history --instance-types $INST \\")
-    print("    --product-descriptions 'Linux/UNIX' --availability-zone $AZ \\")
-    print("    --region us-east-1 --max-items 50 --output json)")
-    print("  CURRENT=$(echo $PRICES | python3 -c \"import json,sys; "
-          "d=json.load(sys.stdin); print(d['SpotPriceHistory'][0]['SpotPrice'])\")")
-    print("  HISTORY=$(echo $PRICES | python3 -c \"import json,sys; "
-          "from datetime import datetime; d=json.load(sys.stdin); "
-          "print(json.dumps([{'timestamp':datetime.fromisoformat("
-          "p['Timestamp'].replace('Z','+00:00')).timestamp(),"
-          "'price':float(p['SpotPrice'])} for p in d['SpotPriceHistory']]))\")")
-    print("  curl -X POST http://$HOST/api/spot-price -H 'Content-Type: application/json' \\")
-    print("    -d \"{\\\"current_price\\\":$CURRENT,\\\"az\\\":\\\"$AZ\\\","
-          "\\\"price_history\\\":$HISTORY}\"")
+    if args.https:
+        print("  TLS:         self-signed (browser will warn)")
     print()
 
-    app.run(host=args.host, port=args.port, debug=args.debug, threaded=True)
+    app.run(host=args.host, port=args.port, debug=args.debug,
+            threaded=True, ssl_context=ssl_ctx)
