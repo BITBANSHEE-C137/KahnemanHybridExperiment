@@ -153,27 +153,58 @@ KahnemanHybridExperiment/
 
 ## Results
 
-**Status: Training in progress** — GPT-2 Small (124M), 7% complete (3,500 / 50,000 steps). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
+**Status: Training in progress** — GPT-2 Small (124M), 7% complete (3,600 / 50,000 steps). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
+
+### Success Criteria
+
+The experiment tests whether a single Transformer can learn both AR and diffusion objectives with shared weights, and whether a confidence head can learn to mediate between them. These are the target metrics at training completion (step 50,000):
+
+| Metric | Target | Rationale |
+|--------|--------|-----------|
+| **AR Perplexity (WikiText-103)** | < 40 | Pretrained GPT-2 Small baseline is ~31.5. Joint training adds overhead; staying within ~25% indicates the AR objective isn't degraded by weight sharing. |
+| **S1 Token Accuracy** | > 40% | System 1 should predict masked tokens well above random (~2%). LLaDA-style diffusion on GPT-2 scale should reach meaningful accuracy. |
+| **Diffusion Loss** | < 4.0 | Steady decline from initial ~7.8 should continue as the bidirectional objective converges. |
+| **Confidence AUROC** | > 0.75 | The confidence head must reliably separate correct from incorrect System 1 predictions to make hybrid escalation useful. |
+| **Confidence ECE** | < 0.05 | Calibration — predicted confidence should match actual accuracy. Already well under target. |
+| **LAMBADA Accuracy (System 2)** | > 30% | Pretrained GPT-2 Small achieves ~36%. Joint training should preserve most of this capability. |
+| **Hybrid Escalation** | Measurable improvement | Hybrid mode (System 1 + selective System 2 escalation) should outperform System 1 alone, validating the dual-process architecture. |
 
 ### Eval Metrics Over Training
 
-| Step | AR PPL | Diff Loss | S1 Token Acc | Conf ECE | Conf AUROC |
-|------|--------|-----------|-------------|----------|------------|
-| 50 | 19,060 | 7.84 | 3.4% | 0.0499 | 0.466 |
-| 100 | 23,331 | 7.57 | 3.2% | 0.0037 | 0.502 |
-| 1,000 | 22,005 | 6.88 | 5.2% | 0.0002 | 0.548 |
-| 2,000 | 25,008 | 6.66 | 6.0% | 0.0030 | 0.594 |
-| 3,000 | 21,412 | 6.52 | 7.1% | 0.0057 | 0.628 |
+| Step | AR PPL | Diff Loss | S1 Token Acc | Conf ECE | Conf AUROC | Status |
+|------|--------|-----------|-------------|----------|------------|--------|
+| 50 | 19,060 | 7.84 | 3.4% | 0.0499 | 0.466 | Baseline |
+| 100 | 23,331 | 7.57 | 3.2% | 0.0037 | 0.502 | |
+| 1,000 | 22,005 | 6.88 | 5.2% | 0.0002 | 0.548 | Warmup phase |
+| 2,000 | 25,008 | 6.66 | 6.0% | 0.0030 | 0.594 | Warmup ends |
+| 3,000 | 21,412 | 6.52 | 7.1% | 0.0057 | 0.628 | Latest |
 
-### Early Observations
+### Progress vs. Targets
+
+| Metric | Current (step 3,000) | Target | Progress |
+|--------|---------------------|--------|----------|
+| AR Perplexity | 21,412 | < 40 | Early — PPL expected to drop sharply as training progresses |
+| S1 Token Accuracy | 7.1% | > 40% | 18% of target — trending up, doubled from baseline |
+| Diffusion Loss | 6.52 | < 4.0 | 34% of reduction achieved (7.84 &rarr; 6.52 &rarr; 4.0) |
+| Confidence AUROC | 0.628 | > 0.75 | 53% of improvement achieved (0.50 &rarr; 0.63 &rarr; 0.75) |
+| Confidence ECE | 0.006 | < 0.05 | Met |
+
+### Observations
 
 - **Diffusion loss** is steadily declining (7.84 &rarr; 6.52), showing System 1 is learning to predict masked tokens.
 - **S1 token accuracy** has doubled from random baseline (3.4% &rarr; 7.1%), indicating the bidirectional diffusion objective is making progress.
 - **Confidence AUROC** is improving (0.47 &rarr; 0.63) — the confidence head is learning to distinguish correct from incorrect System 1 predictions, which is critical for the hybrid escalation mechanism.
-- **Confidence ECE** remains very low (<0.006), suggesting the confidence head is well-calibrated from early training.
-- **AR perplexity** is still high (~21k) — expected at 7% into training, particularly with joint objectives sharing weights. For reference, pretrained GPT-2 Small achieves ~31.5 PPL on WikiText-103.
+- **Confidence ECE** remains very low (<0.006), already meeting the target. The confidence head is well-calibrated from early training.
+- **AR perplexity** is still high (~21k) — expected at 7% into training, particularly with joint objectives competing for shared weights. For reference, pretrained GPT-2 Small achieves ~31.5 PPL on WikiText-103.
 
-Benchmarks (LAMBADA, WikiText-103) and system comparison analysis will be run at training completion.
+### Remaining Benchmarks
+
+These will be run at training completion (step 50,000):
+
+- **LAMBADA** — last-word prediction accuracy (System 1 vs System 2 vs Hybrid)
+- **WikiText-103** — standard perplexity benchmark
+- **System Comparison** — escalation rates, throughput, quality across generation modes
+- **Confidence Calibration** — full analysis at final checkpoint
 
 ## Infrastructure
 
