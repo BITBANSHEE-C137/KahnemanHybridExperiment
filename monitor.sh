@@ -50,7 +50,7 @@ Y="\e[38;5;221m"     # yellow: soft amber
 RD="\e[38;5;167m"    # red: muted coral-red
 C="\e[38;5;110m"     # cyan: muted blue
 
-W=78
+W=94
 
 sep() {
     printf "  ${DM}"
@@ -134,7 +134,6 @@ draw() {
     # ── Header ──
     printf "\n"
     printf "  ${A}${B}◆${R} ${B}${T}ML Training Dashboard${R}  ${DM}${now}${R}\n"
-    printf "\n"
 
     # ── 1. Training Progress ──
     local step=0 ar="" diff="" conf="" lr_val="" elapsed="0"
@@ -179,11 +178,10 @@ draw() {
         printf "  ${C}$(fmt_time "$elapsed")${R}${S} elapsed${R}"
         [ -n "$eta_secs" ] && printf "  ${Y}$(fmt_time "$eta_secs")${R}${S} remaining${R}"
         printf "\n"
-        printf "    "; pbar "$step" "$MAX_STEPS" 60 "$G"; printf " ${B}%d%%${R}\n" "$pct"
+        printf "    "; pbar "$step" "$MAX_STEPS" 76 "$G"; printf " ${B}%d%%${R}\n" "$pct"
     else
         printf "    ${S}Waiting for first step...${R}\n"
     fi
-    printf "\n"
 
     # ── 2. Metrics ──
     if [ "$step" -gt 0 ]; then
@@ -197,7 +195,6 @@ draw() {
         sparkline "${diff_vals[@]}"
         trend diff_vals
         printf "      ${S}LR${R}        ${T}%s${R}\n" "$lr_val"
-        printf "\n"
     fi
 
     # ── 3. GPU ──
@@ -223,7 +220,6 @@ draw() {
         printf "      ${S}VRAM${R}  "; gauge "$mem_pct" "$mc"; printf " ${B}%s${R}${DM}/%sG${R}\n" "$mem_gb" "$tot_gb"
         printf "    ${S}Temp${R}  "; gauge "${gtemp%.*}" "$tc"; printf " %b%s°C%b" "$tc" "$gtemp" "$R"
         printf "      ${S}Power${R} "; gauge "$pow_pct" "$G"; printf " ${B}%s${R}${DM}/%sW${R}\n" "${gpow%.*}" "${gpow_lim%.*}"
-        printf "\n"
     fi
 
     # ── 4. Eval ──
@@ -249,7 +245,6 @@ draw() {
     else
         printf "  ${A}◆${R} ${B}Eval${R}  ${DM}no data yet${R}\n"
     fi
-    printf "\n"
 
     # ── 5. Cost ──
     local imds_token=$(curl -sf -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 30" \
@@ -326,7 +321,6 @@ print(f'{total:.2f}')
             printf "    ${DM}Spot: run update-spot-price.sh to seed data${R}\n"
         fi
     fi
-    printf "\n"
 
     # ── 6. Infrastructure ──
     local tpid=$(pgrep -f joint_trainer 2>/dev/null | head -1)
@@ -352,7 +346,6 @@ print(f'{total:.2f}')
     printf "\n"
     printf "    ${DM}config${R} ${S}%s · bs=%s×%s · lr=%s · warmup=%s · eval@%s · ckpt@%s${R}\n" \
         "$MODEL" "$BS" "$GA" "$LR" "$WARMUP" "$EVAL_EVERY" "$CKPT_EVERY"
-    printf "\n"
 
     # ── 7. Log Tail ──
     sep
@@ -399,7 +392,7 @@ print(f'{total:.2f}')
                     fi
                 done
             fi
-        done < <(tail -12 "$WANDB_LOG")
+        done < <(tail -6 "$WANDB_LOG")
     else
         printf "    ${DM}No log file found${R}\n"
     fi
