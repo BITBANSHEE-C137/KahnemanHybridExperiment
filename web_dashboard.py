@@ -1118,6 +1118,33 @@ function drawSparkline(canvasId, data, color) {
   ctx.stroke();
 }
 
+// ── Chart refresh ────────────────────────────────────────────────────────
+let lastEvalStep = null;
+let lastChartRefresh = Date.now();
+const CHART_REFRESH_INTERVAL = 300000; // 5 min
+
+function checkChartRefresh(data) {
+  const now = Date.now();
+  let needsRefresh = false;
+
+  // Refresh when new eval data appears
+  const evalStep = data.latest_eval ? data.latest_eval.step : null;
+  if (evalStep !== null && evalStep !== lastEvalStep) {
+    lastEvalStep = evalStep;
+    needsRefresh = true;
+  }
+
+  // Periodic refresh for loss chart (training data grows continuously)
+  if (now - lastChartRefresh > CHART_REFRESH_INTERVAL) {
+    needsRefresh = true;
+  }
+
+  if (needsRefresh) {
+    lastChartRefresh = now;
+    loadCharts();
+  }
+}
+
 // ── Bootstrap panel ──────────────────────────────────────────────────────
 let bsHideTimer = null;
 let bsHidden = false;
@@ -1240,6 +1267,9 @@ function updateUI(data) {
 
   // Bootstrap
   if (data.bootstrap) updateBootstrap(data.bootstrap);
+
+  // Refresh charts when new eval data appears or every 5 min
+  checkChartRefresh(data);
 
   // Progress
   $('cur-step').textContent = data.current_step.toLocaleString();
