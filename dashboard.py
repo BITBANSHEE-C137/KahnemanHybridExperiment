@@ -633,8 +633,44 @@ class Dashboard:
         with self._lock:
             lines = list(self.log)
 
+        line_w = pw - 6  # usable chars inside the box
+        indent = 6       # continuation indent for wrapped lines
+
+        def _line_color(ln):
+            if ln.startswith("[eval]"):
+                return curses.color_pair(C_TITLE)
+            if "PASSED" in ln:
+                return curses.color_pair(C_OK)
+            if "FAILED" in ln or "ERROR" in ln or "error" in ln.lower():
+                return curses.color_pair(C_FAIL)
+            if "checkpoint" in ln.lower() or "Saved" in ln:
+                return curses.color_pair(C_RUN) | curses.A_BOLD
+            if "Training complete" in ln:
+                return curses.color_pair(C_OK) | curses.A_BOLD
+            return curses.color_pair(C_LOG) | curses.A_DIM
+
+        # Build wrapped display lines: list of (text, color_attr)
+        display_lines = []
+        for ln in lines:
+            a = _line_color(ln)
+            if len(ln) <= line_w:
+                display_lines.append((ln, a))
+            else:
+                # Wrap long lines at pipe delimiters for readability
+                parts = ln.split(" | ")
+                cur = parts[0]
+                for part in parts[1:]:
+                    candidate = cur + " | " + part
+                    if len(candidate) <= line_w:
+                        cur = candidate
+                    else:
+                        display_lines.append((cur, a))
+                        cur = " " * indent + part
+                if cur:
+                    display_lines.append((cur, a))
+
         visible = log_h - 2
-        total = len(lines)
+        total = len(display_lines)
         if self.log_scroll == 0:
             start = max(0, total - visible)
         else:
@@ -643,20 +679,8 @@ class Dashboard:
         for i in range(visible):
             idx = start + i
             if 0 <= idx < total:
-                ln = lines[idx]
-                if ln.startswith("[eval]"):
-                    a = curses.color_pair(C_TITLE)
-                elif "PASSED" in ln:
-                    a = curses.color_pair(C_OK)
-                elif "FAILED" in ln or "ERROR" in ln or "error" in ln.lower():
-                    a = curses.color_pair(C_FAIL)
-                elif "checkpoint" in ln.lower() or "Saved" in ln:
-                    a = curses.color_pair(C_RUN) | curses.A_BOLD
-                elif "Training complete" in ln:
-                    a = curses.color_pair(C_OK) | curses.A_BOLD
-                else:
-                    a = curses.color_pair(C_LOG) | curses.A_DIM
-                safe_addstr(s, row + 1 + i, 3, ln[:pw - 6], a)
+                text, a = display_lines[idx]
+                safe_addstr(s, row + 1 + i, 3, text[:line_w], a)
 
         # Scroll indicator
         if total > visible:
@@ -806,7 +830,7 @@ class Dashboard:
                     elif key == curses.KEY_UP:
                         self.log_scroll = min(
                             self.log_scroll + 3,
-                            max(0, len(self.log) - 5))
+                            max(0, len(self.log) * 2))
                     elif key == curses.KEY_DOWN:
                         self.log_scroll = max(0, self.log_scroll - 3)
                     self._draw_dashboard()
@@ -823,7 +847,7 @@ class Dashboard:
                     elif key == curses.KEY_UP:
                         self.log_scroll = min(
                             self.log_scroll + 3,
-                            max(0, len(self.log) - 5))
+                            max(0, len(self.log) * 2))
                     elif key == curses.KEY_DOWN:
                         self.log_scroll = max(0, self.log_scroll - 3)
                     self._draw_dashboard()
