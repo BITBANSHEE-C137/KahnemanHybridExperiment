@@ -57,6 +57,18 @@ EVAL_RE = re.compile(
 
 SSE_INTERVAL = 10  # seconds between SSE pushes
 
+# On-demand pricing (USD/hr) — add entries as needed
+INSTANCE_PRICES = {
+    "g6.xlarge": 0.8048,
+    "g6.2xlarge": 0.9776,
+    "g6.4xlarge": 1.3232,
+    "g6.8xlarge": 2.0144,
+    "g5.xlarge": 1.006,
+    "g5.2xlarge": 1.212,
+    "g5.4xlarge": 1.624,
+    "p4d.24xlarge": 32.7726,
+}
+
 # ── Caching layer ────────────────────────────────────────────────────────────
 _cache = {}
 _cache_lock = threading.Lock()
@@ -208,6 +220,54 @@ def get_log_tail(n=20):
         return []
 
 
+def get_instance_info():
+    """Get EC2 instance type, boot time, uptime, and cost."""
+    info = {
+        "instance_type": None,
+        "boot_time_utc": None,
+        "uptime_seconds": None,
+        "price_per_hour": None,
+        "cost_so_far": None,
+    }
+    # Instance type from EC2 metadata (IMDSv2)
+    try:
+        import urllib.request
+        token_req = urllib.request.Request(
+            "http://169.254.169.254/latest/api/token",
+            method="PUT",
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
+        )
+        token = urllib.request.urlopen(token_req, timeout=2).read().decode()
+        meta_req = urllib.request.Request(
+            "http://169.254.169.254/latest/meta-data/instance-type",
+            headers={"X-aws-ec2-metadata-token": token},
+        )
+        info["instance_type"] = urllib.request.urlopen(meta_req, timeout=2).read().decode().strip()
+    except Exception:
+        pass
+
+    # Boot time from uptime -s (UTC on EC2)
+    try:
+        boot_str = subprocess.check_output(["uptime", "-s"], timeout=3, text=True).strip()
+        boot_dt = datetime.strptime(boot_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        info["boot_time_utc"] = boot_dt.isoformat()
+        uptime_s = (datetime.now(timezone.utc) - boot_dt).total_seconds()
+        info["uptime_seconds"] = max(0, uptime_s)
+    except Exception:
+        pass
+
+    # Cost
+    itype = info["instance_type"]
+    if itype and itype in INSTANCE_PRICES:
+        info["price_per_hour"] = INSTANCE_PRICES[itype]
+        if info["uptime_seconds"] is not None:
+            info["cost_so_far"] = round(
+                info["price_per_hour"] * info["uptime_seconds"] / 3600, 4
+            )
+
+    return info
+
+
 # ── Composite status builder ─────────────────────────────────────────────────
 
 def build_status():
@@ -218,6 +278,7 @@ def build_status():
     gpu = cached("gpu", 5, get_gpu_stats)
     infra = cached("infra", 10, get_infra_status)
     config = cached("config", 60, read_config)
+    instance = cached("instance", 30, get_instance_info)
     log_tail = get_log_tail(20)
 
     max_steps = config.get("training", {}).get("max_steps", 50000)
@@ -243,6 +304,18 @@ def build_status():
 
     latest_eval = eval_lines[-1] if eval_lines else None
 
+    # Recompute instance cost live (cached instance info has stale uptime)
+    inst = dict(instance) if instance else {}
+    if inst.get("boot_time_utc") and inst.get("price_per_hour"):
+        boot_dt = datetime.fromisoformat(inst["boot_time_utc"])
+        uptime_s = (datetime.now(timezone.utc) - boot_dt).total_seconds()
+        inst["uptime_seconds"] = max(0, uptime_s)
+        inst["cost_so_far"] = round(inst["price_per_hour"] * uptime_s / 3600, 4)
+
+    # Projected total cost = current $/step * max_steps
+    if inst.get("cost_so_far") and current_step > 0:
+        inst["projected_total"] = round(inst["cost_so_far"] / current_step * max_steps, 2)
+
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "current_step": current_step,
@@ -254,6 +327,7 @@ def build_status():
         "latest_eval": latest_eval,
         "gpu": gpu,
         "infra": infra,
+        "instance": inst,
         "log_tail": log_tail,
         "config_summary": {
             "model": config.get("model", {}).get("name", "?"),
@@ -505,6 +579,33 @@ body {
     </div>
   </div>
 
+  <!-- Instance & Cost -->
+  <div class="card" style="margin-bottom:16px">
+    <h2>Instance & Cost</h2>
+    <div class="metrics-row">
+      <div class="metric-box">
+        <div class="label">Instance</div>
+        <div class="value" id="inst-type" style="font-size:16px">—</div>
+      </div>
+      <div class="metric-box">
+        <div class="label">Uptime</div>
+        <div class="value" id="inst-uptime" style="font-size:16px">—</div>
+      </div>
+      <div class="metric-box">
+        <div class="label">Rate</div>
+        <div class="value" id="inst-rate" style="font-size:16px">—</div>
+      </div>
+      <div class="metric-box">
+        <div class="label">Cost So Far</div>
+        <div class="value" id="inst-cost" style="font-size:20px;color:var(--yellow)">—</div>
+      </div>
+      <div class="metric-box">
+        <div class="label">Projected Total</div>
+        <div class="value" id="inst-projected" style="font-size:16px">—</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Progress -->
   <div class="card" style="margin-bottom:16px">
     <h2>Training Progress</h2>
@@ -679,7 +780,33 @@ function drawSparkline(canvasId, data, color) {
   ctx.stroke();
 }
 
+// ── Cost ticker state ────────────────────────────────────────────────────
+let costState = { bootTime: null, pricePerHour: null };
+
+function tickCost() {
+  if (!costState.bootTime || !costState.pricePerHour) return;
+  const now = Date.now() / 1000;
+  const uptime = now - costState.bootTime;
+  const cost = costState.pricePerHour * uptime / 3600;
+  const el = document.getElementById('inst-cost');
+  if (el) el.textContent = '$' + cost.toFixed(2);
+  const upEl = document.getElementById('inst-uptime');
+  if (upEl) upEl.textContent = fmtTimeLong(uptime);
+}
+setInterval(tickCost, 1000);
+
 // ── Format helpers ───────────────────────────────────────────────────────
+function fmtTimeLong(s) {
+  if (s == null) return '—';
+  s = Math.round(s);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return h + 'h ' + m + 'm ' + sec + 's';
+  if (m > 0) return m + 'm ' + sec + 's';
+  return sec + 's';
+}
+
 function fmtTime(s) {
   if (s == null) return '—';
   s = Math.round(s);
@@ -709,6 +836,24 @@ function updateUI(data) {
   const bar = document.getElementById('progress-bar');
   bar.style.width = pct + '%';
   bar.textContent = pct.toFixed(1) + '%';
+
+  // Instance & cost
+  const inst = data.instance;
+  if (inst) {
+    document.getElementById('inst-type').textContent = inst.instance_type || '—';
+    document.getElementById('inst-rate').textContent = inst.price_per_hour ? '$' + inst.price_per_hour.toFixed(4) + '/hr' : '—';
+    if (inst.boot_time_utc && inst.price_per_hour) {
+      costState.bootTime = new Date(inst.boot_time_utc).getTime() / 1000;
+      costState.pricePerHour = inst.price_per_hour;
+    }
+    if (inst.uptime_seconds != null) {
+      document.getElementById('inst-uptime').textContent = fmtTimeLong(inst.uptime_seconds);
+    }
+    if (inst.cost_so_far != null) {
+      document.getElementById('inst-cost').textContent = '$' + inst.cost_so_far.toFixed(2);
+    }
+    document.getElementById('inst-projected').textContent = inst.projected_total != null ? '$' + inst.projected_total.toFixed(2) : '—';
+  }
 
   // Live metrics
   const t = data.latest_train;
