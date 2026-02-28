@@ -5,6 +5,10 @@ ML Training Dashboard — single-file Flask web UI.
 Monitors training progress by reading log files and eval JSONs from disk.
 No project-specific imports; configure the paths/regexes at the top.
 
+Spot price: The instance role lacks ec2:DescribeSpotPriceHistory, so spot
+pricing is fed externally via POST /api/spot-price or a JSON file at
+/tmp/spot_price.json.  A helper one-liner is printed at startup.
+
 Usage:
     pip install flask pyyaml
     python web_dashboard.py          # http://0.0.0.0:5000
@@ -19,6 +23,7 @@ import re
 import subprocess
 import time
 import threading
+import urllib.request
 from datetime import datetime, timezone
 
 import yaml
@@ -31,9 +36,9 @@ EVAL_DIR = os.path.join(DATA_DIR, "eval_metrics")
 CONFIG_PATH = os.path.join(PROJECT_DIR, "configs/tiny.yaml")
 WANDB_DIR = os.path.join(PROJECT_DIR, "wandb")
 CHECKPOINT_DIR = os.path.join(PROJECT_DIR, "checkpoints")
+SPOT_PRICE_FILE = "/tmp/spot_price.json"
 
-# Regex for training step lines:
-#   step: 200 | ar_loss: 3.1444 | diff_loss: 7.2471 | conf_acc: 0.0000 | lr: 2.98e-05 | time: 609.7s
+# Regex for training step lines
 STEP_RE = re.compile(
     r"^step:\s*(?P<step>\d+)\s*\|"
     r"\s*ar_loss:\s*(?P<ar_loss>[\d.]+)\s*\|"
@@ -43,8 +48,7 @@ STEP_RE = re.compile(
     r"\s*time:\s*(?P<time>[\d.]+)s"
 )
 
-# Regex for eval lines:
-#   [eval] step: 1000 | ar_ppl: 22004.99 | diff_loss: 6.8837 | s1_tok_acc: 0.0516 | ...
+# Regex for eval lines
 EVAL_RE = re.compile(
     r"^\[eval\]\s*step:\s*(?P<step>\d+)\s*\|"
     r"\s*ar_ppl:\s*(?P<ar_ppl>[\d.]+)\s*\|"
@@ -98,7 +102,6 @@ def find_output_log():
 
 
 def parse_training_steps():
-    """Parse all training step lines from the output log."""
     log = find_output_log()
     if not log:
         return []
@@ -119,7 +122,6 @@ def parse_training_steps():
 
 
 def parse_eval_lines():
-    """Parse eval lines from the output log."""
     log = find_output_log()
     if not log:
         return []
@@ -141,7 +143,6 @@ def parse_eval_lines():
 
 
 def read_eval_jsons():
-    """Read eval_step_*.json files from the eval directory."""
     pattern = os.path.join(EVAL_DIR, "eval_step_*.json")
     files = sorted(glob.glob(pattern))
     results = []
@@ -156,7 +157,6 @@ def read_eval_jsons():
 
 
 def get_gpu_stats():
-    """Query nvidia-smi for GPU metrics."""
     try:
         out = subprocess.check_output(
             ["nvidia-smi",
@@ -179,7 +179,6 @@ def get_gpu_stats():
 
 
 def get_infra_status():
-    """Check running processes and checkpoints."""
     def is_running(pattern):
         try:
             subprocess.check_output(["pgrep", "-f", pattern], timeout=3)
@@ -199,7 +198,6 @@ def get_infra_status():
 
 
 def read_config():
-    """Read the training config YAML."""
     try:
         with open(CONFIG_PATH) as f:
             return yaml.safe_load(f)
@@ -208,7 +206,6 @@ def read_config():
 
 
 def get_log_tail(n=20):
-    """Return the last n lines of the output log."""
     log = find_output_log()
     if not log:
         return []
@@ -221,64 +218,79 @@ def get_log_tail(n=20):
 
 
 def get_instance_info():
-    """Get EC2 instance type, boot time, uptime, and cost."""
+    """Get EC2 instance type, lifecycle, boot time, and AZ."""
     info = {
         "instance_type": None,
+        "lifecycle": None,
+        "az": None,
         "boot_time_utc": None,
         "uptime_seconds": None,
-        "price_per_hour": None,
-        "cost_so_far": None,
+        "ondemand_price_per_hour": None,
     }
-    # Instance type from EC2 metadata (IMDSv2)
+    # EC2 metadata (IMDSv2)
     try:
-        import urllib.request
         token_req = urllib.request.Request(
             "http://169.254.169.254/latest/api/token",
             method="PUT",
             headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
         )
         token = urllib.request.urlopen(token_req, timeout=2).read().decode()
-        meta_req = urllib.request.Request(
-            "http://169.254.169.254/latest/meta-data/instance-type",
-            headers={"X-aws-ec2-metadata-token": token},
-        )
-        info["instance_type"] = urllib.request.urlopen(meta_req, timeout=2).read().decode().strip()
+
+        def _meta(path):
+            r = urllib.request.Request(
+                f"http://169.254.169.254/latest/meta-data/{path}",
+                headers={"X-aws-ec2-metadata-token": token},
+            )
+            return urllib.request.urlopen(r, timeout=2).read().decode().strip()
+
+        info["instance_type"] = _meta("instance-type")
+        info["lifecycle"] = _meta("instance-life-cycle")  # "spot" or "on-demand"
+        info["az"] = _meta("placement/availability-zone")
     except Exception:
         pass
 
-    # Boot time from uptime -s (UTC on EC2)
+    # Boot time
     try:
         boot_str = subprocess.check_output(["uptime", "-s"], timeout=3, text=True).strip()
         boot_dt = datetime.strptime(boot_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
         info["boot_time_utc"] = boot_dt.isoformat()
-        uptime_s = (datetime.now(timezone.utc) - boot_dt).total_seconds()
-        info["uptime_seconds"] = max(0, uptime_s)
+        info["uptime_seconds"] = max(0, (datetime.now(timezone.utc) - boot_dt).total_seconds())
     except Exception:
         pass
 
-    # Cost
+    # On-demand price
     itype = info["instance_type"]
     if itype and itype in INSTANCE_PRICES:
-        info["price_per_hour"] = INSTANCE_PRICES[itype]
-        if info["uptime_seconds"] is not None:
-            info["cost_so_far"] = round(
-                info["price_per_hour"] * info["uptime_seconds"] / 3600, 4
-            )
+        info["ondemand_price_per_hour"] = INSTANCE_PRICES[itype]
 
     return info
+
+
+def read_spot_price():
+    """Read spot price data from the external JSON file."""
+    try:
+        with open(SPOT_PRICE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def write_spot_price(data):
+    """Write spot price data to the JSON file."""
+    with open(SPOT_PRICE_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 
 # ── Composite status builder ─────────────────────────────────────────────────
 
 def build_status():
-    """Build the full status snapshot."""
     steps = cached("steps", 5, parse_training_steps)
     eval_lines = cached("eval_lines", 5, parse_eval_lines)
-    eval_jsons = cached("eval_jsons", 15, read_eval_jsons)
     gpu = cached("gpu", 5, get_gpu_stats)
     infra = cached("infra", 10, get_infra_status)
     config = cached("config", 60, read_config)
     instance = cached("instance", 30, get_instance_info)
+    spot_data = cached("spot", 15, read_spot_price)
     log_tail = get_log_tail(20)
 
     max_steps = config.get("training", {}).get("max_steps", 50000)
@@ -288,7 +300,7 @@ def build_status():
     current_step = latest["step"] if latest else 0
     progress_pct = (current_step / max_steps * 100) if max_steps else 0
 
-    # ETA calculation
+    # ETA
     eta_s = None
     phase = "idle"
     if latest and len(steps) >= 2:
@@ -296,28 +308,61 @@ def build_status():
         sps = current_step / elapsed if elapsed > 0 else 0
         remaining = max_steps - current_step
         eta_s = remaining / sps if sps > 0 else None
-
-        if current_step <= warmup_steps:
-            phase = "warmup"
-        else:
-            phase = "cosine_decay"
+        phase = "warmup" if current_step <= warmup_steps else "cosine_decay"
 
     latest_eval = eval_lines[-1] if eval_lines else None
 
-    # Recompute instance cost live (cached instance info has stale uptime)
+    # Live cost recomputation
     inst = dict(instance) if instance else {}
-    if inst.get("boot_time_utc") and inst.get("price_per_hour"):
+    now = datetime.now(timezone.utc)
+    uptime_s = None
+    if inst.get("boot_time_utc"):
         boot_dt = datetime.fromisoformat(inst["boot_time_utc"])
-        uptime_s = (datetime.now(timezone.utc) - boot_dt).total_seconds()
-        inst["uptime_seconds"] = max(0, uptime_s)
-        inst["cost_so_far"] = round(inst["price_per_hour"] * uptime_s / 3600, 4)
+        uptime_s = max(0, (now - boot_dt).total_seconds())
+        inst["uptime_seconds"] = uptime_s
 
-    # Projected total cost = current $/step * max_steps
-    if inst.get("cost_so_far") and current_step > 0:
-        inst["projected_total"] = round(inst["cost_so_far"] / current_step * max_steps, 2)
+    # On-demand cost
+    od_rate = inst.get("ondemand_price_per_hour")
+    od_cost = round(od_rate * uptime_s / 3600, 4) if od_rate and uptime_s else None
+
+    # Spot cost — computed from price history segments
+    spot_rate = None
+    spot_cost = None
+    if spot_data and uptime_s and inst.get("boot_time_utc"):
+        spot_rate = spot_data.get("current_price")
+        history = spot_data.get("price_history", [])
+        if history:
+            boot_ts = datetime.fromisoformat(inst["boot_time_utc"]).timestamp()
+            now_ts = now.timestamp()
+            # Sort by timestamp ascending
+            history = sorted(history, key=lambda x: x["timestamp"])
+            total = 0.0
+            for i, seg in enumerate(history):
+                seg_start = max(seg["timestamp"], boot_ts)
+                seg_end = history[i + 1]["timestamp"] if i + 1 < len(history) else now_ts
+                seg_end = min(seg_end, now_ts)
+                if seg_start < seg_end:
+                    total += seg["price"] * (seg_end - seg_start) / 3600
+            spot_cost = round(total, 4)
+        elif spot_rate:
+            spot_cost = round(spot_rate * uptime_s / 3600, 4)
+
+    # Projected totals
+    od_projected = round(od_cost / current_step * max_steps, 2) if od_cost and current_step > 0 else None
+    spot_projected = round(spot_cost / current_step * max_steps, 2) if spot_cost and current_step > 0 else None
+
+    inst["ondemand_cost"] = od_cost
+    inst["ondemand_projected"] = od_projected
+    inst["spot_rate"] = spot_rate
+    inst["spot_cost"] = spot_cost
+    inst["spot_projected"] = spot_projected
+    inst["spot_updated"] = spot_data.get("updated") if spot_data else None
+    if od_cost and spot_cost:
+        inst["savings"] = round(od_cost - spot_cost, 2)
+        inst["savings_pct"] = round((1 - spot_cost / od_cost) * 100, 1)
 
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now.isoformat(),
         "current_step": current_step,
         "max_steps": max_steps,
         "progress_pct": round(progress_pct, 2),
@@ -358,7 +403,6 @@ def api_history():
 
 @app.route("/api/eval/history")
 def api_eval_history():
-    # Merge log-based eval lines with on-disk JSONs, preferring JSONs (more fields)
     eval_jsons = cached("eval_jsons", 15, read_eval_jsons)
     eval_lines = cached("eval_lines", 5, parse_eval_lines)
     seen = {e.get("step") for e in eval_jsons}
@@ -368,6 +412,38 @@ def api_eval_history():
             merged.append(e)
     merged.sort(key=lambda x: x.get("step", 0))
     return jsonify(merged)
+
+
+@app.route("/api/spot-price", methods=["GET"])
+def api_spot_price_get():
+    data = read_spot_price()
+    if data:
+        return jsonify(data)
+    return jsonify({"error": "no spot price data"}), 404
+
+
+@app.route("/api/spot-price", methods=["POST"])
+def api_spot_price_post():
+    """Accept spot price data from an external source (e.g. local AWS CLI).
+
+    Expected JSON:
+    {
+      "current_price": 0.3765,
+      "az": "us-east-1b",
+      "updated": "2026-02-28T16:00:00Z",
+      "price_history": [
+        {"timestamp": 1740700000, "price": 0.3771},
+        {"timestamp": 1740720000, "price": 0.3765}
+      ]
+    }
+    """
+    data = request.get_json(force=True)
+    data["updated"] = data.get("updated", datetime.now(timezone.utc).isoformat())
+    write_spot_price(data)
+    # Bust cache
+    with _cache_lock:
+        _cache.pop("spot", None)
+    return jsonify({"ok": True})
 
 
 @app.route("/stream")
@@ -408,29 +484,39 @@ HTML_PAGE = r"""<!DOCTYPE html>
   --red: #f87171;
   --orange: #fb923c;
 }
-* { margin: 0; padding: 0; box-sizing: border-box; }
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { overflow-x: hidden; }
 body {
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   background: var(--bg);
   color: var(--text);
   font-size: 13px;
   line-height: 1.5;
+  overflow-x: hidden;
+  min-width: 0;
 }
-.container { max-width: 1400px; margin: 0 auto; padding: 16px; }
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 12px;
+  overflow: hidden;
+}
 
 /* Header */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 10px 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
-.header h1 { font-size: 16px; font-weight: 600; }
-.header .meta { color: var(--dim); font-size: 12px; }
+.header h1 { font-size: 15px; font-weight: 600; white-space: nowrap; }
+.header .meta { color: var(--dim); font-size: 11px; }
 .pulse {
   display: inline-block;
   width: 8px; height: 8px;
@@ -448,33 +534,35 @@ body {
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 12px;
 }
-.grid-full { grid-column: 1 / -1; }
 
 /* Cards */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 16px;
+  padding: 14px;
+  min-width: 0;
+  overflow: hidden;
 }
+.card-full { margin-bottom: 12px; }
 .card h2 {
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--dim);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 /* Progress bar */
 .progress-outer {
   width: 100%;
-  height: 24px;
+  height: 22px;
   background: var(--bg);
   border-radius: 4px;
   overflow: hidden;
-  margin: 8px 0;
+  margin: 6px 0;
 }
 .progress-inner {
   height: 100%;
@@ -487,81 +575,170 @@ body {
   font-size: 11px;
   font-weight: 600;
   color: #000;
-  min-width: 40px;
+  min-width: 36px;
 }
 
 /* Metric boxes */
 .metrics-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 8px;
 }
 .metric-box {
-  flex: 1;
-  min-width: 120px;
   background: var(--bg);
   border-radius: 6px;
-  padding: 12px;
+  padding: 10px 8px;
   text-align: center;
+  min-width: 0;
+  overflow: hidden;
 }
-.metric-box .label { font-size: 11px; color: var(--dim); margin-bottom: 4px; }
-.metric-box .value { font-size: 20px; font-weight: 700; }
-.metric-box .sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
-.metric-box canvas { margin-top: 6px; }
+.metric-box .label {
+  font-size: 10px;
+  color: var(--dim);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.metric-box .value {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.metric-box .sub { font-size: 10px; color: var(--dim); margin-top: 2px; }
+.metric-box canvas { margin-top: 4px; }
+
+/* Cost comparison layout */
+.cost-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: start;
+}
+.cost-col {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px;
+  min-width: 0;
+}
+.cost-col h3 {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+.cost-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 4px 0;
+  gap: 6px;
+}
+.cost-row .cl { font-size: 11px; color: var(--dim); white-space: nowrap; }
+.cost-row .cv { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.cost-big { font-size: 22px !important; font-weight: 700 !important; }
+.cost-col-delta {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px;
+  text-align: center;
+  min-width: 100px;
+}
+.cost-col-delta h3 {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+.savings-big {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--green);
+}
+.savings-pct {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--green);
+  margin-top: 4px;
+}
+.savings-label { font-size: 10px; color: var(--dim); margin-top: 2px; }
+.spot-stale { font-size: 10px; color: var(--orange); margin-top: 6px; }
+
+/* Instance info row */
+.inst-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.inst-row .inst-item { color: var(--dim); white-space: nowrap; }
+.inst-row .inst-val { color: var(--text); font-weight: 600; }
 
 /* GPU bars */
-.bar-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
-.bar-label { width: 80px; font-size: 12px; color: var(--dim); }
+.bar-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+.bar-label { width: 75px; font-size: 11px; color: var(--dim); flex-shrink: 0; }
 .bar-outer {
-  flex: 1; height: 18px;
+  flex: 1; height: 16px; min-width: 0;
   background: var(--bg); border-radius: 3px; overflow: hidden;
 }
 .bar-inner {
   height: 100%; border-radius: 3px;
   transition: width 0.5s ease;
-  display: flex; align-items: center; padding-left: 6px;
-  font-size: 10px; font-weight: 600; color: #000;
+  display: flex; align-items: center; padding-left: 5px;
+  font-size: 9px; font-weight: 600; color: #000;
 }
+.bar-val { width: 80px; text-align: right; font-size: 11px; flex-shrink: 0; white-space: nowrap; }
 
 /* Badges */
 .badge {
   display: inline-block;
-  padding: 3px 10px;
-  border-radius: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
-  margin-right: 6px;
+  margin-right: 4px;
   margin-bottom: 4px;
 }
 .badge-green { background: var(--green); color: #000; }
 .badge-red { background: var(--red); color: #000; }
-.badge-dim { background: var(--border); color: var(--dim); }
 
 /* Log */
 .log-box {
   background: var(--bg);
   border-radius: 6px;
-  padding: 10px;
-  max-height: 300px;
+  padding: 8px;
+  max-height: 280px;
   overflow-y: auto;
+  overflow-x: auto;
   font-size: 11px;
-  line-height: 1.6;
+  line-height: 1.5;
   white-space: pre;
 }
 .log-box .eval-line { color: var(--yellow); }
 .log-box .step-line { color: var(--text); }
 
 /* Charts */
-.chart-container { position: relative; height: 250px; }
+.chart-container { position: relative; height: 240px; }
 
 /* Checkpoint list */
-.ckpt-list { font-size: 12px; color: var(--dim); }
-.ckpt-list span { display: inline-block; margin: 2px 4px; padding: 2px 6px; background: var(--bg); border-radius: 3px; }
+.ckpt-list { font-size: 11px; color: var(--dim); }
+.ckpt-list span {
+  display: inline-block;
+  margin: 2px 3px;
+  padding: 1px 5px;
+  background: var(--bg);
+  border-radius: 3px;
+}
 
 /* Responsive */
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .grid { grid-template-columns: 1fr; }
-  .metrics-row { flex-direction: column; }
+  .cost-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -570,49 +747,59 @@ body {
 
   <!-- Header -->
   <div class="header">
-    <div>
-      <h1><span class="pulse" id="pulse"></span>ML Training Dashboard</h1>
-    </div>
+    <div><h1><span class="pulse" id="pulse"></span>ML Training Dashboard</h1></div>
     <div class="meta">
       <span id="conn-status">Connecting...</span> &middot;
-      <span id="timestamp">—</span>
+      <span id="timestamp"></span>
     </div>
   </div>
 
   <!-- Instance & Cost -->
-  <div class="card" style="margin-bottom:16px">
+  <div class="card card-full">
     <h2>Instance & Cost</h2>
-    <div class="metrics-row">
-      <div class="metric-box">
-        <div class="label">Instance</div>
-        <div class="value" id="inst-type" style="font-size:16px">—</div>
+    <div class="inst-row">
+      <span class="inst-item">Type: <span class="inst-val" id="inst-type">--</span></span>
+      <span class="inst-item">Lifecycle: <span class="inst-val" id="inst-lifecycle">--</span></span>
+      <span class="inst-item">AZ: <span class="inst-val" id="inst-az">--</span></span>
+      <span class="inst-item">Uptime: <span class="inst-val" id="inst-uptime">--</span></span>
+    </div>
+    <div class="cost-grid">
+      <!-- On-demand column -->
+      <div class="cost-col">
+        <h3>On-Demand</h3>
+        <div class="cost-row"><span class="cl">Rate</span><span class="cv" id="od-rate">--</span></div>
+        <div class="cost-row"><span class="cl">Cost</span><span class="cv cost-big" id="od-cost" style="color:var(--orange)">--</span></div>
+        <div class="cost-row"><span class="cl">Projected</span><span class="cv" id="od-proj">--</span></div>
       </div>
-      <div class="metric-box">
-        <div class="label">Uptime</div>
-        <div class="value" id="inst-uptime" style="font-size:16px">—</div>
+      <!-- Spot column -->
+      <div class="cost-col">
+        <h3>Spot (actual)</h3>
+        <div class="cost-row"><span class="cl">Rate</span><span class="cv" id="spot-rate">--</span></div>
+        <div class="cost-row"><span class="cl">Cost</span><span class="cv cost-big" id="spot-cost" style="color:var(--green)">--</span></div>
+        <div class="cost-row"><span class="cl">Projected</span><span class="cv" id="spot-proj">--</span></div>
+        <div class="spot-stale" id="spot-stale" style="display:none"></div>
       </div>
-      <div class="metric-box">
-        <div class="label">Rate</div>
-        <div class="value" id="inst-rate" style="font-size:16px">—</div>
-      </div>
-      <div class="metric-box">
-        <div class="label">Cost So Far</div>
-        <div class="value" id="inst-cost" style="font-size:20px;color:var(--yellow)">—</div>
-      </div>
-      <div class="metric-box">
-        <div class="label">Projected Total</div>
-        <div class="value" id="inst-projected" style="font-size:16px">—</div>
+      <!-- Delta column -->
+      <div class="cost-col-delta">
+        <h3>Savings</h3>
+        <div class="savings-big" id="delta-cost">--</div>
+        <div class="savings-pct" id="delta-pct">--</div>
+        <div class="savings-label">saved so far</div>
+        <div style="margin-top:8px">
+          <div class="savings-label">projected savings</div>
+          <div style="font-size:14px;font-weight:600;color:var(--green)" id="delta-proj">--</div>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Progress -->
-  <div class="card" style="margin-bottom:16px">
+  <div class="card card-full">
     <h2>Training Progress</h2>
-    <div style="display:flex; justify-content:space-between; margin-bottom:4px">
-      <span>Step <strong id="cur-step">—</strong> / <span id="max-step">—</span></span>
-      <span>Phase: <strong id="phase">—</strong></span>
-      <span>ETA: <strong id="eta">—</strong></span>
+    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size:12px">
+      <span>Step <strong id="cur-step">--</strong> / <span id="max-step">--</span></span>
+      <span>Phase: <strong id="phase">--</strong></span>
+      <span>ETA: <strong id="eta">--</strong></span>
     </div>
     <div class="progress-outer">
       <div class="progress-inner" id="progress-bar" style="width:0%">0%</div>
@@ -627,23 +814,23 @@ body {
       <div class="metrics-row">
         <div class="metric-box">
           <div class="label">AR Loss</div>
-          <div class="value" id="m-ar-loss">—</div>
-          <canvas id="spark-ar" width="100" height="30"></canvas>
+          <div class="value" id="m-ar-loss">--</div>
+          <canvas id="spark-ar" width="100" height="28"></canvas>
         </div>
         <div class="metric-box">
           <div class="label">Diff Loss</div>
-          <div class="value" id="m-diff-loss">—</div>
-          <canvas id="spark-diff" width="100" height="30"></canvas>
+          <div class="value" id="m-diff-loss">--</div>
+          <canvas id="spark-diff" width="100" height="28"></canvas>
         </div>
         <div class="metric-box">
           <div class="label">Conf Acc</div>
-          <div class="value" id="m-conf-acc">—</div>
-          <canvas id="spark-conf" width="100" height="30"></canvas>
+          <div class="value" id="m-conf-acc">--</div>
+          <canvas id="spark-conf" width="100" height="28"></canvas>
         </div>
         <div class="metric-box">
           <div class="label">LR</div>
-          <div class="value" id="m-lr">—</div>
-          <canvas id="spark-lr" width="100" height="30"></canvas>
+          <div class="value" id="m-lr">--</div>
+          <canvas id="spark-lr" width="100" height="28"></canvas>
         </div>
       </div>
     </div>
@@ -651,26 +838,26 @@ body {
     <!-- GPU -->
     <div class="card">
       <h2>GPU</h2>
-      <div id="gpu-name" style="color:var(--dim);font-size:12px;margin-bottom:8px">—</div>
+      <div id="gpu-name" style="color:var(--dim);font-size:11px;margin-bottom:6px">--</div>
       <div class="bar-row">
         <span class="bar-label">Utilization</span>
         <div class="bar-outer"><div class="bar-inner" id="gpu-util-bar" style="width:0%"></div></div>
-        <span id="gpu-util-val" style="width:40px;text-align:right">—</span>
+        <span class="bar-val" id="gpu-util-val">--</span>
       </div>
       <div class="bar-row">
         <span class="bar-label">VRAM</span>
         <div class="bar-outer"><div class="bar-inner" id="gpu-vram-bar" style="width:0%"></div></div>
-        <span id="gpu-vram-val" style="width:80px;text-align:right;font-size:12px">—</span>
+        <span class="bar-val" id="gpu-vram-val">--</span>
       </div>
       <div class="bar-row">
-        <span class="bar-label">Temperature</span>
+        <span class="bar-label">Temp</span>
         <div class="bar-outer"><div class="bar-inner" id="gpu-temp-bar" style="width:0%"></div></div>
-        <span id="gpu-temp-val" style="width:40px;text-align:right">—</span>
+        <span class="bar-val" id="gpu-temp-val">--</span>
       </div>
       <div class="bar-row">
         <span class="bar-label">Power</span>
         <div class="bar-outer"><div class="bar-inner" id="gpu-power-bar" style="width:0%"></div></div>
-        <span id="gpu-power-val" style="width:80px;text-align:right;font-size:12px">—</span>
+        <span class="bar-val" id="gpu-power-val">--</span>
       </div>
     </div>
 
@@ -689,24 +876,24 @@ body {
     <!-- Infra -->
     <div class="card">
       <h2>Infrastructure</h2>
-      <div style="margin-bottom:8px">
+      <div style="margin-bottom:6px">
         <span class="badge" id="badge-trainer">Trainer: ?</span>
         <span class="badge" id="badge-sync">Sync: ?</span>
       </div>
-      <div style="margin-bottom:8px">
-        <strong style="font-size:12px;color:var(--dim)">Checkpoints:</strong>
-        <div class="ckpt-list" id="ckpt-list">—</div>
+      <div style="margin-bottom:6px">
+        <span style="font-size:11px;color:var(--dim)">Checkpoints:</span>
+        <div class="ckpt-list" id="ckpt-list">--</div>
       </div>
       <div>
-        <strong style="font-size:12px;color:var(--dim)">Config:</strong>
-        <div id="config-info" style="font-size:12px;color:var(--dim);margin-top:4px">—</div>
+        <span style="font-size:11px;color:var(--dim)">Config:</span>
+        <div id="config-info" style="font-size:11px;color:var(--dim);margin-top:2px">--</div>
       </div>
     </div>
 
     <!-- Log tail -->
     <div class="card">
       <h2>Log Tail</h2>
-      <div class="log-box" id="log-tail">—</div>
+      <div class="log-box" id="log-tail">--</div>
     </div>
 
   </div>
@@ -718,10 +905,10 @@ const chartOpts = {
   responsive: true,
   maintainAspectRatio: false,
   animation: { duration: 300 },
-  plugins: { legend: { labels: { color: '#888', font: { size: 11, family: 'monospace' } } } },
+  plugins: { legend: { labels: { color: '#888', font: { size: 10, family: 'monospace' } } } },
   scales: {
-    x: { ticks: { color: '#666', font: { size: 10 } }, grid: { color: '#1f2233' } },
-    y: { ticks: { color: '#666', font: { size: 10 } }, grid: { color: '#1f2233' } },
+    x: { ticks: { color: '#555', font: { size: 9 } }, grid: { color: '#1f2233' } },
+    y: { ticks: { color: '#555', font: { size: 9 } }, grid: { color: '#1f2233' } },
   },
 };
 
@@ -751,8 +938,8 @@ const evalChart = new Chart(document.getElementById('chart-eval'), {
     ...chartOpts,
     scales: {
       ...chartOpts.scales,
-      y: { ...chartOpts.scales.y, position: 'left', title: { display: true, text: 'Acc / AUROC', color: '#666' } },
-      y1: { ...chartOpts.scales.y, position: 'right', title: { display: true, text: 'PPL', color: '#666' }, grid: { drawOnChartArea: false } },
+      y: { ...chartOpts.scales.y, position: 'left', title: { display: true, text: 'Acc / AUROC', color: '#555' } },
+      y1: { ...chartOpts.scales.y, position: 'right', title: { display: true, text: 'PPL', color: '#555' }, grid: { drawOnChartArea: false } },
     },
   },
 });
@@ -780,24 +967,39 @@ function drawSparkline(canvasId, data, color) {
   ctx.stroke();
 }
 
-// ── Cost ticker state ────────────────────────────────────────────────────
-let costState = { bootTime: null, pricePerHour: null };
+// ── Cost ticker ──────────────────────────────────────────────────────────
+let costState = { bootTime: null, odRate: null, spotRate: null, spotCostBase: null, spotCostBaseTime: null };
 
 function tickCost() {
-  if (!costState.bootTime || !costState.pricePerHour) return;
+  if (!costState.bootTime) return;
   const now = Date.now() / 1000;
   const uptime = now - costState.bootTime;
-  const cost = costState.pricePerHour * uptime / 3600;
-  const el = document.getElementById('inst-cost');
-  if (el) el.textContent = '$' + cost.toFixed(2);
-  const upEl = document.getElementById('inst-uptime');
-  if (upEl) upEl.textContent = fmtTimeLong(uptime);
+  document.getElementById('inst-uptime').textContent = fmtTimeLong(uptime);
+  // On-demand ticker
+  if (costState.odRate) {
+    const odCost = costState.odRate * uptime / 3600;
+    document.getElementById('od-cost').textContent = '$' + odCost.toFixed(2);
+  }
+  // Spot ticker: extrapolate from last known base using current rate
+  if (costState.spotRate && costState.spotCostBase != null && costState.spotCostBaseTime) {
+    const dt = now - costState.spotCostBaseTime;
+    const spotCost = costState.spotCostBase + costState.spotRate * dt / 3600;
+    document.getElementById('spot-cost').textContent = '$' + spotCost.toFixed(2);
+    // Update savings in real time
+    if (costState.odRate) {
+      const odCost = costState.odRate * uptime / 3600;
+      const saved = odCost - spotCost;
+      document.getElementById('delta-cost').textContent = '$' + saved.toFixed(2);
+      const pct = odCost > 0 ? ((1 - spotCost / odCost) * 100).toFixed(1) : 0;
+      document.getElementById('delta-pct').textContent = pct + '% less';
+    }
+  }
 }
 setInterval(tickCost, 1000);
 
 // ── Format helpers ───────────────────────────────────────────────────────
 function fmtTimeLong(s) {
-  if (s == null) return '—';
+  if (s == null) return '--';
   s = Math.round(s);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -808,7 +1010,7 @@ function fmtTimeLong(s) {
 }
 
 function fmtTime(s) {
-  if (s == null) return '—';
+  if (s == null) return '--';
   s = Math.round(s);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -822,46 +1024,91 @@ function barColor(pct) {
   return '#34d399';
 }
 
+function $(id) { return document.getElementById(id); }
+
 // ── UI updater ───────────────────────────────────────────────────────────
 function updateUI(data) {
-  // Timestamp
-  document.getElementById('timestamp').textContent = new Date(data.timestamp).toLocaleTimeString();
+  $('timestamp').textContent = new Date(data.timestamp).toLocaleTimeString();
 
   // Progress
-  document.getElementById('cur-step').textContent = data.current_step.toLocaleString();
-  document.getElementById('max-step').textContent = data.max_steps.toLocaleString();
-  document.getElementById('phase').textContent = data.phase;
-  document.getElementById('eta').textContent = fmtTime(data.eta_seconds);
+  $('cur-step').textContent = data.current_step.toLocaleString();
+  $('max-step').textContent = data.max_steps.toLocaleString();
+  $('phase').textContent = data.phase;
+  $('eta').textContent = fmtTime(data.eta_seconds);
   const pct = data.progress_pct;
-  const bar = document.getElementById('progress-bar');
+  const bar = $('progress-bar');
   bar.style.width = pct + '%';
   bar.textContent = pct.toFixed(1) + '%';
 
   // Instance & cost
   const inst = data.instance;
   if (inst) {
-    document.getElementById('inst-type').textContent = inst.instance_type || '—';
-    document.getElementById('inst-rate').textContent = inst.price_per_hour ? '$' + inst.price_per_hour.toFixed(4) + '/hr' : '—';
-    if (inst.boot_time_utc && inst.price_per_hour) {
-      costState.bootTime = new Date(inst.boot_time_utc).getTime() / 1000;
-      costState.pricePerHour = inst.price_per_hour;
+    $('inst-type').textContent = inst.instance_type || '--';
+    $('inst-lifecycle').textContent = inst.lifecycle || '--';
+    $('inst-az').textContent = inst.az || '--';
+    if (inst.uptime_seconds != null) $('inst-uptime').textContent = fmtTimeLong(inst.uptime_seconds);
+
+    // Boot time for ticker
+    if (inst.boot_time_utc) costState.bootTime = new Date(inst.boot_time_utc).getTime() / 1000;
+
+    // On-demand
+    const odRate = inst.ondemand_price_per_hour;
+    if (odRate) {
+      costState.odRate = odRate;
+      $('od-rate').textContent = '$' + odRate.toFixed(4) + '/hr';
     }
-    if (inst.uptime_seconds != null) {
-      document.getElementById('inst-uptime').textContent = fmtTimeLong(inst.uptime_seconds);
+    if (inst.ondemand_cost != null) $('od-cost').textContent = '$' + inst.ondemand_cost.toFixed(2);
+    $('od-proj').textContent = inst.ondemand_projected != null ? '$' + inst.ondemand_projected.toFixed(2) : '--';
+
+    // Spot
+    if (inst.spot_rate != null) {
+      costState.spotRate = inst.spot_rate;
+      $('spot-rate').textContent = '$' + inst.spot_rate.toFixed(4) + '/hr';
+    } else {
+      $('spot-rate').textContent = 'no data';
     }
-    if (inst.cost_so_far != null) {
-      document.getElementById('inst-cost').textContent = '$' + inst.cost_so_far.toFixed(2);
+    if (inst.spot_cost != null) {
+      $('spot-cost').textContent = '$' + inst.spot_cost.toFixed(2);
+      // Set base for client-side extrapolation
+      costState.spotCostBase = inst.spot_cost;
+      costState.spotCostBaseTime = Date.now() / 1000;
+    } else {
+      $('spot-cost').textContent = '--';
     }
-    document.getElementById('inst-projected').textContent = inst.projected_total != null ? '$' + inst.projected_total.toFixed(2) : '—';
+    $('spot-proj').textContent = inst.spot_projected != null ? '$' + inst.spot_projected.toFixed(2) : '--';
+
+    // Spot staleness indicator
+    const staleEl = $('spot-stale');
+    if (inst.spot_updated) {
+      const age = (Date.now() - new Date(inst.spot_updated).getTime()) / 60000;
+      if (age > 30) {
+        staleEl.style.display = 'block';
+        staleEl.textContent = 'Price data ' + Math.round(age) + 'min old';
+      } else {
+        staleEl.style.display = 'none';
+      }
+    } else if (inst.spot_rate == null) {
+      staleEl.style.display = 'block';
+      staleEl.textContent = 'Run update-spot-price.sh to seed data';
+    }
+
+    // Savings
+    if (inst.savings != null) {
+      $('delta-cost').textContent = '$' + inst.savings.toFixed(2);
+      $('delta-pct').textContent = inst.savings_pct.toFixed(1) + '% less';
+    }
+    if (inst.ondemand_projected != null && inst.spot_projected != null) {
+      $('delta-proj').textContent = '$' + (inst.ondemand_projected - inst.spot_projected).toFixed(2);
+    }
   }
 
   // Live metrics
   const t = data.latest_train;
   if (t) {
-    document.getElementById('m-ar-loss').textContent = t.ar_loss.toFixed(4);
-    document.getElementById('m-diff-loss').textContent = t.diff_loss.toFixed(4);
-    document.getElementById('m-conf-acc').textContent = (t.conf_acc * 100).toFixed(1) + '%';
-    document.getElementById('m-lr').textContent = t.lr.toExponential(2);
+    $('m-ar-loss').textContent = t.ar_loss.toFixed(4);
+    $('m-diff-loss').textContent = t.diff_loss.toFixed(4);
+    $('m-conf-acc').textContent = (t.conf_acc * 100).toFixed(1) + '%';
+    $('m-lr').textContent = t.lr.toExponential(2);
 
     sparkBuffers.ar.push(t.ar_loss);
     sparkBuffers.diff.push(t.diff_loss);
@@ -879,16 +1126,13 @@ function updateUI(data) {
   // GPU
   const g = data.gpu;
   if (g) {
-    document.getElementById('gpu-name').textContent = g.name;
-    const utilPct = g.gpu_util;
-    const vramPct = (g.vram_used_mb / g.vram_total_mb * 100);
-    const tempPct = (g.temp_c / 100 * 100);
-    const powerPct = (g.power_w / g.power_limit_w * 100);
-
-    setBar('gpu-util', utilPct, utilPct.toFixed(0) + '%');
-    setBar('gpu-vram', vramPct, (g.vram_used_mb/1024).toFixed(1) + ' / ' + (g.vram_total_mb/1024).toFixed(1) + ' GB');
-    setBar('gpu-temp', tempPct, g.temp_c + '°C');
-    setBar('gpu-power', powerPct, g.power_w.toFixed(0) + ' / ' + g.power_limit_w.toFixed(0) + ' W');
+    $('gpu-name').textContent = g.name;
+    setBar('gpu-util', g.gpu_util, g.gpu_util.toFixed(0) + '%');
+    setBar('gpu-vram', g.vram_used_mb / g.vram_total_mb * 100,
+      (g.vram_used_mb/1024).toFixed(1) + '/' + (g.vram_total_mb/1024).toFixed(1) + ' GB');
+    setBar('gpu-temp', g.temp_c, g.temp_c + 'C');
+    setBar('gpu-power', g.power_w / g.power_limit_w * 100,
+      g.power_w.toFixed(0) + '/' + g.power_limit_w.toFixed(0) + ' W');
   }
 
   // Infra
@@ -896,7 +1140,7 @@ function updateUI(data) {
   if (inf) {
     setBadge('badge-trainer', 'Trainer', inf.trainer_running);
     setBadge('badge-sync', 'Sync', inf.sync_running);
-    const ckptEl = document.getElementById('ckpt-list');
+    const ckptEl = $('ckpt-list');
     if (inf.checkpoints && inf.checkpoints.length > 0) {
       ckptEl.innerHTML = inf.checkpoints.map(c => '<span>' + c + '</span>').join(' ');
     } else {
@@ -907,13 +1151,13 @@ function updateUI(data) {
   // Config
   const cfg = data.config_summary;
   if (cfg) {
-    document.getElementById('config-info').textContent =
-      cfg.model + ' | bs=' + cfg.batch_size + '×' + cfg.grad_accum +
+    $('config-info').textContent =
+      cfg.model + ' | bs=' + cfg.batch_size + '\u00d7' + cfg.grad_accum +
       ' | lr=' + cfg.lr + ' | warmup=' + cfg.warmup_steps;
   }
 
   // Log tail
-  const logEl = document.getElementById('log-tail');
+  const logEl = $('log-tail');
   if (data.log_tail && data.log_tail.length > 0) {
     logEl.innerHTML = data.log_tail.map(line => {
       if (line.startsWith('[eval]')) return '<span class="eval-line">' + esc(line) + '</span>';
@@ -925,16 +1169,16 @@ function updateUI(data) {
 
 function setBar(prefix, pct, label) {
   pct = Math.min(100, Math.max(0, pct));
-  const bar = document.getElementById(prefix + '-bar');
-  const val = document.getElementById(prefix + '-val');
+  const bar = $(prefix + '-bar');
+  const val = $(prefix + '-val');
   bar.style.width = pct + '%';
   bar.style.background = barColor(pct);
-  bar.textContent = pct > 15 ? label : '';
+  bar.textContent = pct > 20 ? label : '';
   val.textContent = label;
 }
 
 function setBadge(id, name, running) {
-  const el = document.getElementById(id);
+  const el = $(id);
   el.textContent = name + ': ' + (running ? 'Running' : 'Stopped');
   el.className = 'badge ' + (running ? 'badge-green' : 'badge-red');
 }
@@ -955,20 +1199,17 @@ async function loadCharts() {
     const hist = await histRes.json();
     const evals = await evalRes.json();
 
-    // Loss chart
     lossChart.data.labels = hist.map(h => h.step);
     lossChart.data.datasets[0].data = hist.map(h => h.ar_loss);
     lossChart.data.datasets[1].data = hist.map(h => h.diff_loss);
     lossChart.update();
 
-    // Sparkline buffers from history
     const tail = hist.slice(-SPARK_MAX);
     sparkBuffers.ar = tail.map(h => h.ar_loss);
     sparkBuffers.diff = tail.map(h => h.diff_loss);
     sparkBuffers.conf = tail.map(h => h.conf_acc);
     sparkBuffers.lr = tail.map(h => h.lr);
 
-    // Eval chart
     if (evals.length > 0) {
       evalChart.data.labels = evals.map(e => e.step);
       evalChart.data.datasets[0].data = evals.map(e => e.s1_tok_acc ?? e.s1_token_accuracy ?? null);
@@ -986,18 +1227,13 @@ let evtSource;
 function connectSSE() {
   evtSource = new EventSource('/stream');
   evtSource.onmessage = (e) => {
-    document.getElementById('conn-status').textContent = 'Live';
-    document.getElementById('pulse').style.background = '#34d399';
-    try {
-      const data = JSON.parse(e.data);
-      updateUI(data);
-    } catch (err) {
-      console.error('SSE parse error:', err);
-    }
+    $('conn-status').textContent = 'Live';
+    $('pulse').style.background = '#34d399';
+    try { updateUI(JSON.parse(e.data)); } catch (err) { console.error('SSE parse error:', err); }
   };
   evtSource.onerror = () => {
-    document.getElementById('conn-status').textContent = 'Reconnecting...';
-    document.getElementById('pulse').style.background = '#f87171';
+    $('conn-status').textContent = 'Reconnecting...';
+    $('pulse').style.background = '#f87171';
     evtSource.close();
     setTimeout(connectSSE, 5000);
   };
@@ -1005,11 +1241,9 @@ function connectSSE() {
 
 // ── Init ─────────────────────────────────────────────────────────────────
 async function init() {
-  // Initial load
   try {
     const res = await fetch('/api/status');
-    const data = await res.json();
-    updateUI(data);
+    updateUI(await res.json());
   } catch (e) {
     console.error('Initial status load failed:', e);
   }
@@ -1035,4 +1269,22 @@ if __name__ == "__main__":
     print(f"Starting dashboard on http://{args.host}:{args.port}")
     print(f"  Project dir: {PROJECT_DIR}")
     print(f"  Data dir:    {DATA_DIR}")
+    print()
+    print("To seed spot price data from a machine with AWS CLI access:")
+    print("  INST=g6.xlarge AZ=us-east-1b HOST=<ip>:5000")
+    print("  PRICES=$(aws ec2 describe-spot-price-history --instance-types $INST \\")
+    print("    --product-descriptions 'Linux/UNIX' --availability-zone $AZ \\")
+    print("    --region us-east-1 --max-items 50 --output json)")
+    print("  CURRENT=$(echo $PRICES | python3 -c \"import json,sys; "
+          "d=json.load(sys.stdin); print(d['SpotPriceHistory'][0]['SpotPrice'])\")")
+    print("  HISTORY=$(echo $PRICES | python3 -c \"import json,sys; "
+          "from datetime import datetime; d=json.load(sys.stdin); "
+          "print(json.dumps([{'timestamp':datetime.fromisoformat("
+          "p['Timestamp'].replace('Z','+00:00')).timestamp(),"
+          "'price':float(p['SpotPrice'])} for p in d['SpotPriceHistory']]))\")")
+    print("  curl -X POST http://$HOST/api/spot-price -H 'Content-Type: application/json' \\")
+    print("    -d \"{\\\"current_price\\\":$CURRENT,\\\"az\\\":\\\"$AZ\\\","
+          "\\\"price_history\\\":$HISTORY}\"")
+    print()
+
     app.run(host=args.host, port=args.port, debug=args.debug, threaded=True)
