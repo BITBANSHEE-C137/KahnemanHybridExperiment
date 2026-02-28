@@ -633,70 +633,44 @@ body {
 .metric-box canvas { margin-top: 4px; }
 
 /* Cost comparison layout */
-.cost-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 10px;
-  align-items: start;
+/* Cost table */
+.cost-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
 }
-.cost-col {
-  background: var(--bg);
-  border-radius: 6px;
-  padding: 10px;
-  min-width: 0;
-}
-.cost-col h3 {
+.cost-tbl th {
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--dim);
-  margin-bottom: 8px;
+  font-weight: 400;
+  padding: 0 8px 4px 0;
+  text-align: right;
+  white-space: nowrap;
 }
-.cost-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin: 4px 0;
-  gap: 6px;
+.cost-tbl th:first-child { text-align: left; }
+.cost-tbl td {
+  padding: 2px 8px 2px 0;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.cost-row .cl { font-size: 11px; color: var(--dim); white-space: nowrap; }
-.cost-row .cv { font-size: 13px; font-weight: 600; white-space: nowrap; }
-.cost-big { font-size: 22px !important; font-weight: 700 !important; }
-.cost-col-delta {
-  background: var(--bg);
-  border-radius: 6px;
-  padding: 10px;
-  text-align: center;
-  min-width: 100px;
-}
-.cost-col-delta h3 {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.cost-tbl td:first-child {
+  text-align: left;
   color: var(--dim);
-  margin-bottom: 8px;
+  font-size: 11px;
 }
-.savings-big {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--green);
-}
-.savings-pct {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--green);
-  margin-top: 4px;
-}
-.savings-label { font-size: 10px; color: var(--dim); margin-top: 2px; }
-.spot-stale { font-size: 10px; color: var(--orange); margin-top: 6px; }
+.cost-tbl .cost-accent { font-weight: 700; font-size: 14px; }
+.cost-tbl .row-savings td { border-top: 1px solid var(--border); padding-top: 4px; }
+.spot-stale { font-size: 10px; color: var(--orange); margin-top: 4px; }
 
 /* Instance info row */
 .inst-row {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
-  font-size: 12px;
+  font-size: 11px;
 }
 .inst-row .inst-item { color: var(--dim); white-space: nowrap; }
 .inst-row .inst-val { color: var(--text); font-weight: 600; }
@@ -760,7 +734,6 @@ body {
 /* Responsive */
 @media (max-width: 900px) {
   .grid { grid-template-columns: 1fr; }
-  .cost-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -778,41 +751,37 @@ body {
 
   <!-- Instance & Cost -->
   <div class="card card-full">
-    <h2>Instance & Cost</h2>
-    <div class="inst-row">
-      <span class="inst-item">Type: <span class="inst-val" id="inst-type">--</span></span>
-      <span class="inst-item">Lifecycle: <span class="inst-val" id="inst-lifecycle">--</span></span>
-      <span class="inst-item">AZ: <span class="inst-val" id="inst-az">--</span></span>
-      <span class="inst-item">Uptime: <span class="inst-val" id="inst-uptime">--</span></span>
-    </div>
-    <div class="cost-grid">
-      <!-- On-demand column -->
-      <div class="cost-col">
-        <h3>On-Demand</h3>
-        <div class="cost-row"><span class="cl">Rate</span><span class="cv" id="od-rate">--</span></div>
-        <div class="cost-row"><span class="cl">Cost</span><span class="cv cost-big" id="od-cost" style="color:var(--orange)">--</span></div>
-        <div class="cost-row"><span class="cl">Projected</span><span class="cv" id="od-proj">--</span></div>
-      </div>
-      <!-- Spot column -->
-      <div class="cost-col">
-        <h3>Spot (actual)</h3>
-        <div class="cost-row"><span class="cl">Rate</span><span class="cv" id="spot-rate">--</span></div>
-        <div class="cost-row"><span class="cl">Cost</span><span class="cv cost-big" id="spot-cost" style="color:var(--green)">--</span></div>
-        <div class="cost-row"><span class="cl">Projected</span><span class="cv" id="spot-proj">--</span></div>
-        <div class="spot-stale" id="spot-stale" style="display:none"></div>
-      </div>
-      <!-- Delta column -->
-      <div class="cost-col-delta">
-        <h3>Savings</h3>
-        <div class="savings-big" id="delta-cost">--</div>
-        <div class="savings-pct" id="delta-pct">--</div>
-        <div class="savings-label">saved so far</div>
-        <div style="margin-top:8px">
-          <div class="savings-label">projected savings</div>
-          <div style="font-size:14px;font-weight:600;color:var(--green)" id="delta-proj">--</div>
-        </div>
+    <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px; margin-bottom:8px">
+      <h2 style="margin-bottom:0">Instance & Cost</h2>
+      <div class="inst-row">
+        <span class="inst-item"><span class="inst-val" id="inst-type">--</span></span>
+        <span class="inst-item"><span class="inst-val" id="inst-lifecycle">--</span></span>
+        <span class="inst-item"><span class="inst-val" id="inst-az">--</span></span>
+        <span class="inst-item">up <span class="inst-val" id="inst-uptime">--</span></span>
       </div>
     </div>
+    <table class="cost-tbl">
+      <tr><th></th><th>Rate</th><th>Cost</th><th>Projected</th></tr>
+      <tr>
+        <td>On-Demand</td>
+        <td id="od-rate">--</td>
+        <td class="cost-accent" style="color:var(--orange)" id="od-cost">--</td>
+        <td id="od-proj">--</td>
+      </tr>
+      <tr>
+        <td>Spot</td>
+        <td id="spot-rate">--</td>
+        <td class="cost-accent" style="color:var(--green)" id="spot-cost">--</td>
+        <td id="spot-proj">--</td>
+      </tr>
+      <tr class="row-savings">
+        <td style="color:var(--green)">Savings</td>
+        <td id="delta-pct" style="color:var(--green)">--</td>
+        <td class="cost-accent" style="color:var(--green)" id="delta-cost">--</td>
+        <td id="delta-proj" style="color:var(--green)">--</td>
+      </tr>
+    </table>
+    <div class="spot-stale" id="spot-stale" style="display:none"></div>
   </div>
 
   <!-- Progress -->
@@ -1076,7 +1045,6 @@ function updateUI(data) {
     $('inst-az').textContent = inst.az || '--';
     if (inst.uptime_seconds != null) $('inst-uptime').textContent = fmtTimeLong(inst.uptime_seconds);
 
-    // Boot time for ticker
     if (inst.boot_time_utc) costState.bootTime = new Date(inst.boot_time_utc).getTime() / 1000;
 
     // On-demand
@@ -1093,11 +1061,10 @@ function updateUI(data) {
       costState.spotRate = inst.spot_rate;
       $('spot-rate').textContent = '$' + inst.spot_rate.toFixed(4) + '/hr';
     } else {
-      $('spot-rate').textContent = 'no data';
+      $('spot-rate').textContent = '--';
     }
     if (inst.spot_cost != null) {
       $('spot-cost').textContent = '$' + inst.spot_cost.toFixed(2);
-      // Set base for client-side extrapolation
       costState.spotCostBase = inst.spot_cost;
       costState.spotCostBaseTime = Date.now() / 1000;
     } else {
@@ -1105,25 +1072,25 @@ function updateUI(data) {
     }
     $('spot-proj').textContent = inst.spot_projected != null ? '$' + inst.spot_projected.toFixed(2) : '--';
 
-    // Spot staleness indicator
+    // Staleness
     const staleEl = $('spot-stale');
     if (inst.spot_updated) {
       const age = (Date.now() - new Date(inst.spot_updated).getTime()) / 60000;
       if (age > 30) {
         staleEl.style.display = 'block';
-        staleEl.textContent = 'Price data ' + Math.round(age) + 'min old';
+        staleEl.textContent = 'Spot price data ' + Math.round(age) + 'min old';
       } else {
         staleEl.style.display = 'none';
       }
     } else if (inst.spot_rate == null) {
       staleEl.style.display = 'block';
-      staleEl.textContent = 'Run update-spot-price.sh to seed data';
+      staleEl.textContent = 'Run update-spot-price.sh to seed spot data';
     }
 
-    // Savings
+    // Savings row
     if (inst.savings != null) {
       $('delta-cost').textContent = '$' + inst.savings.toFixed(2);
-      $('delta-pct').textContent = inst.savings_pct.toFixed(1) + '% less';
+      $('delta-pct').textContent = inst.savings_pct.toFixed(1) + '%';
     }
     if (inst.ondemand_projected != null && inst.spot_projected != null) {
       $('delta-proj').textContent = '$' + (inst.ondemand_projected - inst.spot_projected).toFixed(2);
