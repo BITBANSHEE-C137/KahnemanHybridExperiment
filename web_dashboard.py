@@ -38,6 +38,7 @@ CONFIG_PATH = os.path.join(PROJECT_DIR, "configs/tiny.yaml")
 WANDB_DIR = os.path.join(PROJECT_DIR, "wandb")
 CHECKPOINT_DIR = os.path.join(DATA_DIR, "checkpoints")
 SPOT_PRICE_FILE = "/tmp/spot_price.json"
+BOOTSTRAP_STATUS_FILE = "/tmp/bootstrap_status.json"
 
 # Regex for training step lines
 STEP_RE = re.compile(
@@ -285,6 +286,22 @@ def write_spot_price(data):
         json.dump(data, f, indent=2)
 
 
+def read_bootstrap_status():
+    """Read bootstrap progress from the status JSON written by bootstrap.sh."""
+    try:
+        with open(BOOTSTRAP_STATUS_FILE) as f:
+            data = json.load(f)
+        # Compute total elapsed
+        started = data.get("started")
+        finished = data.get("finished")
+        if started:
+            end = finished if finished else time.time()
+            data["total_elapsed_s"] = round(end - started, 1)
+        return data
+    except Exception:
+        return None
+
+
 # ── Composite status builder ─────────────────────────────────────────────────
 
 def build_status():
@@ -397,6 +414,7 @@ def build_status():
         "infra": infra,
         "milestones": milestones,
         "instance": inst,
+        "bootstrap": cached("bootstrap", 2, read_bootstrap_status),
         "log_tail": log_tail,
         "config_summary": {
             "model": config.get("model", {}).get("name", "?"),
@@ -793,9 +811,67 @@ body {
   border-radius: 3px;
 }
 
+/* Bootstrap panel */
+.bootstrap-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
+  transition: opacity 0.8s ease, max-height 0.8s ease;
+}
+.bootstrap-panel.hidden { display: none; }
+.bootstrap-panel.fading { opacity: 0; max-height: 0; overflow: hidden; padding: 0 14px; margin-bottom: 0; }
+.bootstrap-panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 8px; }
+.bs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.bs-header .bs-elapsed { font-size: 11px; color: var(--dim); }
+.bs-progress-outer {
+  width: 100%;
+  height: 6px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.bs-progress-inner {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease, background 0.3s ease;
+  background: var(--accent);
+}
+.bs-progress-inner.done { background: var(--green); }
+.bs-progress-inner.failed { background: var(--red); }
+.bs-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 4px 12px;
+}
+.bs-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.bs-step .bs-icon { width: 14px; text-align: center; flex-shrink: 0; }
+.bs-step .bs-label { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+.bs-step .bs-time { color: var(--dim); font-size: 10px; margin-left: auto; flex-shrink: 0; }
+.bs-step.done .bs-icon { color: var(--green); }
+.bs-step.done .bs-label { color: var(--text); }
+.bs-step.running .bs-icon { color: var(--accent); }
+.bs-step.running .bs-label { color: var(--text); }
+.bs-step.failed .bs-icon { color: var(--red); }
+.bs-step.failed .bs-label { color: var(--red); }
+.bs-step.pending .bs-icon { color: var(--dim); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.bs-spinner { display: inline-block; animation: spin 1s linear infinite; }
+
 /* Responsive */
 @media (max-width: 900px) {
   .grid { grid-template-columns: 1fr; }
+  .bs-steps { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -814,6 +890,18 @@ body {
       <span id="conn-status">Connecting...</span> &middot;
       <span id="timestamp"></span>
     </div>
+  </div>
+
+  <!-- Bootstrap progress -->
+  <div id="bootstrap-panel" class="bootstrap-panel hidden">
+    <div class="bs-header">
+      <h2>Bootstrap Progress</h2>
+      <span class="bs-elapsed" id="bs-elapsed"></span>
+    </div>
+    <div class="bs-progress-outer">
+      <div class="bs-progress-inner" id="bs-progress" style="width:0%"></div>
+    </div>
+    <div class="bs-steps" id="bs-steps"></div>
   </div>
 
   <!-- Progress -->
@@ -1030,6 +1118,63 @@ function drawSparkline(canvasId, data, color) {
   ctx.stroke();
 }
 
+// ── Bootstrap panel ──────────────────────────────────────────────────────
+let bsHideTimer = null;
+let bsHidden = false;
+
+function updateBootstrap(bs) {
+  const panel = $('bootstrap-panel');
+  if (!bs || bsHidden) {
+    panel.classList.add('hidden');
+    return;
+  }
+  panel.classList.remove('hidden');
+
+  const steps = bs.steps || [];
+  const doneCount = steps.filter(s => s.status === 'done').length;
+  const total = steps.length || 1;
+  const pct = (doneCount / total * 100).toFixed(0);
+
+  // Progress bar
+  const bar = $('bs-progress');
+  bar.style.width = pct + '%';
+  bar.className = 'bs-progress-inner' + (bs.status === 'done' ? ' done' : bs.status === 'failed' ? ' failed' : '');
+
+  // Elapsed
+  const elapsedEl = $('bs-elapsed');
+  if (bs.status === 'done' && bs.total_elapsed_s != null) {
+    elapsedEl.textContent = 'Completed in ' + fmtTimeLong(bs.total_elapsed_s);
+  } else if (bs.total_elapsed_s != null) {
+    elapsedEl.textContent = fmtTimeLong(bs.total_elapsed_s);
+  } else {
+    elapsedEl.textContent = '';
+  }
+
+  // Steps
+  const container = $('bs-steps');
+  container.innerHTML = steps.map(s => {
+    let icon;
+    if (s.status === 'done') icon = '\u2713';
+    else if (s.status === 'running') icon = '<span class="bs-spinner">\u25E0</span>';
+    else if (s.status === 'failed') icon = '\u2717';
+    else icon = '\u2022';
+    const elapsed = s.elapsed != null ? s.elapsed.toFixed(1) + 's' : '';
+    return '<div class="bs-step ' + s.status + '">' +
+      '<span class="bs-icon">' + icon + '</span>' +
+      '<span class="bs-label">' + esc(s.label) + '</span>' +
+      '<span class="bs-time">' + elapsed + '</span>' +
+      '</div>';
+  }).join('');
+
+  // Auto-hide 30s after completion (never if failed)
+  if (bs.status === 'done' && !bsHideTimer) {
+    bsHideTimer = setTimeout(() => {
+      panel.classList.add('fading');
+      setTimeout(() => { panel.classList.add('hidden'); bsHidden = true; }, 800);
+    }, 30000);
+  }
+}
+
 // ── Cost ticker ──────────────────────────────────────────────────────────
 let costState = { bootTime: null, odRate: null, spotRate: null, spotCostBase: null, spotCostBaseTime: null };
 
@@ -1092,6 +1237,9 @@ function $(id) { return document.getElementById(id); }
 // ── UI updater ───────────────────────────────────────────────────────────
 function updateUI(data) {
   $('timestamp').textContent = new Date(data.timestamp).toLocaleTimeString();
+
+  // Bootstrap
+  if (data.bootstrap) updateBootstrap(data.bootstrap);
 
   // Progress
   $('cur-step').textContent = data.current_step.toLocaleString();
