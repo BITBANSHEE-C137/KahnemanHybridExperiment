@@ -99,9 +99,9 @@ class OpenWebTextDataset(Dataset):
 
         # Load dataset
         if max_samples is not None:
-            raw = load_dataset("openwebtext", split=f"{split}[:{max_samples}]", trust_remote_code=True)
+            raw = load_dataset("openwebtext", split=f"{split}[:{max_samples}]")
         else:
-            raw = load_dataset("openwebtext", split=split, trust_remote_code=True)
+            raw = load_dataset("openwebtext", split=split)
 
         # Tokenize and concatenate all texts into one long token stream,
         # then chunk into max_length sequences

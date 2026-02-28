@@ -18,17 +18,23 @@ sudo chown -R ubuntu:ubuntu "$DATA_DIR"
 echo "Fetching W&B API key from Secrets Manager..."
 WANDB_API_KEY=$(aws secretsmanager get-secret-value --secret-id "ml-lab/wandb-api-key" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
 
+# Fetch HF token for authenticated dataset downloads
+echo "Fetching HF token from Secrets Manager..."
+HF_TOKEN=$(aws secretsmanager get-secret-value --secret-id "ml-lab/hf-token" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
+
 # ── Ubuntu user environment ──
 echo "Configuring ubuntu user environment..."
 sudo -u ubuntu bash << ENVBLOCK
   # Clean old env vars
-  sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /WANDB_API_KEY/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d' ~/.bashrc
+  sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d' ~/.bashrc
 
   # Inject env vars
   echo 'export GH_TOKEN="$GH_TOKEN"' >> ~/.bashrc
   echo 'export HF_HOME=$DATA_DIR/hf_cache' >> ~/.bashrc
   echo 'export CHECKPOINT_DIR=$DATA_DIR/checkpoints' >> ~/.bashrc
   echo 'export WANDB_API_KEY="$WANDB_API_KEY"' >> ~/.bashrc
+  echo 'export HF_TOKEN="$HF_TOKEN"' >> ~/.bashrc
+  echo 'export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"' >> ~/.bashrc
   echo 'export S3_BUCKET="$S3_BUCKET"' >> ~/.bashrc
   echo 'export DATA_DIR="$DATA_DIR"' >> ~/.bashrc
   echo 'export AWS_DEFAULT_REGION="$REGION"' >> ~/.bashrc

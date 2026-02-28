@@ -33,8 +33,9 @@ S3_PREFIX = "dual-system-research-data/preprocessed"
 def tokenize_and_write(output_dir: str) -> dict:
     """Stream OpenWebText, tokenize, and write train/eval binary files.
 
-    Single-pass iteration: first (total - EVAL_DOCS) documents go to
-    train file, remaining EVAL_DOCS documents go to eval file.
+    Two-pass approach to avoid loading entire dataset into memory:
+      Pass 1: Stream and write all docs to train file, buffer last EVAL_DOCS
+      Pass 2: Write eval docs from buffer
 
     Args:
         output_dir: Directory to write .bin and .json files.
@@ -42,6 +43,8 @@ def tokenize_and_write(output_dir: str) -> dict:
     Returns:
         Metadata dict with token counts and split info.
     """
+    from collections import deque
+
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -52,38 +55,31 @@ def tokenize_and_write(output_dir: str) -> dict:
     eval_path = output_path / "openwebtext_eval.bin"
     meta_path = output_path / "openwebtext_meta.json"
 
-    print(f"Loading OpenWebText from HuggingFace (streaming)...")
-    dataset = load_dataset("openwebtext", split="train", trust_remote_code=True)
-    total_docs = len(dataset)
-    train_doc_count = total_docs - EVAL_DOCS
-
-    print(f"Total documents: {total_docs:,}")
-    print(f"Train documents: {train_doc_count:,}")
-    print(f"Eval documents:  {EVAL_DOCS:,}")
+    print("Loading OpenWebText from HuggingFace (streaming mode)...")
+    dataset = load_dataset("openwebtext", split="train", streaming=True)
 
     train_tokens = 0
     eval_tokens = 0
     docs_processed = 0
     t0 = time.time()
 
-    # Single-pass: train docs to train file, eval docs to eval file
-    print(f"\nWriting train + eval splits (single pass)...")
+    # Keep a rolling buffer of the last EVAL_DOCS tokenized documents
+    eval_buffer = deque(maxlen=EVAL_DOCS)
+
+    print(f"\nWriting train split (streaming)...")
     print(f"  Train: {train_path}")
-    print(f"  Eval:  {eval_path}")
-    with open(train_path, "wb") as f_train, open(eval_path, "wb") as f_eval:
-        for i, example in enumerate(dataset):
+    with open(train_path, "wb") as f_train:
+        for example in dataset:
             tokens = tokenizer.encode(example["text"])
             tokens.append(eos_id)
             token_bytes = np.array(tokens, dtype=np.uint16).tobytes()
 
-            if i < train_doc_count:
-                f_train.write(token_bytes)
-                train_tokens += len(tokens)
-            else:
-                f_eval.write(token_bytes)
-                eval_tokens += len(tokens)
-
+            f_train.write(token_bytes)
+            train_tokens += len(tokens)
             docs_processed += 1
+
+            # Buffer for eval split
+            eval_buffer.append(token_bytes)
 
             if docs_processed % 100_000 == 0:
                 elapsed = time.time() - t0
@@ -95,14 +91,25 @@ def tokenize_and_write(output_dir: str) -> dict:
                     f"{elapsed:.0f}s elapsed"
                 )
 
+    total_docs = docs_processed
+    print(f"\nTotal documents streamed: {total_docs:,}")
     print(f"Train split: {train_tokens:,} tokens")
-    print(f"Eval split:  {eval_tokens:,} tokens")
+
+    # Write eval split from buffer
+    print(f"\nWriting eval split ({len(eval_buffer)} docs)...")
+    print(f"  Eval: {eval_path}")
+    with open(eval_path, "wb") as f_eval:
+        for token_bytes in eval_buffer:
+            eval_tokens += len(token_bytes) // 2  # uint16 = 2 bytes per token
+            f_eval.write(token_bytes)
+
+    print(f"Eval split: {eval_tokens:,} tokens")
 
     elapsed = time.time() - t0
     meta = {
         "total_docs": total_docs,
-        "train_docs": train_doc_count,
-        "eval_docs": EVAL_DOCS,
+        "train_docs": total_docs,
+        "eval_docs": len(eval_buffer),
         "train_tokens": train_tokens,
         "eval_tokens": eval_tokens,
         "dtype": "uint16",

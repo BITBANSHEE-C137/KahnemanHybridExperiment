@@ -55,6 +55,50 @@ def get_lr(step: int, warmup_steps: int, max_steps: int, max_lr: float, min_lr: 
     return min_lr + 0.5 * (max_lr - min_lr) * (1.0 + math.cos(math.pi * progress))
 
 
+def find_latest_checkpoint(checkpoint_dir: Path) -> Path | None:
+    """Find the latest checkpoint by step number, checking local then S3."""
+    import subprocess as _sp
+
+    local_ckpts = sorted(
+        checkpoint_dir.glob("step_*.pt"),
+        key=lambda p: int(p.stem.split("_")[1]),
+    )
+
+    s3_bucket = os.environ.get("S3_BUCKET", "ml-lab-004507070771/dual-system-research-data")
+    region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+    try:
+        result = _sp.run(
+            ["aws", "s3", "ls", f"s3://{s3_bucket}/checkpoints/", "--region", region],
+            capture_output=True, text=True, timeout=30,
+        )
+        s3_steps = set()
+        for line in result.stdout.strip().split("\n"):
+            if "step_" in line:
+                fname = line.strip().split()[-1]
+                step_num = int(fname.replace("step_", "").replace(".pt", ""))
+                s3_steps.add(step_num)
+
+        local_steps = {int(p.stem.split("_")[1]) for p in local_ckpts}
+        missing = s3_steps - local_steps
+        if missing:
+            latest_missing = max(missing)
+            s3_key = f"s3://{s3_bucket}/checkpoints/step_{latest_missing}.pt"
+            local_dest = checkpoint_dir / f"step_{latest_missing}.pt"
+            print(f"[resume] Downloading checkpoint step {latest_missing} from S3...")
+            _sp.run(
+                ["aws", "s3", "cp", s3_key, str(local_dest), "--region", region],
+                check=True, capture_output=True, timeout=300,
+            )
+            local_ckpts.append(local_dest)
+            local_ckpts.sort(key=lambda p: int(p.stem.split("_")[1]))
+    except Exception as e:
+        print(f"[resume] S3 checkpoint check failed (non-fatal): {e}")
+
+    if local_ckpts:
+        return local_ckpts[-1]
+    return None
+
+
 def train(
     config: dict,
     smoke_test: bool = False,
@@ -97,6 +141,20 @@ def train(
         weight_decay=train_cfg["weight_decay"],
         betas=(0.9, 0.95),
     )
+
+    # Resume from checkpoint if available
+    start_step = 0
+    if not smoke_test:
+        latest_ckpt = find_latest_checkpoint(checkpoint_dir)
+        if latest_ckpt is not None:
+            print(f"[resume] Loading checkpoint: {latest_ckpt}")
+            ckpt = torch.load(latest_ckpt, map_location=device, weights_only=False)
+            model.load_state_dict(ckpt["model_state_dict"])
+            optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            start_step = ckpt["step"]
+            print(f"[resume] Resuming from step {start_step}")
+        else:
+            print("[resume] No checkpoint found, starting from scratch")
 
     # Data
     dataloader = create_dataloader(config, smoke_test=smoke_test)
@@ -147,7 +205,7 @@ def train(
     scaler = torch.amp.GradScaler("cuda", enabled=(dtype == torch.bfloat16))
 
     model.train()
-    step = 0
+    step = start_step
     t0 = time.time()
 
     while step < max_steps:
@@ -168,11 +226,8 @@ def train(
 
             with torch.autocast(device_type=device.type, dtype=dtype):
                 # --- System 2: AR loss ---
-                # Shift: predict token t+1 from token t
-                ar_labels = input_ids.clone()
-                ar_labels[:, :-1] = input_ids[:, 1:]
-                ar_labels[:, -1] = -100  # ignore last position
-                ar_loss = model.compute_ar_loss(input_ids, ar_labels)
+                # GPT2LMHeadModel.forward(labels=) auto-shifts internally
+                ar_loss = model.compute_ar_loss(input_ids, input_ids)
 
                 # --- System 1: Diffusion loss ---
                 masked_ids, mask_positions = create_mask(
