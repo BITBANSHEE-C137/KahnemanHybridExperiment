@@ -161,7 +161,7 @@ nginx -t 2>&1 && systemctl reload nginx
 echo "  nginx + TLS: CONFIGURED"
 
 # ── 5. Install Flask if missing ──
-python3 -c "import flask" 2>/dev/null || pip install flask > /dev/null 2>&1
+sudo -u ubuntu python3 -c "import flask" 2>/dev/null || sudo -u ubuntu pip install --user flask > /dev/null 2>&1
 
 # ── 6. Start web dashboard ──
 echo "Starting web dashboard..."
