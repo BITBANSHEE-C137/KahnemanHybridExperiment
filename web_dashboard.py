@@ -10,10 +10,10 @@ pricing is fed externally via POST /api/spot-price or a JSON file at
 /tmp/spot_price.json.  A helper one-liner is printed at startup.
 
 Usage:
-    pip install flask pyyaml pyopenssl
-    python web_dashboard.py                # http://0.0.0.0:5000
-    python web_dashboard.py --https        # https (experimental, requires pyopenssl)
+    pip install flask pyyaml
+    python web_dashboard.py                # http://127.0.0.1:5000 (behind nginx)
     python web_dashboard.py --port 8080
+    python web_dashboard.py --spot-token SECRET  # require token for POST /api/spot-price
 """
 
 import argparse
@@ -28,7 +28,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 import yaml
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, request, abort
 
 # ── Configuration ────────────────────────────────────────────────────────────
 PROJECT_DIR = "/home/ubuntu/KahnemanHybridExperiment"
@@ -61,6 +61,9 @@ EVAL_RE = re.compile(
 )
 
 SSE_INTERVAL = 10  # seconds between SSE pushes
+SSE_MAX_CONNECTIONS = 10
+_sse_connections = 0
+_sse_lock = threading.Lock()
 
 # On-demand pricing (USD/hr) — add entries as needed
 INSTANCE_PRICES = {
@@ -449,6 +452,8 @@ def api_spot_price_get():
 def api_spot_price_post():
     """Accept spot price data from an external source (e.g. local AWS CLI).
 
+    Requires Authorization: Bearer <token> header when --spot-token is set.
+
     Expected JSON:
     {
       "current_price": 0.3765,
@@ -460,7 +465,48 @@ def api_spot_price_post():
       ]
     }
     """
-    data = request.get_json(force=True)
+    # Token auth
+    if app.config.get("SPOT_TOKEN"):
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer ") or auth[7:] != app.config["SPOT_TOKEN"]:
+            abort(403)
+
+    # Payload size guard (redundant with nginx, but defense-in-depth)
+    if request.content_length and request.content_length > 100_000:
+        return jsonify({"error": "payload too large"}), 413
+
+    data = request.get_json(silent=True)
+    if not data or not isinstance(data, dict):
+        return jsonify({"error": "invalid JSON"}), 400
+
+    # Validate required field
+    cp = data.get("current_price")
+    if cp is None:
+        return jsonify({"error": "missing current_price"}), 400
+    try:
+        cp = float(cp)
+    except (TypeError, ValueError):
+        return jsonify({"error": "current_price must be a number"}), 400
+    if not (0 < cp < 1000):
+        return jsonify({"error": "current_price out of range"}), 400
+    data["current_price"] = cp
+
+    # Validate optional price_history
+    history = data.get("price_history")
+    if history is not None:
+        if not isinstance(history, list):
+            return jsonify({"error": "price_history must be a list"}), 400
+        for entry in history:
+            if not isinstance(entry, dict):
+                return jsonify({"error": "price_history entries must be objects"}), 400
+            if "timestamp" not in entry or "price" not in entry:
+                return jsonify({"error": "price_history entries need timestamp and price"}), 400
+            try:
+                entry["timestamp"] = float(entry["timestamp"])
+                entry["price"] = float(entry["price"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "invalid types in price_history"}), 400
+
     data["updated"] = data.get("updated", datetime.now(timezone.utc).isoformat())
     write_spot_price(data)
     # Bust cache
@@ -471,11 +517,23 @@ def api_spot_price_post():
 
 @app.route("/stream")
 def stream():
+    global _sse_connections
+    with _sse_lock:
+        if _sse_connections >= SSE_MAX_CONNECTIONS:
+            return jsonify({"error": "too many SSE connections"}), 429
+        _sse_connections += 1
+
     def generate():
-        while True:
-            data = json.dumps(build_status())
-            yield f"data: {data}\n\n"
-            time.sleep(SSE_INTERVAL)
+        global _sse_connections
+        try:
+            while True:
+                data = json.dumps(build_status())
+                yield f"data: {data}\n\n"
+                time.sleep(SSE_INTERVAL)
+        finally:
+            with _sse_lock:
+                _sse_connections -= 1
+
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -1267,32 +1325,28 @@ init();
 </html>
 """
 
-# ── TLS helpers ───────────────────────────────────────────────────────────────
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ML Training Dashboard")
     parser.add_argument("--port", type=int, default=5000)
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--https", action="store_true",
-                        help="Enable HTTPS with a self-signed certificate")
+    parser.add_argument("--spot-token",
+                        default=os.environ.get("SPOT_TOKEN", ""),
+                        help="Bearer token required for POST /api/spot-price")
     args = parser.parse_args()
 
-    ssl_ctx = None
-    scheme = "http"
-    if args.https:
-        ssl_ctx = "adhoc"
-        scheme = "https"
+    if args.spot_token:
+        app.config["SPOT_TOKEN"] = args.spot_token
+        print("  Spot-price POST auth: enabled")
+    else:
+        print("  Spot-price POST auth: disabled (no --spot-token)")
 
-    print(f"Starting dashboard on {scheme}://{args.host}:{args.port}")
+    print(f"Starting dashboard on http://{args.host}:{args.port}")
     print(f"  Project dir: {PROJECT_DIR}")
     print(f"  Data dir:    {DATA_DIR}")
-    if args.https:
-        print("  TLS:         self-signed (browser will warn)")
     print()
 
     app.run(host=args.host, port=args.port, debug=args.debug,
-            threaded=True, ssl_context=ssl_ctx)
+            threaded=True)

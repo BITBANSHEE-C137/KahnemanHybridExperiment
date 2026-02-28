@@ -2,17 +2,24 @@
 # Fetches current spot price from AWS and pushes it to the dashboard.
 # Run from a machine with AWS CLI access (not the GPU instance).
 #
-# Usage:  ./update-spot-price.sh [host:port]
-# Example: ./update-spot-price.sh 52.90.216.77:5000
+# Usage:  ./update-spot-price.sh [host] [token]
+# Example: ./update-spot-price.sh train.bitbanshee.com mytoken
 #
-# Can be cron'd: */15 * * * * /path/to/update-spot-price.sh 52.90.216.77:5000
+# Token can also be set via SPOT_TOKEN env var.
+# Can be cron'd: */15 * * * * SPOT_TOKEN=xxx /path/to/update-spot-price.sh
 
 set -euo pipefail
 
-HOST="${1:-52.90.216.77:5000}"
+HOST="${1:-train.bitbanshee.com}"
+TOKEN="${2:-${SPOT_TOKEN:-}}"
 INST="g6.xlarge"
 AZ="us-east-1b"
 REGION="us-east-1"
+
+if [ -z "$TOKEN" ]; then
+  echo "Warning: no token provided. POST may be rejected." >&2
+  echo "Usage: $0 [host] [token]  (or set SPOT_TOKEN env var)" >&2
+fi
 
 PRICES=$(aws ec2 describe-spot-price-history \
   --instance-types "$INST" \
@@ -47,9 +54,12 @@ print(json.dumps({
 }))
 ")
 
-RESP=$(curl -s -X POST "http://${HOST}/api/spot-price" \
-  -H "Content-Type: application/json" \
-  -d "$PAYLOAD")
+CURL_ARGS=(-s -X POST "https://${HOST}/api/spot-price" -H "Content-Type: application/json")
+if [ -n "$TOKEN" ]; then
+  CURL_ARGS+=(-H "Authorization: Bearer ${TOKEN}")
+fi
+
+RESP=$(curl "${CURL_ARGS[@]}" -d "$PAYLOAD")
 
 echo "Pushed spot price to $HOST: $RESP"
 echo "Current spot: $(echo "$PAYLOAD" | python3 -c "import json,sys; print('$'+str(json.load(sys.stdin).get('current_price','?')))")/hr"
