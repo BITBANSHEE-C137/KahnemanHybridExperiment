@@ -598,6 +598,9 @@ body {
 }
 .header h1 { font-size: 15px; font-weight: 600; white-space: nowrap; }
 .header .meta { color: var(--dim); font-size: 11px; }
+.header-links { display: flex; gap: 10px; font-size: 11px; }
+.header-links a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.header-links a:hover { text-decoration: underline; }
 .pulse {
   display: inline-block;
   width: 8px; height: 8px;
@@ -802,6 +805,11 @@ body {
   <!-- Header -->
   <div class="header">
     <div><h1><span class="pulse" id="pulse"></span>ML Training Dashboard</h1></div>
+    <div class="header-links">
+      <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
+      <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
+      <a href="https://siliconstrategy.ai" target="_blank">siliconstrategy.ai</a>
+    </div>
     <div class="meta">
       <span id="conn-status">Connecting...</span> &middot;
       <span id="timestamp"></span>

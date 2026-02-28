@@ -1,5 +1,7 @@
 # KahnemanHybridExperiment
 
+**[Live Dashboard](https://train.bitbanshee.com)** | **[siliconstrategy.ai](https://siliconstrategy.ai)**
+
 A research project exploring **dual-process language models** — a single Transformer that operates in two cognitive modes inspired by Kahneman's System 1 / System 2 framework from *Thinking, Fast and Slow*.
 
 - **System 1 (Diffusion)**: Fast, parallel token generation via masked diffusion. Bidirectional attention. Default mode.
@@ -151,7 +153,27 @@ KahnemanHybridExperiment/
 
 ## Results
 
-*Experiments in progress. Results will be added upon completion.*
+**Status: Training in progress** — GPT-2 Small (124M), 7% complete (3,500 / 50,000 steps). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
+
+### Eval Metrics Over Training
+
+| Step | AR PPL | Diff Loss | S1 Token Acc | Conf ECE | Conf AUROC |
+|------|--------|-----------|-------------|----------|------------|
+| 50 | 19,060 | 7.84 | 3.4% | 0.0499 | 0.466 |
+| 100 | 23,331 | 7.57 | 3.2% | 0.0037 | 0.502 |
+| 1,000 | 22,005 | 6.88 | 5.2% | 0.0002 | 0.548 |
+| 2,000 | 25,008 | 6.66 | 6.0% | 0.0030 | 0.594 |
+| 3,000 | 21,412 | 6.52 | 7.1% | 0.0057 | 0.628 |
+
+### Early Observations
+
+- **Diffusion loss** is steadily declining (7.84 &rarr; 6.52), showing System 1 is learning to predict masked tokens.
+- **S1 token accuracy** has doubled from random baseline (3.4% &rarr; 7.1%), indicating the bidirectional diffusion objective is making progress.
+- **Confidence AUROC** is improving (0.47 &rarr; 0.63) — the confidence head is learning to distinguish correct from incorrect System 1 predictions, which is critical for the hybrid escalation mechanism.
+- **Confidence ECE** remains very low (<0.006), suggesting the confidence head is well-calibrated from early training.
+- **AR perplexity** is still high (~21k) — expected at 7% into training, particularly with joint objectives sharing weights. For reference, pretrained GPT-2 Small achieves ~31.5 PPL on WikiText-103.
+
+Benchmarks (LAMBADA, WikiText-103) and system comparison analysis will be run at training completion.
 
 ## Infrastructure
 
@@ -161,6 +183,7 @@ KahnemanHybridExperiment/
 - **Storage**: Instance NVMe for fast I/O, S3 for persistence (`s3://ml-lab-004507070771/dual-system-research-data/`)
 - **Secrets**: AWS Secrets Manager for W&B and HuggingFace tokens
 - **Tracking**: [Weights & Biases](https://wandb.ai) for real-time experiment logging
+- **Dashboard**: [train.bitbanshee.com](https://train.bitbanshee.com) — live web UI with training progress, GPU stats, loss curves, and cost tracking (nginx + Let's Encrypt TLS)
 
 ### Spot Instance Resilience
 
@@ -223,6 +246,9 @@ python scripts/compare_systems.py --checkpoint checkpoints/step_50000.pt --confi
 
 ### Dashboard
 
+**Web:** Visit [train.bitbanshee.com](https://train.bitbanshee.com) for the live web dashboard with charts, GPU stats, and cost tracking.
+
+**Terminal:**
 ```bash
 python dashboard.py
 ```
