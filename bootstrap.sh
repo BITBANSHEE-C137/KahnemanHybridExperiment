@@ -169,9 +169,12 @@ sudo -u ubuntu bash -c "cd $PROJECT && nohup python3 web_dashboard.py --port 500
 sleep 3
 curl -sf http://127.0.0.1:5000/api/status > /dev/null && echo "  web dashboard: RUNNING" || echo "  WARNING: web dashboard failed to start"
 
-# ── 7. Start spot price updater (every 5 minutes) ──
-echo "Starting spot price updater..."
-sudo -u ubuntu bash -c "cd $PROJECT && nohup bash -c 'while true; do bash update-spot-price.sh train.bitbanshee.com \"$SPOT_TOKEN\" > /dev/null 2>&1; sleep 300; done' > /tmp/spot-updater.log 2>&1 &"
+# ── 7. Spot price updater — run now + cron every 5 minutes ──
+echo "Setting up spot price updater..."
+sudo -u ubuntu bash -c "cd $PROJECT && bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1" &
+CRON_LINE="*/5 * * * * cd $PROJECT && SPOT_TOKEN='$SPOT_TOKEN' bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1"
+( sudo -u ubuntu crontab -l 2>/dev/null | grep -v update-spot-price; echo "$CRON_LINE" ) | sudo -u ubuntu crontab -
+echo "  spot price: cron installed (every 5 min)"
 
 # ── 8. Launch training in tmux (resumes from latest checkpoint) ──
 echo "Launching training..."
