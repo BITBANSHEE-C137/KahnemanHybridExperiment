@@ -153,7 +153,7 @@ KahnemanHybridExperiment/
 
 ## Results
 
-**Status: Training in progress** — GPT-2 Small (124M), 7% complete (3,600 / 50,000 steps). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
+**Status: Training in progress** — GPT-2 Small (124M), 8% complete (4,100 / 50,000 steps). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
 
 ### Success Criteria
 
@@ -177,25 +177,26 @@ The experiment tests whether a single Transformer can learn both AR and diffusio
 | 100 | 23,331 | 7.57 | 3.2% | 0.0037 | 0.502 | |
 | 1,000 | 22,005 | 6.88 | 5.2% | 0.0002 | 0.548 | Warmup phase |
 | 2,000 | 25,008 | 6.66 | 6.0% | 0.0030 | 0.594 | Warmup ends |
-| 3,000 | 21,412 | 6.52 | 7.1% | 0.0057 | 0.628 | Latest |
+| 3,000 | 21,412 | 6.52 | 7.1% | 0.0057 | 0.628 | |
+| 4,000 | 22,406 | 6.23 | 8.6% | 0.0052 | 0.669 | Latest |
 
 ### Progress vs. Targets
 
-| Metric | Current (step 3,000) | Target | Progress |
+| Metric | Current (step 4,000) | Target | Progress |
 |--------|---------------------|--------|----------|
-| AR Perplexity | 21,412 | < 40 | Early — PPL expected to drop sharply as training progresses |
-| S1 Token Accuracy | 7.1% | > 40% | 18% of target — trending up, doubled from baseline |
-| Diffusion Loss | 6.52 | < 4.0 | 34% of reduction achieved (7.84 &rarr; 6.52 &rarr; 4.0) |
-| Confidence AUROC | 0.628 | > 0.75 | 53% of improvement achieved (0.50 &rarr; 0.63 &rarr; 0.75) |
-| Confidence ECE | 0.006 | < 0.05 | Met |
+| AR Perplexity | 22,406 | < 40 | Early — PPL expected to drop sharply as training progresses |
+| S1 Token Accuracy | 8.6% | > 40% | 22% of target — trending up, 2.5× from baseline |
+| Diffusion Loss | 6.23 | < 4.0 | 42% of reduction achieved (7.84 &rarr; 6.23 &rarr; 4.0) |
+| Confidence AUROC | 0.669 | > 0.75 | 68% of improvement achieved (0.50 &rarr; 0.67 &rarr; 0.75) |
+| Confidence ECE | 0.005 | < 0.05 | Met |
 
 ### Observations
 
-- **Diffusion loss** is steadily declining (7.84 &rarr; 6.52), showing System 1 is learning to predict masked tokens.
-- **S1 token accuracy** has doubled from random baseline (3.4% &rarr; 7.1%), indicating the bidirectional diffusion objective is making progress.
-- **Confidence AUROC** is improving (0.47 &rarr; 0.63) — the confidence head is learning to distinguish correct from incorrect System 1 predictions, which is critical for the hybrid escalation mechanism.
+- **Diffusion loss** is steadily declining (7.84 &rarr; 6.23), showing System 1 is learning to predict masked tokens.
+- **S1 token accuracy** is 2.5× the random baseline (3.4% &rarr; 8.6%), indicating the bidirectional diffusion objective is making steady progress.
+- **Confidence AUROC** is improving (0.47 &rarr; 0.67) — the confidence head is learning to distinguish correct from incorrect System 1 predictions, which is critical for the hybrid escalation mechanism.
 - **Confidence ECE** remains very low (<0.006), already meeting the target. The confidence head is well-calibrated from early training.
-- **AR perplexity** is still high (~21k) — expected at 7% into training, particularly with joint objectives competing for shared weights. For reference, pretrained GPT-2 Small achieves ~31.5 PPL on WikiText-103.
+- **AR perplexity** is still high (~22k) — expected at 8% into training, particularly with joint objectives competing for shared weights. For reference, pretrained GPT-2 Small achieves ~31.5 PPL on WikiText-103.
 
 ### Remaining Benchmarks
 

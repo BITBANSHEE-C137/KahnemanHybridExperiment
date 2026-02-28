@@ -10,20 +10,18 @@
 
 | Metric | Value |
 |---|---|
-| Current step | 3,500 / 50,000 (7.0%) |
+| Current step | 4,100 / 50,000 (8.2%) |
 | Phase | Cosine decay (warmup complete at step 2,000) |
-| Elapsed | ~6 hours |
-| Instance | g6.xlarge (NVIDIA L4, spot) |
-| Spot rate | $0.3765/hr |
-| Spot cost so far | ~$5.60 |
+| Elapsed | ~7 hours |
+| Instance | g5.2xlarge (NVIDIA A10G, spot) |
 
-### Latest Train Metrics (step 3,500)
+### Latest Train Metrics (step 4,100)
 
 | Metric | Value |
 |---|---|
-| AR Loss | 3.2244 |
-| Diffusion Loss | 6.4867 |
-| Confidence Accuracy | 92.9% |
+| AR Loss | 3.197 |
+| Diffusion Loss | 6.168 |
+| Confidence Accuracy | 91.5% |
 | Learning Rate | 2.99e-4 |
 
 ### Eval History
@@ -35,15 +33,16 @@
 | 1,000 | 22,005 | 6.88 | 5.2% | 0.0002 | 0.548 |
 | 2,000 | 25,008 | 6.66 | 6.0% | 0.0030 | 0.594 |
 | 3,000 | 21,412 | 6.52 | 7.1% | 0.0057 | 0.628 |
+| 4,000 | 22,406 | 6.23 | 8.6% | 0.0052 | 0.669 |
 
-**Trends:** Diffusion loss steadily declining. S1 token accuracy doubling from baseline. Confidence AUROC improving (0.47 -> 0.63), indicating the confidence head is learning to distinguish correct from incorrect predictions. AR perplexity still high — expected early in training with joint objectives competing for shared weights.
+**Trends:** Diffusion loss steadily declining (7.84 → 6.23). S1 token accuracy 2.5× baseline (3.4% → 8.6%). Confidence AUROC improving (0.47 → 0.67), indicating the confidence head is learning to distinguish correct from incorrect predictions. AR perplexity still high — expected early in training with joint objectives competing for shared weights.
 
 ## Infrastructure
 
 | Component | Status | Details |
 |---|---|---|
 | S3 bucket | Active | `s3://ml-lab-004507070771/dual-system-research-data/` |
-| Instance type | Active | g6.xlarge — NVIDIA L4 (24GB VRAM), spot |
+| Instance type | Active | g5.2xlarge / g6.xlarge (spot fleet) |
 | EBS root volume | 100GB | OS + Python 3.12 + ML stack |
 | Ephemeral NVMe | 419GB | `/opt/dlami/nvme` — runtime data |
 | Deploy scripts | Updated | bootstrap.sh, sync-checkpoints.sh in S3 |
@@ -71,7 +70,7 @@
 - [x] Deploy scripts updated with correct bucket paths
 - [x] Python 3.12 set as default `python3`
 - [x] Full ML stack installed to EBS
-- [x] GPU verified — L4 detected, CUDA matmul confirmed
+- [x] GPU verified — A10G detected, CUDA matmul confirmed
 - [x] requirements.txt created
 - [x] Project source code built (src/, configs/, tests/)
 - [x] AMI snapshot with current environment
@@ -79,7 +78,7 @@
 - [x] OpenWebText preprocessing (memmap shards)
 - [x] Full training launched on tiny config (GPT-2 Small, 50k steps)
 - [x] Web dashboard — live at [train.bitbanshee.com](https://train.bitbanshee.com)
-- [x] HTTPS + nginx reverse proxy with Let's Encrypt TLS
+- [x] HTTPS + nginx reverse proxy with Let’s Encrypt TLS
 - [x] Dashboard hardened — token auth on write endpoints, SSE limits, security headers
 - [x] Route53 DNS auto-update on instance boot
 
