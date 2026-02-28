@@ -821,7 +821,6 @@ body {
   transition: opacity 0.8s ease, max-height 0.8s ease;
 }
 .bootstrap-panel.hidden { display: none; }
-.bootstrap-panel.fading { opacity: 0; max-height: 0; overflow: hidden; padding: 0 14px; margin-bottom: 0; }
 .bootstrap-panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 8px; }
 .bs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .bs-header .bs-elapsed { font-size: 11px; color: var(--dim); }
@@ -1146,15 +1145,16 @@ function checkChartRefresh(data) {
 }
 
 // ── Bootstrap panel ──────────────────────────────────────────────────────
-let bsHideTimer = null;
-let bsHidden = false;
-
 function updateBootstrap(bs) {
   const panel = $('bootstrap-panel');
-  if (!bs || bsHidden) {
+
+  // Hide if no data, or if all steps are done
+  if (!bs || bs.status === 'done') {
     panel.classList.add('hidden');
     return;
   }
+
+  // Has incomplete/failed steps — show the panel
   panel.classList.remove('hidden');
 
   const steps = bs.steps || [];
@@ -1165,13 +1165,11 @@ function updateBootstrap(bs) {
   // Progress bar
   const bar = $('bs-progress');
   bar.style.width = pct + '%';
-  bar.className = 'bs-progress-inner' + (bs.status === 'done' ? ' done' : bs.status === 'failed' ? ' failed' : '');
+  bar.className = 'bs-progress-inner' + (bs.status === 'failed' ? ' failed' : '');
 
   // Elapsed
   const elapsedEl = $('bs-elapsed');
-  if (bs.status === 'done' && bs.total_elapsed_s != null) {
-    elapsedEl.textContent = 'Completed in ' + fmtTimeLong(bs.total_elapsed_s);
-  } else if (bs.total_elapsed_s != null) {
+  if (bs.total_elapsed_s != null) {
     elapsedEl.textContent = fmtTimeLong(bs.total_elapsed_s);
   } else {
     elapsedEl.textContent = '';
@@ -1192,14 +1190,6 @@ function updateBootstrap(bs) {
       '<span class="bs-time">' + elapsed + '</span>' +
       '</div>';
   }).join('');
-
-  // Auto-hide 30s after completion (never if failed)
-  if (bs.status === 'done' && !bsHideTimer) {
-    bsHideTimer = setTimeout(() => {
-      panel.classList.add('fading');
-      setTimeout(() => { panel.classList.add('hidden'); bsHidden = true; }, 800);
-    }, 30000);
-  }
 }
 
 // ── Cost ticker ──────────────────────────────────────────────────────────
