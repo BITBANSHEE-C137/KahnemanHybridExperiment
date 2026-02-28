@@ -37,7 +37,7 @@ training:
   confidence_threshold: 0.8       # escalate to System 2 below this
 
   # Checkpointing
-  checkpoint_every: 5000
+  checkpoint_every: 1000
   checkpoint_dir: "checkpoints/"
 
   # Logging

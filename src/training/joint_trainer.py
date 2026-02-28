@@ -323,6 +323,15 @@ def train(
             print(f"Saved checkpoint: {ckpt_path}")
             upload_checkpoint(ckpt_path, step)
 
+            # Keep only the last 3 checkpoints locally (S3 has all)
+            local_ckpts = sorted(
+                checkpoint_dir.glob("step_*.pt"),
+                key=lambda p: int(p.stem.split("_")[1]),
+            )
+            for old_ckpt in local_ckpts[:-3]:
+                old_ckpt.unlink()
+                print(f"Removed old local checkpoint: {old_ckpt.name}")
+
     print(f"Training complete. {step} steps in {time.time() - t0:.1f}s")
 
     # Save and upload training log
