@@ -749,41 +749,6 @@ body {
     </div>
   </div>
 
-  <!-- Instance & Cost -->
-  <div class="card card-full">
-    <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px; margin-bottom:8px">
-      <h2 style="margin-bottom:0">Instance & Cost</h2>
-      <div class="inst-row">
-        <span class="inst-item"><span class="inst-val" id="inst-type">--</span></span>
-        <span class="inst-item"><span class="inst-val" id="inst-lifecycle">--</span></span>
-        <span class="inst-item"><span class="inst-val" id="inst-az">--</span></span>
-        <span class="inst-item">up <span class="inst-val" id="inst-uptime">--</span></span>
-      </div>
-    </div>
-    <table class="cost-tbl">
-      <tr><th></th><th>Rate</th><th>Cost</th><th>Projected</th></tr>
-      <tr>
-        <td>On-Demand</td>
-        <td id="od-rate">--</td>
-        <td class="cost-accent" style="color:var(--orange)" id="od-cost">--</td>
-        <td id="od-proj">--</td>
-      </tr>
-      <tr>
-        <td>Spot</td>
-        <td id="spot-rate">--</td>
-        <td class="cost-accent" style="color:var(--green)" id="spot-cost">--</td>
-        <td id="spot-proj">--</td>
-      </tr>
-      <tr class="row-savings">
-        <td style="color:var(--green)">Savings</td>
-        <td id="delta-pct" style="color:var(--green)">--</td>
-        <td class="cost-accent" style="color:var(--green)" id="delta-cost">--</td>
-        <td id="delta-proj" style="color:var(--green)">--</td>
-      </tr>
-    </table>
-    <div class="spot-stale" id="spot-stale" style="display:none"></div>
-  </div>
-
   <!-- Progress -->
   <div class="card card-full">
     <h2>Training Progress</h2>
@@ -863,6 +828,41 @@ body {
     <div class="card">
       <h2>Eval Metrics</h2>
       <div class="chart-container"><canvas id="chart-eval"></canvas></div>
+    </div>
+
+    <!-- Instance & Cost -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px; margin-bottom:8px">
+        <h2 style="margin-bottom:0">Instance & Cost</h2>
+        <div class="inst-row">
+          <span class="inst-item"><span class="inst-val" id="inst-type">--</span></span>
+          <span class="inst-item"><span class="inst-val" id="inst-lifecycle">--</span></span>
+          <span class="inst-item"><span class="inst-val" id="inst-az">--</span></span>
+          <span class="inst-item">up <span class="inst-val" id="inst-uptime">--</span></span>
+        </div>
+      </div>
+      <table class="cost-tbl">
+        <tr><th></th><th>Rate</th><th>Cost</th><th>Projected</th></tr>
+        <tr>
+          <td>On-Demand</td>
+          <td id="od-rate">--</td>
+          <td class="cost-accent" style="color:var(--orange)" id="od-cost">--</td>
+          <td id="od-proj">--</td>
+        </tr>
+        <tr>
+          <td>Spot</td>
+          <td id="spot-rate">--</td>
+          <td class="cost-accent" style="color:var(--green)" id="spot-cost">--</td>
+          <td id="spot-proj">--</td>
+        </tr>
+        <tr class="row-savings">
+          <td style="color:var(--green)">Savings</td>
+          <td id="delta-pct" style="color:var(--green)">--</td>
+          <td class="cost-accent" style="color:var(--green)" id="delta-cost">--</td>
+          <td id="delta-proj" style="color:var(--green)">--</td>
+        </tr>
+      </table>
+      <div class="spot-stale" id="spot-stale" style="display:none"></div>
     </div>
 
     <!-- Infra -->
