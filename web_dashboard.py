@@ -1140,12 +1140,18 @@ function drawSparkline(canvasId, data, color) {
 // ── Chart refresh ────────────────────────────────────────────────────────
 let currentTrainStep = 0;
 let lastEvalStep = null;
+let lastTrainStep = null;
 let lastChartRefresh = Date.now();
-const CHART_REFRESH_INTERVAL = 300000; // 5 min
 
 function checkChartRefresh(data) {
-  const now = Date.now();
   let needsRefresh = false;
+
+  // Refresh when new training steps appear
+  const trainStep = data.current_step || 0;
+  if (trainStep > 0 && trainStep !== lastTrainStep) {
+    lastTrainStep = trainStep;
+    needsRefresh = true;
+  }
 
   // Refresh when new eval data appears
   const evalStep = data.latest_eval ? data.latest_eval.step : null;
@@ -1154,13 +1160,8 @@ function checkChartRefresh(data) {
     needsRefresh = true;
   }
 
-  // Periodic refresh for loss chart (training data grows continuously)
-  if (now - lastChartRefresh > CHART_REFRESH_INTERVAL) {
-    needsRefresh = true;
-  }
-
   if (needsRefresh) {
-    lastChartRefresh = now;
+    lastChartRefresh = Date.now();
     loadCharts();
   }
 }
