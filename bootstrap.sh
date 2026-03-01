@@ -10,7 +10,7 @@ DATA_DIR="$NVME/ml-lab"
 # ── Bootstrap status tracking ──
 BOOTSTRAP_STATUS="/tmp/bootstrap_status.json"
 
-STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Setup cost tracker","Launch training"]'
+STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Setup cost tracker","Setup auto-sitrep","Launch training"]'
 
 init_bootstrap_status() {
     python3 -c "
@@ -289,13 +289,22 @@ echo "$EXISTING" | grep -v cost-tracker | { cat; echo "$COST_CRON"; } | sudo -u 
 echo "  cost tracker: initialized + cron installed (every 5 min)"
 step_done 14
 
-# ── Step 15: Launch training in tmux (resumes from latest checkpoint) ──
+# ── Step 15: Setup auto-sitrep cron (every 30 min) ──
 step_start 15
+echo "Setting up auto-sitrep cron..."
+SITREP_CRON="*/30 * * * * cd $PROJECT && python3 auto_sitrep.py >> /tmp/auto-sitrep.log 2>&1"
+EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
+echo "$EXISTING" | grep -v auto_sitrep | { cat; echo "$SITREP_CRON"; } | sudo -u ubuntu crontab -
+echo "  auto-sitrep: cron installed (every 30 min)"
+step_done 15
+
+# ── Step 16: Launch training in tmux (resumes from latest checkpoint) ──
+step_start 16
 echo "Launching training..."
 sudo -u ubuntu setsid tmux new-session -d -s training -c "$PROJECT"
 sudo -u ubuntu tmux send-keys -t training "export WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' CHECKPOINT_DIR='$DATA_DIR/checkpoints' DATA_DIR='$DATA_DIR' PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && python3 -m src.training.joint_trainer --config configs/tiny.yaml" Enter
 echo "  training: LAUNCHED in tmux (will resume from latest checkpoint)"
-step_done 15
+step_done 16
 
 bootstrap_done
 
