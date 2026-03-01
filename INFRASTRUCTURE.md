@@ -115,6 +115,8 @@ Single-file Flask application (1,600 lines) serving an inline HTML/CSS/JS dashbo
 
 ### monitor.sh — Terminal Dashboard
 
+![Terminal Dashboard](static/terminal-dashboard.png)
+
 Bash script (430 lines) rendering a full-screen ANSI terminal dashboard. Same data sources as the web dashboard, but parsed directly in bash with `grep`/`bc`/`python3` one-liners. Designed for SSH sessions on the GPU instance.
 
 ```
