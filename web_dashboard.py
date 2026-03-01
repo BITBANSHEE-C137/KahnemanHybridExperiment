@@ -1009,7 +1009,7 @@ body {
         <tr>
           <td>On-Demand</td>
           <td id="od-rate">--</td>
-          <td class="cost-accent" style="color:var(--orange)" id="od-cost">--</td>
+          <td class="cost-accent" style="color:var(--red)" id="od-cost">--</td>
           <td id="od-proj">--</td>
         </tr>
         <tr>
@@ -1019,10 +1019,10 @@ body {
           <td id="spot-proj">--</td>
         </tr>
         <tr class="row-savings">
-          <td style="color:var(--green)">Savings</td>
-          <td id="delta-pct" style="color:var(--green)">--</td>
-          <td class="cost-accent" style="color:var(--green)" id="delta-cost">--</td>
-          <td id="delta-proj" style="color:var(--green)">--</td>
+          <td>Savings</td>
+          <td id="delta-pct">--</td>
+          <td class="cost-accent" id="delta-cost">--</td>
+          <td id="delta-proj">--</td>
         </tr>
       </table>
       <div class="spot-stale" id="spot-stale" style="display:none"></div>
