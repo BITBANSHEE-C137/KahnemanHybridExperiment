@@ -1006,16 +1006,16 @@ body {
       </div>
       <table class="cost-tbl">
         <tr><th></th><th>Rate</th><th>Cost</th><th>Projected</th></tr>
-        <tr>
+        <tr style="color:var(--red)">
           <td>On-Demand</td>
           <td id="od-rate">--</td>
-          <td class="cost-accent" style="color:var(--red)" id="od-cost">--</td>
+          <td class="cost-accent" id="od-cost">--</td>
           <td id="od-proj">--</td>
         </tr>
-        <tr>
+        <tr style="color:var(--green)">
           <td>Spot</td>
           <td id="spot-rate">--</td>
-          <td class="cost-accent" style="color:var(--green)" id="spot-cost">--</td>
+          <td class="cost-accent" id="spot-cost">--</td>
           <td id="spot-proj">--</td>
         </tr>
         <tr class="row-savings">
