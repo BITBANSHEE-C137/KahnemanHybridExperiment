@@ -820,10 +820,11 @@ body::before {
   padding: 8px;
   max-height: 280px;
   overflow-y: auto;
-  overflow-x: auto;
-  font-size: 15px;
+  overflow-x: hidden;
+  font-size: 13px;
   line-height: 1.5;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .log-box .eval-line { color: var(--yellow); }
 .log-box .step-line { color: var(--text); }
