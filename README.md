@@ -33,7 +33,7 @@ Speculative decoding (Leviathan et al., 2023; Chen et al., 2023) uses a small dr
 
 ### Discrete Diffusion for Text
 
-Masked diffusion language models have recently shown strong results: Austin et al. (2021) introduced D3PM for discrete diffusion, LLaDA (Nie et al., 2025) demonstrated masked diffusion at the 8B parameter scale, MDLM (Lou et al., 2024) and SEDD (Sahoo et al., 2024) explored alternative noise schedules and score-based formulations. We adopt LLaDA's masking strategy but apply it jointly with an autoregressive objective on shared weights, which to our knowledge has only been explored by Dual Language Models (Zheng et al., 2024).
+Masked diffusion language models have recently shown strong results: Austin et al. (2021) introduced D3PM for discrete diffusion, LLaDA (Nie et al., 2025) demonstrated masked diffusion at the 8B parameter scale, MDLM (Lou et al., 2024) and SEDD (Sahoo et al., 2024) explored alternative noise schedules and score-based formulations. We adopt LLaDA's masking strategy but apply it jointly with an autoregressive objective on shared weights, which to our knowledge has only been explored by Dual Language Models (Zheng et al., 2024). DiffER (He et al., 2026) showed that even bidirectional diffusion models suffer from the reversal curse due to entity fragmentation under random token masking, proposing whole-entity masking as a remedy. Our architecture addresses a related problem differently: the confidence head learns to detect positions where System 1's token-level predictions are unreliable and escalates to System 2, sidestepping the need for entity-aware masking.
 
 ### Confidence-Based Routing
 
@@ -345,6 +345,7 @@ Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 chec
 - Fedus, W., Zoph, B., & Shazeer, N. (2022). Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity. *JMLR*, 23(120), 1–39. [arXiv:2101.03961](https://arxiv.org/abs/2101.03961)
 - Gal, Y., & Ghahramani, Z. (2016). Dropout as a Bayesian Approximation: Representing Model Uncertainty in Deep Learning. *ICML 2016*. [arXiv:1506.02142](https://arxiv.org/abs/1506.02142)
 - Gokaslan, A., & Cohen, V. (2019). OpenWebText Corpus. [HuggingFace](https://huggingface.co/datasets/openwebtext)
+- He, S., Wei, K., Zeng, X., Chen, X., Yang, X., Li, Z., Zhong, J., & Tian, Y. (2026). DiffER: Diffusion Entity-Relation Modeling for Reversal Curse in Diffusion Large Language Models. [arXiv:2601.07347](https://arxiv.org/abs/2601.07347)
 - Kahneman, D. (2011). *Thinking, Fast and Slow*. Farrar, Straus and Giroux.
 - Kadavath, S., et al. (2022). Language Models (Mostly) Know What They Know. [arXiv:2207.05221](https://arxiv.org/abs/2207.05221)
 - Leviathan, Y., Kalman, M., & Matias, Y. (2023). Fast Inference from Transformers via Speculative Decoding. *ICML 2023*. [arXiv:2211.17192](https://arxiv.org/abs/2211.17192)
