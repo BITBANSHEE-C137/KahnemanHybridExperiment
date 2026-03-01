@@ -110,9 +110,9 @@ KahnemanHybridExperiment/
 ├── sync-checkpoints.sh              # S3 artifact sync daemon
 ├── update-dns.sh                    # Route53 DNS auto-update
 ├── update-spot-price.sh             # Spot price monitoring (cron + IMDSv2)
-├── web_dashboard.py                 # Live web dashboard (Flask + SSE)
-├── monitor.sh                       # Terminal training monitor (ANSI)
-├── dashboard.py                     # Curses-based training monitor TUI
+├── web_dashboard.py                 # Live web dashboard (Flask + SSE + Chart.js)
+├── monitor.sh                       # Terminal training monitor (bash + ANSI)
+├── dashboard.py                     # Curses TUI — job launcher + live monitor
 ├── requirements.txt
 └── setup.py
 ```
@@ -213,6 +213,118 @@ These will be run at training completion (step 50,000):
 - **System Comparison** — escalation rates, throughput, quality across generation modes
 - **Confidence Calibration** — full analysis at final checkpoint
 
+## Monitoring & Dashboards
+
+Three monitoring interfaces share the same on-disk data sources but serve different use cases.
+
+### Data Flow
+
+```
+joint_trainer.py
+  ├─ wandb output.log ──────── step lines (ar_loss, diff_loss, conf_acc, lr, time)
+  │                             [eval] lines (ar_ppl, diff_loss, s1_tok_acc, conf_acc, conf_ece, conf_auroc)
+  ├─ eval_metrics/*.json ────── one JSON per eval checkpoint
+  ├─ checkpoints/*.pt ───────── model + optimizer state
+  └─ configs/tiny.yaml ──────── training hyperparameters
+
+/tmp/spot_price.json ────────── spot pricing (written by cron via update-spot-price.sh)
+/tmp/bootstrap_status.json ──── bootstrap progress (written by bootstrap.sh)
+EC2 IMDS v2 ─────────────────── instance type, lifecycle, AZ, boot time
+nvidia-smi ──────────────────── GPU util, VRAM, temp, power
+```
+
+### web_dashboard.py — Live Web Dashboard
+
+Single-file Flask application (1,600 lines) serving an inline HTML/CSS/JS dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Designed for remote monitoring over CloudFront.
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | Flask, Server-Sent Events (SSE) at `/stream` (10s interval) |
+| Frontend | Vanilla JS, Chart.js (loss curves + eval metrics), inline CSS |
+| Caching | Per-key TTL cache (2–60s) to avoid re-parsing on every SSE push |
+| Proxy | nginx (HTTP, port 80) → CloudFront (TLS termination) → `train.bitbanshee.com` |
+
+**Key features:**
+- **Live metrics cards** with RAG (red/amber/green) color coding based on proximity to training targets
+- **Loss curves chart** — AR loss + diffusion loss over training steps, auto-refreshes on new data
+- **Eval metrics chart** — S1 token accuracy, AUROC, AR perplexity; filtered to current run only
+- **Sparklines** on each metric (last 30 data points)
+- **GPU gauges** — utilization, VRAM, temperature, power with color thresholds
+- **Cost tracking** — on-demand vs spot pricing, live savings computation, projected run cost
+- **Bootstrap progress panel** — step-by-step instance boot status (auto-hides when complete)
+- **Infrastructure status** — trainer/sync daemon health, checkpoint list, next milestones
+
+**API endpoints:**
+
+| Endpoint | Description |
+|----------|------------|
+| `GET /api/status` | Full status payload (training, eval, GPU, cost, infra, bootstrap) |
+| `GET /api/history` | Training step data for loss chart |
+| `GET /api/eval/history` | Merged eval JSONs + log-parsed eval lines |
+| `GET /stream` | SSE stream — pushes `/api/status` every 10s |
+| `POST /api/spot-price` | Accepts spot price data from external updater (token-auth) |
+
+### monitor.sh — Terminal Dashboard
+
+Bash script (430 lines) rendering a full-screen ANSI terminal dashboard. Same data sources as the web dashboard, but parsed directly in bash with `grep`/`bc`/`python3` one-liners. Designed for SSH sessions on the GPU instance.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  ◆ ML Training Dashboard                              14:32:08 UTC  │
+│  ◆ Progress    1,100/50,000  warmup  1h 2m elapsed  46h remaining   │
+│    ▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 2%   │
+│  ◆ Metrics                                                          │
+│    AR Loss   3.1242  ▁▂▃▄▅▆▇█ ↓      Conf Acc  0.9506             │
+│    Diff Loss 6.8470  ▁▂▃▄▅▆▇█ ↓      LR        1.65e-04           │
+│  ◆ GPU  NVIDIA A10G                                                 │
+│    Util  ████████░░ 82%      VRAM  ████████░░ 18.2/22G             │
+│    Temp  ███░░░░░░░ 34°C     Power ██████░░░░ 138/300W             │
+│  ◆ Eval  step 1000                                                  │
+│    AR PPL 20575   S1 Acc 4.9%   AUROC 0.550 ████░░   ECE 0.0028   │
+│  ◆ Cost  g5.xlarge · spot · us-east-1a · up 1h 5m                  │
+│    On-Demand  $1.0060/hr  $1.04  proj $47.28                       │
+│    Spot       $0.4253/hr  $0.44  proj $19.99                       │
+│    Savings    56.7%       $0.60  proj $27.29                       │
+│  ◆ Infra  ● trainer ● sync                                         │
+│    next eval 2000 in 900  ckpt 2000 in 900  warmup ends 2000       │
+│  ──────────────────────────────────────────────────────────────────  │
+│  ◆ Log                                                              │
+│    step: 1100 | ar_loss: 3.1242 | diff_loss: 6.8470 | ...          │
+│  ──────────────────────────────────────────────────────────────────  │
+│  refresh 15s  q=quit r=refresh                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Features:** Progress bar, inline sparklines with trend arrows, GPU gauges with color thresholds, spot cost tracking, eval data filtered to current run only, auto-refresh with keyboard controls.
+
+```bash
+./monitor.sh        # 15s refresh (default)
+./monitor.sh 5      # 5s refresh
+```
+
+### dashboard.py — Curses Job Manager TUI
+
+Python curses application (880 lines) for interactive job management. Launches training, smoke tests, or pytest from a menu and monitors the running process with live output, GPU stats, and parsed metrics.
+
+```bash
+python dashboard.py              # Interactive menu
+python dashboard.py --job tiny   # Launch training directly
+python dashboard.py --job smoke  # Launch smoke test
+python dashboard.py --job test   # Launch pytest
+```
+
+### Comparison
+
+| Feature | web_dashboard.py | monitor.sh | dashboard.py |
+|---------|-----------------|------------|-------------|
+| Access | Browser (remote) | SSH terminal | SSH terminal |
+| Charts | Chart.js (loss + eval) | Sparklines (ANSI) | — |
+| RAG indicators | Color-coded metric cards | Color-coded gauges | — |
+| Cost tracking | Full (on-demand + spot) | Full | — |
+| Bootstrap status | Progress panel | — | — |
+| Job control | View only | View only | Launch + monitor |
+| Dependencies | Flask, nginx, CloudFront | bash, bc, python3 | Python curses |
+
 ## Infrastructure
 
 ### AWS Setup
@@ -221,7 +333,8 @@ These will be run at training completion (step 50,000):
 - **Storage**: Instance NVMe for fast I/O, S3 for persistence (`s3://ml-lab-004507070771/dual-system-research-data/`)
 - **Secrets**: AWS Secrets Manager for W&B and HuggingFace tokens
 - **Tracking**: [Weights & Biases](https://wandb.ai) for real-time experiment logging
-- **Dashboard**: [train.bitbanshee.com](https://train.bitbanshee.com) — live web UI with training progress, GPU stats, loss curves, and cost tracking (nginx + Let's Encrypt TLS)
+- **CDN/TLS**: CloudFront (`EGWW28IMM7U2T`) → ACM certificate → `train.bitbanshee.com`. Origin failover to S3 static page when instance is down.
+- **Dashboard**: [train.bitbanshee.com](https://train.bitbanshee.com) — live web UI with training progress, GPU stats, loss curves, and cost tracking
 
 ### Spot Instance Resilience
 
@@ -233,7 +346,27 @@ Training runs on spot instances with three layers of protection:
 
 ### Bootstrap
 
-`bootstrap.sh` handles full autonomous instance setup in 8 steps: mounts NVMe, fetches secrets, restores artifacts from S3, updates DNS, starts the sync daemon, configures nginx + TLS, starts the web dashboard and spot price monitoring, and launches training in a tmux session. Tested across 3 spot recovery cycles with zero manual intervention required.
+`bootstrap.sh` handles full autonomous instance setup in 15 steps with real-time status tracking (written to `/tmp/bootstrap_status.json` for the dashboard to display):
+
+| Step | Action | Notes |
+|------|--------|-------|
+| 0 | NVMe ephemeral storage | Create data directories on fast local disk |
+| 1 | Fetch secrets | W&B, HuggingFace, dashboard tokens from Secrets Manager |
+| 2 | Configure environment | `.bashrc` env vars, git credentials |
+| 3 | Pull latest code | `git pull --ff-only` |
+| 4 | Restore artifacts from S3 | Checkpoints, logs, eval metrics, benchmarks (**bottleneck: ~3 min**) |
+| 5 | Sync preprocessed data | Tokenized training data from S3 |
+| 6 | Fix file ownership | S3 restores as root |
+| 7 | Update CloudFront DNS | `origin.train.bitbanshee.com` A record → instance IP |
+| 8 | Start sync daemon | `sync-checkpoints.sh` (60s interval) |
+| 9 | Install nginx | apt install (if missing) |
+| 10 | Configure nginx | HTTP-only reverse proxy (CloudFront handles TLS) |
+| 11 | Install Flask | pip install (if missing) |
+| 12 | Start web dashboard | Flask on :5000 |
+| 13 | Setup spot price updater | Initial run + cron every 5 min |
+| 14 | Launch training | tmux session, auto-resumes from latest checkpoint |
+
+Pulled from S3 on every boot (`s3://ml-lab-004507070771/dual-system-research-data/deploy/bootstrap.sh`). Tested across multiple spot recovery cycles with zero manual intervention.
 
 ## Quick Start
 
@@ -282,16 +415,21 @@ python scripts/benchmark.py --checkpoint checkpoints/step_50000.pt --config conf
 python scripts/compare_systems.py --checkpoint checkpoints/step_50000.pt --config configs/tiny.yaml
 ```
 
-### Dashboard
+### Monitoring
 
 **Web:** Visit [train.bitbanshee.com](https://train.bitbanshee.com) for the live web dashboard with charts, GPU stats, and cost tracking.
 
-**Terminal:**
+**Terminal (read-only):**
 ```bash
-python dashboard.py
+./monitor.sh        # ANSI dashboard, 15s refresh
+./monitor.sh 5      # 5s refresh
 ```
 
-A terminal UI for launching and monitoring training runs with live metrics, GPU stats, and scrollable logs.
+**Terminal (job manager):**
+```bash
+python dashboard.py              # Interactive menu
+python dashboard.py --job tiny   # Launch training directly
+```
 
 ## Training Configuration
 
