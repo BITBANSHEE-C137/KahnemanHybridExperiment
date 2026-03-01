@@ -881,6 +881,11 @@ body {
 <body>
 <div class="container">
 
+  <!-- Hero -->
+  <div style="text-align:center;margin-bottom:12px">
+    <img src="/static/hero.png" alt="BitBanshee Research" style="width:100%;max-width:800px;border-radius:8px;border:1px solid var(--border)">
+  </div>
+
   <!-- Header -->
   <div class="header">
     <div><h1><span class="pulse" id="pulse"></span>ML Training Dashboard</h1></div>

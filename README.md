@@ -1,5 +1,7 @@
 # KahnemanHybridExperiment
 
+![BitBanshee Research](static/hero.png)
+
 **[Live Dashboard](https://train.bitbanshee.com)** | **[siliconstrategy.ai](https://siliconstrategy.ai)**
 
 A research project exploring **dual-process language models** — a single Transformer that operates in two cognitive modes inspired by Kahneman's System 1 / System 2 framework from *Thinking, Fast and Slow*.
