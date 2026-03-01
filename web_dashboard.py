@@ -595,7 +595,7 @@ body {
   background-repeat: no-repeat;
   background-attachment: fixed;
   color: var(--text);
-  font-size: 13px;
+  font-size: 17px;
   line-height: 1.5;
   overflow-x: hidden;
   min-width: 0;
@@ -629,9 +629,9 @@ body::before {
   flex-wrap: wrap;
   gap: 8px;
 }
-.header h1 { font-size: 15px; font-weight: 600; white-space: nowrap; }
-.header .meta { color: var(--dim); font-size: 11px; }
-.header-links { display: flex; gap: 10px; font-size: 11px; }
+.header h1 { font-size: 20px; font-weight: 600; white-space: nowrap; }
+.header .meta { color: var(--dim); font-size: 15px; }
+.header-links { display: flex; gap: 10px; font-size: 15px; }
 .header-links a { color: var(--accent); text-decoration: none; white-space: nowrap; }
 .header-links a:hover { text-decoration: underline; }
 .pulse {
@@ -665,7 +665,7 @@ body::before {
 }
 .card-full { margin-bottom: 12px; }
 .card h2 {
-  font-size: 11px;
+  font-size: 15px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--dim);
@@ -689,7 +689,7 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   color: #000;
   min-width: 36px;
@@ -718,7 +718,7 @@ body::before {
 .metric-box.rag-red { border-left-color: var(--red); }
 .metric-box.rag-red .value { color: var(--red); }
 .metric-box .label {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--dim);
   margin-bottom: 3px;
   white-space: nowrap;
@@ -726,13 +726,13 @@ body::before {
   text-overflow: ellipsis;
 }
 .metric-box .value {
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.metric-box .sub { font-size: 10px; color: var(--dim); margin-top: 2px; }
+.metric-box .sub { font-size: 13px; color: var(--dim); margin-top: 2px; }
 .metric-box canvas { margin-top: 4px; }
 
 /* Cost comparison layout */
@@ -740,10 +740,10 @@ body::before {
 .cost-tbl {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 16px;
 }
 .cost-tbl th {
-  font-size: 10px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--dim);
@@ -762,25 +762,25 @@ body::before {
 .cost-tbl td:first-child {
   text-align: left;
   color: var(--dim);
-  font-size: 11px;
+  font-size: 15px;
 }
-.cost-tbl .cost-accent { font-weight: 700; font-size: 14px; }
+.cost-tbl .cost-accent { font-weight: 700; font-size: 19px; }
 .cost-tbl .row-savings td { border-top: 1px solid var(--border); padding-top: 4px; }
-.spot-stale { font-size: 10px; color: var(--orange); margin-top: 4px; }
+.spot-stale { font-size: 13px; color: var(--orange); margin-top: 4px; }
 
 /* Instance info row */
 .inst-row {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 11px;
+  font-size: 15px;
 }
 .inst-row .inst-item { color: var(--dim); white-space: nowrap; }
 .inst-row .inst-val { color: var(--text); font-weight: 600; }
 
 /* GPU bars */
 .bar-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
-.bar-label { width: 75px; font-size: 11px; color: var(--dim); flex-shrink: 0; }
+.bar-label { width: 75px; font-size: 15px; color: var(--dim); flex-shrink: 0; }
 .bar-outer {
   flex: 1; height: 16px; min-width: 0;
   background: var(--bg); border-radius: 3px; overflow: hidden;
@@ -789,16 +789,16 @@ body::before {
   height: 100%; border-radius: 3px;
   transition: width 0.5s ease;
   display: flex; align-items: center; padding-left: 5px;
-  font-size: 9px; font-weight: 600; color: #000;
+  font-size: 12px; font-weight: 600; color: #000;
 }
-.bar-val { width: 80px; text-align: right; font-size: 11px; flex-shrink: 0; white-space: nowrap; }
+.bar-val { width: 80px; text-align: right; font-size: 15px; flex-shrink: 0; white-space: nowrap; }
 
 /* Badges */
 .badge {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   margin-right: 4px;
   margin-bottom: 4px;
@@ -814,7 +814,7 @@ body::before {
   max-height: 280px;
   overflow-y: auto;
   overflow-x: auto;
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.5;
   white-space: pre;
 }
@@ -825,7 +825,7 @@ body::before {
 .chart-container { position: relative; height: 240px; }
 
 /* Checkpoint list */
-.ckpt-list { font-size: 11px; color: var(--dim); }
+.ckpt-list { font-size: 15px; color: var(--dim); }
 .ckpt-list span {
   display: inline-block;
   margin: 2px 3px;
@@ -844,9 +844,9 @@ body::before {
   transition: opacity 0.8s ease, max-height 0.8s ease;
 }
 .bootstrap-panel.hidden { display: none; }
-.bootstrap-panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 8px; }
+.bootstrap-panel h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 8px; }
 .bs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.bs-header .bs-elapsed { font-size: 11px; color: var(--dim); }
+.bs-header .bs-elapsed { font-size: 15px; color: var(--dim); }
 .bs-progress-outer {
   width: 100%;
   height: 6px;
@@ -872,14 +872,14 @@ body::before {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 15px;
   padding: 2px 0;
   white-space: nowrap;
   overflow: hidden;
 }
 .bs-step .bs-icon { width: 14px; text-align: center; flex-shrink: 0; }
 .bs-step .bs-label { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
-.bs-step .bs-time { color: var(--dim); font-size: 10px; margin-left: auto; flex-shrink: 0; }
+.bs-step .bs-time { color: var(--dim); font-size: 13px; margin-left: auto; flex-shrink: 0; }
 .bs-step.done .bs-icon { color: var(--green); }
 .bs-step.done .bs-label { color: var(--text); }
 .bs-step.running .bs-icon { color: var(--accent); }
@@ -929,7 +929,7 @@ body::before {
   <!-- Progress -->
   <div class="card card-full">
     <h2>Training Progress</h2>
-    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size:12px">
+    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size: 16px">
       <span>Step <strong id="cur-step">--</strong> / <span id="max-step">--</span></span>
       <span>Phase: <strong id="phase">--</strong></span>
       <span>Elapsed: <strong id="elapsed">--</strong></span>
@@ -977,7 +977,7 @@ body::before {
     <!-- GPU -->
     <div class="card">
       <h2>GPU</h2>
-      <div id="gpu-name" style="color:var(--dim);font-size:11px;margin-bottom:6px">--</div>
+      <div id="gpu-name" style="color:var(--dim);font-size: 15px;margin-bottom:6px">--</div>
       <div class="bar-row">
         <span class="bar-label">Utilization</span>
         <div class="bar-outer"><div class="bar-inner" id="gpu-util-bar" style="width:0%"></div></div>
@@ -1055,16 +1055,16 @@ body::before {
         <span class="badge" id="badge-sync">Sync: ?</span>
       </div>
       <div style="margin-bottom:6px">
-        <span style="font-size:11px;color:var(--dim)">Next milestones:</span>
-        <div id="milestones" style="font-size:11px;margin-top:2px">--</div>
+        <span style="font-size: 15px;color:var(--dim)">Next milestones:</span>
+        <div id="milestones" style="font-size: 15px;margin-top:2px">--</div>
       </div>
       <div style="margin-bottom:6px">
-        <span style="font-size:11px;color:var(--dim)">Checkpoints:</span>
+        <span style="font-size: 15px;color:var(--dim)">Checkpoints:</span>
         <div class="ckpt-list" id="ckpt-list">--</div>
       </div>
       <div>
-        <span style="font-size:11px;color:var(--dim)">Config:</span>
-        <div id="config-info" style="font-size:11px;color:var(--dim);margin-top:2px">--</div>
+        <span style="font-size: 15px;color:var(--dim)">Config:</span>
+        <div id="config-info" style="font-size: 15px;color:var(--dim);margin-top:2px">--</div>
       </div>
     </div>
 
