@@ -141,3 +141,13 @@ class TestDualProcessGPT2:
         self.model.forward_system2(ids)
         s2_wte = self.model.transformer.transformer.wte.weight
         assert s1_wte.data_ptr() == s2_wte.data_ptr()
+
+    def test_system2_matches_manual_causal(self):
+        """System 2 logits must match manual forward with causal mask."""
+        ids = torch.randint(0, 50257, (1, 64))
+        logits_hf, _ = self.model.forward_system2(ids)
+        T = ids.size(1)
+        causal_mask = torch.tril(torch.ones(1, 1, T, T))
+        logits_manual, _ = self.model._forward_transformer(ids, causal_mask)
+        assert torch.allclose(logits_hf, logits_manual, atol=1e-4), \
+            f"Max diff: {(logits_hf - logits_manual).abs().max().item()}"
