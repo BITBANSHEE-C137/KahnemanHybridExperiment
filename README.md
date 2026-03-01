@@ -45,6 +45,8 @@ T5 (Raffel et al., 2020) demonstrated that a single model can learn multiple obj
 
 ## Architecture
 
+![DualProcessGPT2 Architecture & Training](static/architecture-diagram.svg)
+
 ### DualProcessGPT2
 
 Built on HuggingFace's `GPT2LMHeadModel`, initialized from pretrained weights. Three components:
@@ -83,6 +85,8 @@ L = λ_ar · L_ar + λ_diff · L_diff + λ_conf · L_conf
 | **L_conf** (Confidence) | Binary cross-entropy — trains confidence head to predict whether System 1 got each masked token correct. | 0.1 |
 
 ### Inference Modes
+
+![Dual-Process Inference Flow](static/dual-process-flow.svg)
 
 Three generation pipelines in `src/inference/generator.py`:
 
