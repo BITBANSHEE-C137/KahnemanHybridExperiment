@@ -939,6 +939,11 @@ body {
           <canvas id="spark-conf" width="100" height="28"></canvas>
         </div>
         <div class="metric-box">
+          <div class="label">AUROC</div>
+          <div class="value" id="m-auroc">--</div>
+          <canvas id="spark-auroc" width="100" height="28"></canvas>
+        </div>
+        <div class="metric-box">
           <div class="label">LR</div>
           <div class="value" id="m-lr">--</div>
           <canvas id="spark-lr" width="100" height="28"></canvas>
@@ -1095,7 +1100,7 @@ const evalChart = new Chart(document.getElementById('chart-eval'), {
 });
 
 // ── Sparklines ───────────────────────────────────────────────────────────
-const sparkBuffers = { ar: [], diff: [], conf: [], lr: [] };
+const sparkBuffers = { ar: [], diff: [], conf: [], auroc: [], lr: [] };
 const SPARK_MAX = 30;
 
 function drawSparkline(canvasId, data, color) {
@@ -1353,6 +1358,15 @@ function updateUI(data) {
     drawSparkline('spark-lr', sparkBuffers.lr, '#a78bfa');
   }
 
+  // AUROC (from eval, updates at eval intervals)
+  const ev = data.latest_eval;
+  if (ev && ev.conf_auroc != null) {
+    $('m-auroc').textContent = ev.conf_auroc.toFixed(4);
+    sparkBuffers.auroc.push(ev.conf_auroc);
+    if (sparkBuffers.auroc.length > SPARK_MAX) sparkBuffers.auroc.shift();
+    drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
+  }
+
   // GPU
   const g = data.gpu;
   if (g) {
@@ -1455,6 +1469,8 @@ async function loadCharts() {
     sparkBuffers.lr = tail.map(h => h.lr);
 
     if (evals.length > 0) {
+      sparkBuffers.auroc = evals.map(e => e.conf_auroc ?? null).filter(v => v != null);
+      drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
       evalChart.data.labels = evals.map(e => e.step);
       evalChart.data.datasets[0].data = evals.map(e => e.s1_tok_acc ?? e.s1_token_accuracy ?? null);
       evalChart.data.datasets[1].data = evals.map(e => e.conf_auroc ?? null);
