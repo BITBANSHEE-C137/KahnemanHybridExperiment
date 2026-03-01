@@ -115,10 +115,8 @@ def evaluate(
         input_ids = batch.to(device)
 
         # --- AR perplexity ---
-        ar_labels = input_ids.clone()
-        ar_labels[:, :-1] = input_ids[:, 1:]
-        ar_labels[:, -1] = -100
-        ar_loss = model.compute_ar_loss(input_ids, ar_labels)
+        # GPT2LMHeadModel.forward(labels=) auto-shifts internally
+        ar_loss = model.compute_ar_loss(input_ids, input_ids)
         total_ar_loss += ar_loss.item()
 
         # --- System 1 metrics ---

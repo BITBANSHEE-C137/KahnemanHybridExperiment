@@ -221,10 +221,8 @@ def compare_quality(
         """Score perplexity of generated text using AR mode."""
         if generated_ids.size(1) < 2:
             return float("inf")
-        labels = generated_ids.clone()
-        labels[:, :-1] = generated_ids[:, 1:]
-        labels[:, -1] = -100
-        loss = model.compute_ar_loss(generated_ids, labels)
+        # GPT2LMHeadModel.forward(labels=) auto-shifts internally
+        loss = model.compute_ar_loss(generated_ids, generated_ids)
         return math.exp(min(loss.item(), 100.0))
 
     results = {}

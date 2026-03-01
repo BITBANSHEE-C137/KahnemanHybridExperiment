@@ -224,10 +224,8 @@ def eval_wikitext(
 
     for chunk in chunks:
         input_ids = torch.tensor([chunk], dtype=torch.long, device=device)
-        labels = input_ids.clone()
-        labels[:, :-1] = input_ids[:, 1:]
-        labels[:, -1] = -100
-        loss = model.compute_ar_loss(input_ids, labels)
+        # GPT2LMHeadModel.forward(labels=) auto-shifts internally
+        loss = model.compute_ar_loss(input_ids, input_ids)
         total_ar_loss += loss.item() * (len(chunk) - 1)
         total_ar_tokens += len(chunk) - 1
 
