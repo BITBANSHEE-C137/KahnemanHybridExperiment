@@ -137,6 +137,7 @@ aws s3 sync "s3://$S3_BUCKET/checkpoints/" "$DATA_DIR/checkpoints/" --region "$R
 aws s3 sync "s3://$S3_BUCKET/logs/" "$DATA_DIR/logs/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/eval_metrics/" "$DATA_DIR/eval_metrics/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/benchmarks/" "$DATA_DIR/benchmarks/" --region "$REGION" || true
+aws s3 sync "s3://$S3_BUCKET/wandb/" "$PROJECT/wandb/" --region "$REGION" || true
 echo "Restored checkpoints:"
 ls -lh "$DATA_DIR/checkpoints/"*.pt 2>/dev/null || echo "  (none)"
 step_done 4
@@ -151,6 +152,7 @@ step_done 5
 # ── Step 6: Fix ownership (S3 restores as root) ──
 step_start 6
 sudo chown -R ubuntu:ubuntu "$DATA_DIR"
+sudo chown -R ubuntu:ubuntu "$PROJECT/wandb" 2>/dev/null || true
 step_done 6
 
 # ── Step 7: Update CloudFront origin to this instance's IP ──

@@ -15,6 +15,13 @@ sync_all() {
                 while read -r line; do echo "[sync][$subdir] $line"; done
         fi
     done
+
+    # sync wandb/ from project directory (not in DATA_DIR)
+    local wandb_dir="/home/ubuntu/KahnemanHybridExperiment/wandb"
+    if [ -d "$wandb_dir" ] && [ "$(ls -A "$wandb_dir" 2>/dev/null)" ]; then
+        aws s3 sync "$wandb_dir/" "s3://$S3_BUCKET/wandb/" --region "$REGION" --no-follow-symlinks 2>&1 | \
+            while read -r line; do echo "[sync][wandb] $line"; done
+    fi
 }
 
 cleanup() {
