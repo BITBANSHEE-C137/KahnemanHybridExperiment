@@ -28,9 +28,6 @@ BS=$(python3 -c "import yaml; c=yaml.safe_load(open('$CONFIG')); print(c['traini
 GA=$(python3 -c "import yaml; c=yaml.safe_load(open('$CONFIG')); print(c['training']['gradient_accumulation_steps'])" 2>/dev/null || echo 8)
 MODEL=$(python3 -c "import yaml; c=yaml.safe_load(open('$CONFIG')); print(c['model']['name'])" 2>/dev/null || echo "gpt2")
 
-# On-demand prices
-declare -A OD_PRICES=( ["g6.xlarge"]="0.8048" ["g6.2xlarge"]="0.9776" ["g5.xlarge"]="1.006" )
-
 # Find W&B log
 WANDB_LOG=$(ls -td "$PROJECT_DIR"/wandb/run-*/files/output.log 2>/dev/null | head -1)
 
@@ -273,28 +270,15 @@ if best:
     local boot_s=$(date -d "$(uptime -s)" +%s 2>/dev/null)
     local now_s=$(date +%s)
     local uptime_s=$((now_s - boot_s))
-    local od_rate="${OD_PRICES[$itype]:-}"
 
     printf "  ${A}◆${R} ${B}Cost${R}  ${DM}%s · %s · %s · up $(fmt_time "$uptime_s")${R}\n" \
         "${itype:-?}" "${lifecycle:-?}" "${az:-?}"
 
-    if [ -n "$od_rate" ]; then
-        local od_cost=$(echo "scale=2; $od_rate * $uptime_s / 3600" | bc 2>/dev/null)
-        local od_proj=""
-        [ "$step" -gt 0 ] && od_proj=$(echo "scale=6; x=$od_cost / $step * $MAX_STEPS; scale=2; x/1" | bc 2>/dev/null)
-
-        printf "    ${S}On-Demand${R}  \$%s/hr  " "$od_rate"
-        printf "${Y}\$%s${R}" "$od_cost"
-        [ -n "$od_proj" ] && printf "  ${DM}proj${R} \$%s" "$od_proj"
-        printf "\n"
-
-        # Spot
-        if [ -f "$SPOT_PRICE_FILE" ]; then
-            local spot_rate=$(python3 -c "import json; print(json.load(open('$SPOT_PRICE_FILE')).get('current_price',''))" 2>/dev/null)
-            if [ -n "$spot_rate" ]; then
-                local spot_cost=$(python3 -c "
+    if [ -f "$SPOT_PRICE_FILE" ]; then
+        local spot_rate=$(python3 -c "import json; print(json.load(open('$SPOT_PRICE_FILE')).get('current_price',''))" 2>/dev/null)
+        if [ -n "$spot_rate" ]; then
+            local spot_cost=$(python3 -c "
 import json
-from datetime import datetime, timezone
 d = json.load(open('$SPOT_PRICE_FILE'))
 hist = sorted(d.get('price_history', []), key=lambda x: x['timestamp'])
 boot_ts = $boot_s
@@ -308,29 +292,16 @@ for i, seg in enumerate(hist):
         total += seg['price'] * (e - s) / 3600
 print(f'{total:.2f}')
 " 2>/dev/null)
-                local spot_proj=""
-                [ "$step" -gt 0 ] && spot_proj=$(echo "scale=6; x=$spot_cost / $step * $MAX_STEPS; scale=2; x/1" | bc 2>/dev/null)
-                local savings=$(echo "scale=2; $od_cost - $spot_cost" | bc 2>/dev/null)
-                local sav_pct=""
-                [ "$(echo "$od_cost > 0" | bc)" = "1" ] && sav_pct=$(echo "scale=1; (1 - $spot_cost / $od_cost) * 100" | bc 2>/dev/null)
+            local spot_proj=""
+            [ "$step" -gt 0 ] && spot_proj=$(echo "scale=6; x=$spot_cost / $step * $MAX_STEPS; scale=2; x/1" | bc 2>/dev/null)
 
-                printf "    ${S}Spot${R}       \$%s/hr  " "$spot_rate"
-                printf "${G}\$%s${R}" "$spot_cost"
-                [ -n "$spot_proj" ] && printf "  ${DM}proj${R} \$%s" "$spot_proj"
-                printf "\n"
-
-                printf "    ${G}Savings${R}    "
-                [ -n "$sav_pct" ] && printf "${G}%s%%${R}         " "$sav_pct"
-                printf "${G}\$%s${R}" "$savings"
-                if [ -n "$od_proj" ] && [ -n "$spot_proj" ]; then
-                    local proj_sav=$(echo "scale=2; $od_proj - $spot_proj" | bc 2>/dev/null)
-                    printf "  ${DM}proj${R} ${G}\$%s${R}" "$proj_sav"
-                fi
-                printf "\n"
-            fi
-        else
-            printf "    ${DM}Spot: run update-spot-price.sh to seed data${R}\n"
+            printf "    ${S}Spot${R}  \$%s/hr  " "$spot_rate"
+            printf "${G}\$%s${R}${S} so far${R}" "$spot_cost"
+            [ -n "$spot_proj" ] && printf "  ${DM}proj${R} ${Y}\$%s${R}" "$spot_proj"
+            printf "\n"
         fi
+    else
+        printf "    ${DM}Spot: run update-spot-price.sh to seed data${R}\n"
     fi
 
     # ── 6. Infrastructure ──
