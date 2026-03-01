@@ -187,10 +187,9 @@ Spot pricing varies by instance type and availability zone. The `update-spot-pri
 ### Projected Training Cost
 
 **Pure compute estimate** (uninterrupted):
-- 50,000 steps at ~4.7 steps/sec = ~3 hours of GPU time (excluding eval pauses)
-- g5.2xlarge spot: ~$1.30 per complete run
-- g6.xlarge spot: ~$0.90 per complete run
+- 50,000 steps at ~0.50 steps/sec = ~28 hours of GPU time (including eval every 1,000 steps)
+- g5.2xlarge spot: ~$12 per complete run (~$24 with spot overhead across multiple allocations)
 
-**Actual wall time** is significantly longer due to spot interruptions, bootstrap recovery (~5 min per cycle), and instance availability gaps. The current training run (~12,000 steps) has spanned 4 spot allocations over several days. A reliable cost-per-run estimate requires a complete uninterrupted run.
+**Actual wall time** is significantly longer due to spot interruptions, bootstrap recovery (~5 min per cycle), and instance availability gaps. The current training run has spanned 4 spot allocations over several days, with the dashboard projecting ~$24 total cost — spot overhead roughly doubles pure compute cost.
 
 S3 storage: negligible (~$0.02/month for checkpoints and logs)
