@@ -584,6 +584,20 @@ def stream():
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+SITREP_FILE = os.path.join(PROJECT_DIR, "sitrep.md")
+
+
+@app.route("/api/sitrep")
+def api_sitrep():
+    if not os.path.isfile(SITREP_FILE):
+        return jsonify({"content": "_No sitrep available yet._", "modified": None})
+    mtime = os.path.getmtime(SITREP_FILE)
+    modified = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+    with open(SITREP_FILE) as f:
+        text = f.read()
+    return jsonify({"content": text, "modified": modified})
+
+
 @app.route("/")
 def index():
     return HTML_PAGE
@@ -957,6 +971,29 @@ body::before {
   border-color: var(--accent);
   background: rgba(232, 121, 84, 0.1);
 }
+/* ── Sitrep modal ── */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex;
+  align-items: center; justify-content: center; z-index: 1000; }
+.modal.hidden { display: none; }
+.modal-content { background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; max-width: 700px; width: 90%; max-height: 80vh;
+  overflow-y: auto; padding: 28px 32px; position: relative; }
+.modal-close { position: absolute; top: 12px; right: 16px; background: none;
+  border: none; color: var(--dim); font-size: 24px; cursor: pointer; line-height: 1; }
+.modal-close:hover { color: var(--text); }
+.modal-content h2 { margin: 0 0 4px 0; font-size: 20px; color: var(--accent); }
+.sitrep-time { color: var(--dim); font-size: 12px; margin-bottom: 16px; }
+.sitrep-body { font-size: 14px; line-height: 1.7; color: var(--text); }
+.sitrep-body h1, .sitrep-body h2, .sitrep-body h3 {
+  color: var(--accent); margin: 18px 0 8px 0; font-size: 16px; }
+.sitrep-body h1 { font-size: 18px; }
+.sitrep-body ul { margin: 4px 0 12px 0; padding-left: 20px; }
+.sitrep-body li { margin-bottom: 3px; }
+.sitrep-body ol { margin: 4px 0 12px 0; padding-left: 20px; }
+.sitrep-body code { background: var(--bg); padding: 1px 5px; border-radius: 4px;
+  font-size: 13px; border: 1px solid var(--border); }
+.sitrep-body p { margin: 0 0 10px 0; }
+.sitrep-body strong { color: var(--text); }
 </style>
 </head>
 <body>
@@ -970,6 +1007,7 @@ body::before {
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
         <a href="https://siliconstrategy.ai" target="_blank">siliconstrategy.ai</a>
+        <a href="#" onclick="openSitrep();return false">Sitrep</a>
       </div>
       <div class="meta">
         <span id="conn-status">Connecting...</span> &middot;
@@ -1720,6 +1758,73 @@ function connectSSE() {
   };
 }
 
+// ── Sitrep modal ─────────────────────────────────────────────────────────
+function renderMarkdown(md) {
+  let html = '';
+  const lines = md.split('\n');
+  let inUl = false, inOl = false;
+  for (let line of lines) {
+    if (inUl && !/^\s*[-*]\s/.test(line)) { html += '</ul>'; inUl = false; }
+    if (inOl && !/^\s*\d+\.\s/.test(line)) { html += '</ol>'; inOl = false; }
+
+    if (/^###\s+(.*)/.test(line)) {
+      html += '<h3>' + RegExp.$1 + '</h3>';
+    } else if (/^##\s+(.*)/.test(line)) {
+      html += '<h2>' + RegExp.$1 + '</h2>';
+    } else if (/^#\s+(.*)/.test(line)) {
+      html += '<h1>' + RegExp.$1 + '</h1>';
+    } else if (/^\s*[-*]\s+(.*)/.test(line)) {
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += '<li>' + inlineFormat(RegExp.$1) + '</li>';
+    } else if (/^\s*(\d+)\.\s+(.*)/.test(line)) {
+      if (!inOl) { html += '<ol>'; inOl = true; }
+      html += '<li>' + inlineFormat(RegExp.$2) + '</li>';
+    } else if (line.trim() === '') {
+      html += '<br>';
+    } else {
+      html += '<p>' + inlineFormat(line) + '</p>';
+    }
+  }
+  if (inUl) html += '</ul>';
+  if (inOl) html += '</ol>';
+  return html;
+}
+
+function inlineFormat(s) {
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  return s;
+}
+
+async function openSitrep() {
+  const modal = document.getElementById('sitrep-modal');
+  const body = document.getElementById('sitrep-body');
+  const timeEl = document.getElementById('sitrep-time');
+  body.innerHTML = '<p style="color:var(--dim)">Loading...</p>';
+  timeEl.textContent = '';
+  modal.classList.remove('hidden');
+  try {
+    const res = await fetch('/api/sitrep');
+    const data = await res.json();
+    body.innerHTML = renderMarkdown(data.content);
+    if (data.modified) {
+      const d = new Date(data.modified);
+      timeEl.textContent = 'Last updated: ' + d.toLocaleString();
+    }
+  } catch (e) {
+    body.innerHTML = '<p style="color:#e74c3c">Failed to load sitrep.</p>';
+  }
+}
+
+function closeSitrep() {
+  document.getElementById('sitrep-modal').classList.add('hidden');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeSitrep();
+});
+
 // ── Init ─────────────────────────────────────────────────────────────────
 async function init() {
   try {
@@ -1734,6 +1839,16 @@ async function init() {
 
 init();
 </script>
+
+<!-- Sitrep modal -->
+<div id="sitrep-modal" class="modal hidden" onclick="if(event.target===this)closeSitrep()">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeSitrep()">&times;</button>
+    <h2>Sitrep</h2>
+    <div id="sitrep-time" class="sitrep-time"></div>
+    <div id="sitrep-body" class="sitrep-body"></div>
+  </div>
+</div>
 </body>
 </html>
 """

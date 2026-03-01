@@ -22,6 +22,13 @@ sync_all() {
         aws s3 sync "$wandb_dir/" "s3://$S3_BUCKET/wandb/" --region "$REGION" --no-follow-symlinks 2>&1 | \
             while read -r line; do echo "[sync][wandb] $line"; done
     fi
+
+    # sync sitrep.md from project directory
+    local sitrep_file="/home/ubuntu/KahnemanHybridExperiment/sitrep.md"
+    if [ -f "$sitrep_file" ]; then
+        aws s3 cp "$sitrep_file" "s3://$S3_BUCKET/sitrep.md" --region "$REGION" 2>&1 | \
+            while read -r line; do echo "[sync][sitrep] $line"; done
+    fi
 }
 
 cleanup() {
