@@ -2,7 +2,7 @@
 
 ![BitBanshee Research](static/hero.png)
 
-**[Live Dashboard](https://train.bitbanshee.com)** | **[W&B Training Logs](https://wandb.ai/bitbanshee-c137/dual-process-lm)** | **[siliconstrategy.ai](https://siliconstrategy.ai)**
+**[Live Dashboard](https://train.bitbanshee.com)** | **[siliconstrategy.ai](https://siliconstrategy.ai)**
 
 ## Abstract
 
@@ -287,7 +287,8 @@ All training metrics are available in machine-readable form for independent veri
 
 - **[`experiments/eval_metrics.csv`](experiments/eval_metrics.csv)** — Checkpoint evaluation metrics (every 1,000 steps)
 - **[`experiments/training_steps.csv`](experiments/training_steps.csv)** — Step-level training losses and learning rate
-- **[W&B project](https://wandb.ai/bitbanshee-c137/dual-process-lm)** — Full training history with interactive charts
+
+Training is also logged to [Weights & Biases](https://wandb.ai) (project: `bitbanshee-c137/dual-process-lm`, not publicly accessible). The CSVs above are exported from the same data sources and are kept in sync with training progress.
 
 See [`experiments/README.md`](experiments/README.md) for column descriptions and re-export instructions.
 
