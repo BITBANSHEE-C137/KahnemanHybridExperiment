@@ -1,0 +1,9 @@
+[eval] step: 50 | ar_ppl: 22.43 | diff_loss: 7.9068 | s1_tok_acc: 0.0367 | conf_acc: 0.9633 | conf_ece: 0.0481 | conf_auroc: 0.5024
+[eval] step: 100 | ar_ppl: 22.16 | diff_loss: 7.6887 | s1_tok_acc: 0.0336 | conf_acc: 0.9664 | conf_ece: 0.0030 | conf_auroc: 0.4973
+[eval] step: 1000 | ar_ppl: 21.22 | diff_loss: 6.8632 | s1_tok_acc: 0.0483 | conf_acc: 0.9517 | conf_ece: 0.0030 | conf_auroc: 0.5592
+[eval] step: 2000 | ar_ppl: 22.44 | diff_loss: 6.6052 | s1_tok_acc: 0.0617 | conf_acc: 0.9383 | conf_ece: 0.0012 | conf_auroc: 0.6081
+[eval] step: 3000 | ar_ppl: 23.16 | diff_loss: 6.3376 | s1_tok_acc: 0.0797 | conf_acc: 0.9207 | conf_ece: 0.0071 | conf_auroc: 0.6449
+[eval] step: 4000 | ar_ppl: 23.62 | diff_loss: 6.2651 | s1_tok_acc: 0.0819 | conf_acc: 0.9188 | conf_ece: 0.0130 | conf_auroc: 0.6708
+[eval] step: 5000 | ar_ppl: 24.33 | diff_loss: 6.1099 | s1_tok_acc: 0.0931 | conf_acc: 0.9087 | conf_ece: 0.0113 | conf_auroc: 0.6951
+[eval] step: 6000 | ar_ppl: 24.66 | diff_loss: 5.9825 | s1_tok_acc: 0.1005 | conf_acc: 0.9037 | conf_ece: 0.0131 | conf_auroc: 0.7148
+[eval] step: 7000 | ar_ppl: 25.08 | diff_loss: 5.8270 | s1_tok_acc: 0.1181 | conf_acc: 0.8894 | conf_ece: 0.0098 | conf_auroc: 0.7250

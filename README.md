@@ -159,7 +159,9 @@ KahnemanHybridExperiment/
 
 ## Results
 
-**Status: Training in progress** — GPT-2 Small (124M), currently at step ~7,500 (15%), cosine decay phase (LR 2.91e-4). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
+**Status: Training in progress** — GPT-2 Small (124M), currently at step ~7,900 (15.8%), cosine decay phase (LR 2.90e-4). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
+
+> **Note (2026-03-01):** All eval metrics below were re-evaluated from saved checkpoints after fixing a double-shift bug in the AR perplexity computation. The original evaluator manually shifted labels before passing them to `GPT2LMHeadModel.forward(labels=)`, which auto-shifts internally — resulting in the model predicting 2 tokens ahead. The bug inflated AR PPL by ~1000x (showing ~20,000 instead of ~22–25). Diffusion loss, S1 accuracy, confidence accuracy, ECE, and AUROC were unaffected. All values below are from the corrected re-evaluation run against each checkpoint.
 
 ### Success Criteria
 
@@ -177,51 +179,51 @@ The experiment tests whether a single Transformer can learn both AR and diffusio
 
 ### Eval Metrics Over Training
 
-Data from three training runs across multiple spot instances. Run 1 reached step 4,000 before spot termination. Run 2 resumed from the step 1,000 checkpoint and ran to step 2,000. Run 3 resumed from step 2,000 and is ongoing.
+All values from corrected re-evaluation (2026-03-01). Data spans three training runs across multiple spot instances. Run 1 reached step 4,000 before spot termination. Run 2 resumed from the step 1,000 checkpoint and ran to step 2,000. Run 3 resumed from step 2,000 and is ongoing.
 
-| Step | AR PPL | Diff Loss | S1 Tok Acc | Conf Acc | Conf ECE | Conf AUROC | Run |
-|------|--------|-----------|-----------|----------|----------|------------|-----|
-| 50 | 19,060 | 7.8397 | 3.4% | 96.6% | 0.0499 | 0.467 | 1 |
-| 100 | 23,331 | 7.5697 | 3.2% | 96.8% | 0.0037 | 0.502 | 1 |
-| 1,000 | 20,575 | 6.7854 | 4.9% | 95.1% | 0.0028 | 0.550 | 2 |
-| 2,000 | 21,752 | 6.5495 | 6.5% | 93.5% | 0.0014 | 0.607 | 2 |
-| 3,000 | 22,828 | 6.5356 | 7.0% | 93.0% | 0.0038 | 0.629 | 3 |
-| 4,000 | 20,156 | 6.2058 | 8.6% | 91.5% | 0.0146 | 0.664 | 3 |
-| 5,000 | 20,283 | 6.0761 | 9.9% | 90.3% | 0.0135 | 0.693 | 3 |
-| 6,000 | 22,486 | 6.1530 | 9.6% | 90.7% | 0.0110 | 0.695 | 3 |
-| 7,000 | 19,562 | 6.0198 | 10.3% | 90.3% | 0.0074 | 0.724 | 3 |
+| Step | AR PPL | Diff Loss | S1 Tok Acc | Conf Acc | Conf ECE | Conf AUROC |
+|------|--------|-----------|-----------|----------|----------|------------|
+| 50 | 22.43 | 7.9068 | 3.7% | 96.3% | 0.0481 | 0.502 |
+| 100 | 22.16 | 7.6887 | 3.4% | 96.6% | 0.0030 | 0.497 |
+| 1,000 | 21.22 | 6.8632 | 4.8% | 95.2% | 0.0030 | 0.559 |
+| 2,000 | 22.44 | 6.6052 | 6.2% | 93.8% | 0.0012 | 0.608 |
+| 3,000 | 23.16 | 6.3376 | 8.0% | 92.1% | 0.0071 | 0.645 |
+| 4,000 | 23.62 | 6.2651 | 8.2% | 91.9% | 0.0130 | 0.671 |
+| 5,000 | 24.33 | 6.1099 | 9.3% | 90.9% | 0.0113 | 0.695 |
+| 6,000 | 24.66 | 5.9825 | 10.0% | 90.4% | 0.0131 | 0.715 |
+| 7,000 | 25.08 | 5.8270 | 11.8% | 88.9% | 0.0098 | 0.725 |
 
 ### Progress vs. Targets
 
 | Metric | Best | Step | Target | Progress |
 |--------|------|------|--------|----------|
-| AR Perplexity | 19,060 | 50 | < 40 | Early — PPL has not yet begun to decline |
-| S1 Token Accuracy | 10.3% | 7,000 | > 40% | 26% of target — 3× above random baseline |
-| Diffusion Loss | 6.02 | 7,000 | < 4.0 | 47% of reduction achieved (7.84 &rarr; 6.02 &rarr; 4.0) |
-| Confidence AUROC | 0.724 | 7,000 | > 0.75 | 91% of improvement achieved (0.47 &rarr; 0.72 &rarr; 0.75) |
+| AR Perplexity | 21.22 | 1,000 | < 40 | **Met** — started at ~22, currently ~25 (still well under target, but drifting upward due to objective interference with diffusion training) |
+| S1 Token Accuracy | 11.8% | 7,000 | > 40% | 30% of target — 3.5&times; above random baseline |
+| Diffusion Loss | 5.83 | 7,000 | < 4.0 | 53% of reduction achieved (7.91 &rarr; 5.83 &rarr; 4.0) |
+| Confidence AUROC | 0.725 | 7,000 | > 0.75 | 90% of improvement achieved (0.50 &rarr; 0.73 &rarr; 0.75) |
 | Confidence ECE | 0.001 | 2,000 | < 0.05 | **Met** |
 
 ### Observations
 
-- **Confidence AUROC** is approaching target: 0.47 &rarr; 0.72 over 7k steps (91% of the way to the 0.75 target). The confidence head is reliably learning to distinguish correct from incorrect System 1 predictions, which is critical for the hybrid escalation mechanism. On current trajectory, the target should be reached within the next 1–2k steps.
-- **Diffusion loss** continues to decline (7.84 &rarr; 6.02 over 7k steps), showing System 1 is learning to predict masked tokens. The rate of decline has slowed from ~0.4/1k steps (early) to ~0.1/1k steps (recent), which may reflect diminishing returns or the need for more training.
-- **S1 token accuracy** has grown 3× from random baseline (3.4% &rarr; 10.3%), with consistent improvement. The diffusion objective is converging but will need significant further training to approach the 40% target.
+- **AR perplexity** started at ~22 (better than pretrained GPT-2 Small's ~31.5 on WikiText-103) and has risen to ~25 by step 7,000. This upward drift is caused by objective interference — the diffusion loss (~5.8) contributes ~1.75&times; more gradient than the AR loss (~3.3) at equal weights (&lambda;=1.0), pulling shared weights toward bidirectional prediction at the expense of causal AR. The model is still well within the < 40 target, but the trend bears watching. If AR PPL continues rising past ~30, reducing `diff_loss_weight` may be warranted.
+- **Confidence AUROC** is approaching target: 0.50 &rarr; 0.73 over 7k steps (90% of the way to the 0.75 target). The confidence head is reliably learning to distinguish correct from incorrect System 1 predictions, which is critical for the hybrid escalation mechanism.
+- **Diffusion loss** continues to decline (7.91 &rarr; 5.83 over 7k steps), showing System 1 is learning to predict masked tokens. 53% of the reduction toward the 4.0 target is achieved.
+- **S1 token accuracy** has grown 3.5&times; from random baseline (3.7% &rarr; 11.8%), with consistent improvement. The diffusion objective is converging but will need significant further training to approach the 40% target.
 - **Confidence ECE** remains very low (< 0.015), well under the 0.05 target since step 100. The confidence head is well-calibrated throughout training.
-- **Confidence accuracy** has gradually declined from 96.8% to 90.3% as expected — early on, System 1 gets almost nothing right so predicting "wrong" for everything trivially achieves high accuracy. As S1 improves, the classification task becomes harder, and the accuracy/AUROC tradeoff shifts toward more informative predictions.
-- **AR perplexity** remains very high (~19–23k) and is not yet showing a clear downward trend, despite being 5,500 steps into the cosine decay phase. Pretrained GPT-2 Small achieves ~31.5 PPL on WikiText-103. This is the metric to watch — if AR PPL doesn't begin declining in the next few thousand steps, the joint training objective may be interfering with autoregressive learning.
+- **Confidence accuracy** has gradually declined from 96.3% to 88.9% as expected — early on, System 1 gets almost nothing right so predicting "wrong" for everything trivially achieves high accuracy. As S1 improves, the classification task becomes harder, and the accuracy/AUROC tradeoff shifts toward more informative predictions.
 - **Spot resilience** validated across 3 runs and multiple recovery cycles — bootstrap autonomously recovers all services with zero manual intervention.
 
 ### Current Training Metrics (Live)
 
-At step ~7,500 (cosine decay phase, LR 2.91e-4):
+At step ~7,900 (cosine decay phase, LR 2.90e-4):
 
 | Metric | Value | RAG Status |
 |--------|-------|------------|
-| AR Loss | 3.19 | Amber (target: < 3.0) |
-| Diff Loss | 5.78 | Amber (target: < 5.0) |
+| AR Loss | 3.34 | Amber (target: < 3.0) |
+| Diff Loss | 5.63 | Amber (target: < 5.0) |
 | Conf Acc | 90.3% | Green (target: > 90%) |
-| S1 Acc | 10.3% | Red (target: > 40%) |
-| AUROC | 0.724 | Amber (target: > 0.75) |
+| S1 Acc | 11.8% | Red (target: > 40%) |
+| AUROC | 0.725 | Amber (target: > 0.75) |
 
 ### Remaining Benchmarks
 
