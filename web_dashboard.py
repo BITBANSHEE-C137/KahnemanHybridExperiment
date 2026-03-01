@@ -708,7 +708,15 @@ body::before {
   text-align: center;
   min-width: 0;
   overflow: hidden;
+  border-left: 3px solid transparent;
+  transition: border-color 0.4s, color 0.4s;
 }
+.metric-box.rag-green { border-left-color: var(--green); }
+.metric-box.rag-green .value { color: var(--green); }
+.metric-box.rag-amber { border-left-color: var(--yellow); }
+.metric-box.rag-amber .value { color: var(--yellow); }
+.metric-box.rag-red { border-left-color: var(--red); }
+.metric-box.rag-red .value { color: var(--red); }
 .metric-box .label {
   font-size: 10px;
   color: var(--dim);
@@ -1273,6 +1281,31 @@ function barColor(pct) {
 
 function $(id) { return document.getElementById(id); }
 
+// ── RAG (red/amber/green) metric coloring ────────────────────────────────
+// Thresholds tuned to GPT-2 small training trajectory.
+// "lower" = lower is better; "higher" = higher is better.
+function setRAG(elementId, value, thresholds) {
+  const el = $(elementId);
+  if (!el) return;
+  const box = el.closest('.metric-box');
+  if (!box) return;
+  box.classList.remove('rag-green', 'rag-amber', 'rag-red');
+  if (value == null) return;
+  let cls;
+  if (thresholds.dir === 'lower') {
+    cls = value < thresholds.green ? 'rag-green' : value < thresholds.red ? 'rag-amber' : 'rag-red';
+  } else {
+    cls = value > thresholds.green ? 'rag-green' : value > thresholds.red ? 'rag-amber' : 'rag-red';
+  }
+  box.classList.add(cls);
+}
+const RAG = {
+  ar_loss:   { dir: 'lower',  green: 3.0, red: 5.0 },
+  diff_loss: { dir: 'lower',  green: 5.0, red: 7.0 },
+  conf_acc:  { dir: 'higher', green: 0.90, red: 0.75 },
+  auroc:     { dir: 'higher', green: 0.75, red: 0.55 },
+};
+
 // ── UI updater ───────────────────────────────────────────────────────────
 function updateUI(data) {
   $('timestamp').textContent = new Date(data.timestamp).toLocaleTimeString();
@@ -1364,6 +1397,10 @@ function updateUI(data) {
     $('m-diff-loss').textContent = t.diff_loss.toFixed(4);
     $('m-lr').textContent = t.lr.toExponential(2);
 
+    setRAG('m-ar-loss', t.ar_loss, RAG.ar_loss);
+    setRAG('m-diff-loss', t.diff_loss, RAG.diff_loss);
+    setRAG('m-conf-acc', t.conf_acc, RAG.conf_acc);
+
     sparkBuffers.ar.push(t.ar_loss);
     sparkBuffers.diff.push(t.diff_loss);
     sparkBuffers.lr.push(t.lr);
@@ -1385,12 +1422,16 @@ function updateUI(data) {
     if (sparkBuffers.conf.length > SPARK_MAX) sparkBuffers.conf.shift();
     drawSparkline('spark-conf', sparkBuffers.conf, '#34d399');
 
+    setRAG('m-conf-acc', ev.conf_accuracy ?? ev.conf_acc ?? 0, RAG.conf_acc);
+
     if (ev.conf_auroc != null) {
       $('m-auroc').style.fontSize = '';
       $('m-auroc').textContent = ev.conf_auroc.toFixed(4);
       sparkBuffers.auroc.push(ev.conf_auroc);
       if (sparkBuffers.auroc.length > SPARK_MAX) sparkBuffers.auroc.shift();
       drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
+
+      setRAG('m-auroc', ev.conf_auroc, RAG.auroc);
     }
   } else {
     $('m-conf-acc').textContent = awaitMsg;
