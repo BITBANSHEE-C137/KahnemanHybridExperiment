@@ -813,20 +813,20 @@ body::before {
 .inst-row .inst-item { color: var(--dim); white-space: nowrap; }
 .inst-row .inst-val { color: var(--text); font-weight: 600; }
 
-/* GPU bars */
-.bar-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
-.bar-label { width: 90px; font-size: 15px; color: var(--dim); flex-shrink: 0; }
-.bar-outer {
-  flex: 1; height: 16px; min-width: 0;
+/* GPU metrics */
+.gpu-metric { margin: 10px 0; }
+.gpu-metric-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.gpu-metric-label { font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.gpu-metric-value { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.gpu-bar-track {
+  height: 6px; width: 100%;
   background: var(--bg); border-radius: 3px; overflow: hidden;
 }
-.bar-inner {
+.gpu-bar-fill {
   height: 100%; border-radius: 3px;
-  transition: width 0.5s ease;
-  display: flex; align-items: center; padding-left: 5px;
-  font-size: 12px; font-weight: 600; color: #000;
+  transition: width 0.5s ease, background 0.5s ease;
+  width: 0%;
 }
-.bar-val { width: 110px; text-align: right; font-size: 15px; flex-shrink: 0; white-space: nowrap; }
 
 /* Badges */
 .badge {
@@ -1046,26 +1046,34 @@ body::before {
     <!-- GPU -->
     <div class="card">
       <h2>GPU</h2>
-      <div id="gpu-name" style="color:var(--dim);font-size: 15px;margin-bottom:6px">--</div>
-      <div class="bar-row">
-        <span class="bar-label">Utilization</span>
-        <div class="bar-outer"><div class="bar-inner" id="gpu-util-bar" style="width:0%"></div></div>
-        <span class="bar-val" id="gpu-util-val">--</span>
+      <div id="gpu-name" style="color:var(--dim);font-size:15px;margin-bottom:8px">--</div>
+      <div class="gpu-metric">
+        <div class="gpu-metric-header">
+          <span class="gpu-metric-label">Utilization</span>
+          <span class="gpu-metric-value" id="gpu-util-val">--</span>
+        </div>
+        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-util-bar"></div></div>
       </div>
-      <div class="bar-row">
-        <span class="bar-label">VRAM</span>
-        <div class="bar-outer"><div class="bar-inner" id="gpu-vram-bar" style="width:0%"></div></div>
-        <span class="bar-val" id="gpu-vram-val">--</span>
+      <div class="gpu-metric">
+        <div class="gpu-metric-header">
+          <span class="gpu-metric-label">VRAM</span>
+          <span class="gpu-metric-value" id="gpu-vram-val">--</span>
+        </div>
+        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-vram-bar"></div></div>
       </div>
-      <div class="bar-row">
-        <span class="bar-label">Temp</span>
-        <div class="bar-outer"><div class="bar-inner" id="gpu-temp-bar" style="width:0%"></div></div>
-        <span class="bar-val" id="gpu-temp-val">--</span>
+      <div class="gpu-metric">
+        <div class="gpu-metric-header">
+          <span class="gpu-metric-label">Temp</span>
+          <span class="gpu-metric-value" id="gpu-temp-val">--</span>
+        </div>
+        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-temp-bar"></div></div>
       </div>
-      <div class="bar-row">
-        <span class="bar-label">Power</span>
-        <div class="bar-outer"><div class="bar-inner" id="gpu-power-bar" style="width:0%"></div></div>
-        <span class="bar-val" id="gpu-power-val">--</span>
+      <div class="gpu-metric">
+        <div class="gpu-metric-header">
+          <span class="gpu-metric-label">Power</span>
+          <span class="gpu-metric-value" id="gpu-power-val">--</span>
+        </div>
+        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-power-bar"></div></div>
       </div>
     </div>
 
@@ -1356,11 +1364,7 @@ function fmtTime(s) {
   return m + 'm';
 }
 
-function barColor(pct) {
-  if (pct > 90) return '#f87171';
-  if (pct > 70) return '#fbbf24';
-  return '#34d399';
-}
+
 
 function $(id) { return document.getElementById(id); }
 
@@ -1563,12 +1567,14 @@ function updateUI(data) {
   const g = data.gpu;
   if (g) {
     $('gpu-name').textContent = g.name;
-    setBar('gpu-util', g.gpu_util, g.gpu_util.toFixed(0) + '%');
-    setBar('gpu-vram', g.vram_used_mb / g.vram_total_mb * 100,
-      (g.vram_used_mb/1024).toFixed(1) + '/' + (g.vram_total_mb/1024).toFixed(1) + ' GB');
-    setBar('gpu-temp', g.temp_c, g.temp_c + 'C');
-    setBar('gpu-power', g.power_w / g.power_limit_w * 100,
-      g.power_w.toFixed(0) + '/' + g.power_limit_w.toFixed(0) + ' W');
+    setGpuMetric('gpu-util', g.gpu_util,
+      g.gpu_util.toFixed(0) + '%');
+    setGpuMetric('gpu-vram', g.vram_used_mb / g.vram_total_mb * 100,
+      (g.vram_used_mb/1024).toFixed(1) + ' / ' + (g.vram_total_mb/1024).toFixed(1) + ' GB');
+    setGpuMetric('gpu-temp', g.temp_c,
+      g.temp_c.toFixed(0) + '°C', tempColor);
+    setGpuMetric('gpu-power', g.power_w / g.power_limit_w * 100,
+      g.power_w.toFixed(0) + ' / ' + g.power_limit_w.toFixed(0) + ' W');
   }
 
   // Infra
@@ -1617,14 +1623,27 @@ function updateUI(data) {
   }
 }
 
-function setBar(prefix, pct, label) {
+function setGpuMetric(prefix, pct, label, colorFn) {
   pct = Math.min(100, Math.max(0, pct));
   const bar = $(prefix + '-bar');
   const val = $(prefix + '-val');
   bar.style.width = pct + '%';
-  bar.style.background = barColor(pct);
-  bar.textContent = pct > 20 ? label : '';
+  bar.style.background = colorFn ? colorFn(pct) : gpuColor(pct);
   val.textContent = label;
+}
+
+// Util/VRAM: green=normal, yellow=high, red=critical
+function gpuColor(pct) {
+  if (pct > 95) return '#f87171';
+  if (pct > 80) return '#fbbf24';
+  return '#34d399';
+}
+
+// Temp: green<60, yellow 60-80, red>80 (mapped to 0-100 scale for the bar)
+function tempColor(pct) {
+  if (pct > 80) return '#f87171';
+  if (pct > 60) return '#fbbf24';
+  return '#34d399';
 }
 
 function setBadge(id, name, running) {
