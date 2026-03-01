@@ -87,6 +87,31 @@ dual-process-model/
 - nanoGPT by Karpathy — clean GPT-2 reference implementation
 - "Chain of Thought Monitorability" (arxiv 2507.11473) — safety context
 
+## Current Training Status (2026-03-01)
+
+Training GPT-2 Small (124M) on OpenWebText, step ~10,700 / 50,000 (21%).
+Three of seven targets met: AR PPL (<40), AUROC (>0.75), ECE (<0.05).
+
+Key findings:
+- Confidence AUROC crossed 0.75 at step 8,000 — hybrid escalation mechanism validated
+- AR PPL ~26.5 (better than pretrained baseline ~31.5, drifting up slowly due to objective interference)
+- Diffusion loss 5.41 (64% of reduction toward 4.0 target)
+- S1 token accuracy 14.7% (accelerating, targeting 40%)
+
+## Known Bugs (Fixed)
+
+- **AR PPL double-shift** (fixed 2026-03-01): evaluator.py, benchmark.py, and
+  compare_systems.py manually shifted labels before `compute_ar_loss()`, which
+  auto-shifts internally via HuggingFace. This inflated eval AR PPL by ~1000x.
+  All historical checkpoints re-evaluated via `scripts/reeval_checkpoints.py`.
+- **Bash `local` scope** (fixed 2026-03-01): `local a=$((expr)) b=$((a))` in
+  monitor.sh gauge/pbar functions — bash evaluates b before a is assigned in the
+  same `local` declaration. Split into separate `local` statements.
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
+
 ## Testing
 
 Run tests before committing:

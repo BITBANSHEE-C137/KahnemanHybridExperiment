@@ -484,4 +484,4 @@ Key hyperparameters for the Tiny (GPT-2 Small) config:
 
 ## License
 
-This is a research project. No license has been specified yet.
+This project is licensed under the [MIT License](LICENSE).
