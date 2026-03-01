@@ -53,7 +53,8 @@ Training runs on spot instances with three layers of protection:
 | 11 | Install Flask | pip install (if missing) |
 | 12 | Start web dashboard | Flask on :5000 |
 | 13 | Setup spot price updater | Initial run + cron every 5 min |
-| 14 | Launch training | tmux session, auto-resumes from latest checkpoint |
+| 14 | Setup cost tracker | `cost-tracker.sh` — initial run + cron |
+| 15 | Launch training | tmux session, auto-resumes from latest checkpoint |
 
 ## Checkpoint Management
 
@@ -88,7 +89,7 @@ nvidia-smi ──────────────────── GPU util
 
 ![ML Lab Dashboard](static/ml-lab-dashboard.png)
 
-Single-file Flask application (1,600 lines) serving an inline HTML/CSS/JS dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Designed for remote monitoring over CloudFront.
+Single-file Flask application (1,800 lines) serving an inline HTML/CSS/JS dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Designed for remote monitoring over CloudFront.
 
 | Layer | Technology |
 |-------|-----------|
@@ -156,7 +157,7 @@ python dashboard.py --job test   # Launch pytest
 
 The training environment is baked into an AMI to avoid lengthy setup on each spot instance launch:
 - AMI: `ami-0ab66bc7f8ec4fbd1` (launch template `lt-06e111b12bd85396f`, v17)
-- Pre-installed: Python 3.12, PyTorch 2.6, CUDA 12.4, full ML stack
+- Pre-installed: Python 3.12, PyTorch 2.6, CUDA 12.8, full ML stack
 - Fleet ID: `fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a` (set capacity 0/1 to stop/start)
 
 ### Quick Start (Instance Management)

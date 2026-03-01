@@ -67,7 +67,7 @@ Built on HuggingFace's `GPT2LMHeadModel`, initialized from pretrained weights. T
 
 **System 1** (`forward_system1`): Takes input with masked tokens, runs bidirectional attention (all-ones mask), returns logits + confidence scores. Used for parallel prediction of masked positions.
 
-**System 2** (`forward_system2`): Standard causal left-to-right pass via GPT-2's built-in causal mask. Returns logits only.
+**System 2** (`forward_system2`): Standard causal left-to-right pass via GPT-2's built-in causal mask. Returns logits (no confidence scores).
 
 ### Masking Strategy (LLaDA-style)
 
@@ -263,7 +263,7 @@ The evaluator, benchmark, and system comparison scripts all manually shifted lab
 
 ### Spot Instance Recovery
 
-Training across multiple spot instances required building a fully autonomous bootstrap system (15 steps) to handle instance termination and recovery. The system was battle-tested across 4 recovery cycles. Key failure modes encountered and fixed: `crontab -l` returning exit code 1 under `set -o pipefail`, `pip install flask` breaking due to blinker version conflicts, and empty spot price API results crashing the price updater. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for full details.
+Training across multiple spot instances required building a fully autonomous bootstrap system (16 steps) to handle instance termination and recovery. The system was battle-tested across 4 recovery cycles. Key failure modes encountered and fixed: `crontab -l` returning exit code 1 under `set -o pipefail`, `pip install flask` breaking due to blinker version conflicts, and empty spot price API results crashing the price updater. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for full details.
 
 ## Reproducibility
 
@@ -355,18 +355,18 @@ Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 chec
 - Gal, Y., & Ghahramani, Z. (2016). Dropout as a Bayesian Approximation: Representing Model Uncertainty in Deep Learning. *ICML 2016*. [arXiv:1506.02142](https://arxiv.org/abs/1506.02142)
 - Gokaslan, A., & Cohen, V. (2019). OpenWebText Corpus. [HuggingFace](https://huggingface.co/datasets/openwebtext)
 - He, S., Wei, K., Zeng, X., Chen, X., Yang, X., Li, Z., Zhong, J., & Tian, Y. (2026). DiffER: Diffusion Entity-Relation Modeling for Reversal Curse in Diffusion Large Language Models. [arXiv:2601.07347](https://arxiv.org/abs/2601.07347)
-- Kahneman, D. (2011). *Thinking, Fast and Slow*. Farrar, Straus and Giroux.
 - Kadavath, S., et al. (2022). Language Models (Mostly) Know What They Know. [arXiv:2207.05221](https://arxiv.org/abs/2207.05221)
-- Leviathan, Y., Kalman, M., & Matias, Y. (2023). Fast Inference from Transformers via Speculative Decoding. *ICML 2023*. [arXiv:2211.17192](https://arxiv.org/abs/2211.17192)
+- Kahneman, D. (2011). *Thinking, Fast and Slow*. Farrar, Straus and Giroux.
 - Lakshminarayanan, B., Pritzel, A., & Blundell, C. (2017). Simple and Scalable Predictive Uncertainty Estimation using Deep Ensembles. *NeurIPS 2017*. [arXiv:1612.01474](https://arxiv.org/abs/1612.01474)
+- Leviathan, Y., Kalman, M., & Matias, Y. (2023). Fast Inference from Transformers via Speculative Decoding. *ICML 2023*. [arXiv:2211.17192](https://arxiv.org/abs/2211.17192)
 - Liu, X., et al. (2024). Routing to the Expert: Efficient Reward-guided Ensemble of Large Language Models. [arXiv:2311.08692](https://arxiv.org/abs/2311.08692)
 - Lou, A., Meng, C., & Ermon, S. (2024). Discrete Diffusion Modeling by Estimating the Ratios of the Data Distribution. *ICML 2024*. [arXiv:2310.16834](https://arxiv.org/abs/2310.16834)
 - Nie, S., et al. (2025). Large Language Diffusion Models. [arXiv:2502.09992](https://arxiv.org/abs/2502.09992)
 - Raffel, C., et al. (2020). Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer. *JMLR*, 21(140), 1–67. [arXiv:1910.10683](https://arxiv.org/abs/1910.10683)
 - Sahoo, S., Arriola, M., Schiff, Y., Gokaslan, A., Marroquin, E., Chiu, J. T., Rush, A., & Kuleshov, V. (2024). Simple and Effective Masked Diffusion Language Models. [arXiv:2406.07524](https://arxiv.org/abs/2406.07524)
 - Samuel, D., & Charpentier, L. G. G. (2025). Dual-objective Language Models: Training Efficiency Without Overfitting. [arXiv:2512.14549](https://arxiv.org/abs/2512.14549)
-- Shazeer, N., Mirhoseini, A., Maziarz, K., Davis, A., Le, Q., Hinton, G., & Dean, J. (2017). Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer. *ICLR 2017*. [arXiv:1701.06538](https://arxiv.org/abs/1701.06538)
 - Schuster, T., Fisch, A., Gupta, J., Dehghani, M., Bahri, D., Tran, V. Q., Tay, Y., & Metzler, D. (2022). Confident Adaptive Language Modeling. *NeurIPS 2022*. [arXiv:2207.07061](https://arxiv.org/abs/2207.07061)
+- Shazeer, N., Mirhoseini, A., Maziarz, K., Davis, A., Le, Q., Hinton, G., & Dean, J. (2017). Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer. *ICLR 2017*. [arXiv:1701.06538](https://arxiv.org/abs/1701.06538)
 - Sloman, S. A. (1996). The empirical case for two systems of reasoning. *Psychological Bulletin*, 119(1), 3–22.
 
 ## License
