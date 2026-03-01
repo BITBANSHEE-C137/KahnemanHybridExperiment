@@ -8,7 +8,7 @@ INTERVAL=60
 echo "[sync] Artifact sync daemon started at $(date -u)"
 
 sync_all() {
-    for subdir in checkpoints eval_metrics benchmarks logs preprocessed; do
+    for subdir in checkpoints eval_metrics benchmarks logs preprocessed cost; do
         local_dir="$DATA_DIR/$subdir"
         if [ -d "$local_dir" ] && [ "$(ls -A "$local_dir" 2>/dev/null)" ]; then
             aws s3 sync "$local_dir/" "s3://$S3_BUCKET/$subdir/" --region "$REGION" 2>&1 | \

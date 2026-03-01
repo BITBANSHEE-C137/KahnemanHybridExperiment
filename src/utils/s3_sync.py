@@ -141,12 +141,26 @@ class SpotTerminationHandler:
         print("[s3_sync] Spot termination handler registered (SIGTERM)")
 
     def _handler(self, signum: int, frame: object) -> None:
-        """SIGTERM handler: sync all artifacts then exit."""
+        """SIGTERM handler: finalize cost tracking, sync all artifacts, then exit."""
         print("[s3_sync] SIGTERM received — performing final sync...")
         self.terminated = True
+        self._finalize_cost_tracker()
         self._final_sync()
         print("[s3_sync] Final sync complete. Exiting.")
         raise SystemExit(0)
+
+    def _finalize_cost_tracker(self) -> None:
+        """Call cost-tracker.sh finalize to persist final session cost."""
+        try:
+            project_dir = os.environ.get("PROJECT_DIR", "/home/ubuntu/KahnemanHybridExperiment")
+            subprocess.run(
+                ["bash", os.path.join(project_dir, "cost-tracker.sh"), "finalize"],
+                timeout=30,
+                capture_output=True,
+            )
+            print("[s3_sync] Cost tracker finalized")
+        except Exception as e:
+            print(f"[s3_sync] Cost tracker finalize failed (non-fatal): {e}")
 
     def _final_sync(self) -> None:
         """Sync all artifact directories to S3."""

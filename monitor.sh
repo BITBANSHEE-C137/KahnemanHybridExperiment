@@ -17,6 +17,7 @@ EVAL_DIR="$DATA_DIR/eval_metrics"
 CKPT_DIR="$DATA_DIR/checkpoints"
 CONFIG="$PROJECT_DIR/configs/tiny.yaml"
 SPOT_PRICE_FILE="/tmp/spot_price.json"
+COST_LEDGER_FILE="$DATA_DIR/cost/cost_ledger.json"
 
 # Read config
 MAX_STEPS=$(python3 -c "import yaml; c=yaml.safe_load(open('$CONFIG')); print(c['training']['max_steps'])" 2>/dev/null || echo 50000)
@@ -302,6 +303,26 @@ print(f'{total:.2f}')
         fi
     else
         printf "    ${DM}Spot: run update-spot-price.sh to seed data${R}\n"
+    fi
+
+    # Run total cost from ledger
+    if [ -f "$COST_LEDGER_FILE" ]; then
+        local ledger_data
+        ledger_data=$(python3 -c "
+import json
+with open('$COST_LEDGER_FILE') as f:
+    ledger = json.load(f)
+total = ledger.get('total_cost', 0)
+sessions = len(ledger.get('sessions', []))
+print(f'{total:.2f}|{sessions}')
+" 2>/dev/null)
+        if [ -n "$ledger_data" ]; then
+            local run_total run_sessions
+            IFS='|' read -r run_total run_sessions <<< "$ledger_data"
+            printf "    ${S}Run Total${R}  ${A}${B}\$%s${R}" "$run_total"
+            [ "$run_sessions" -gt 1 ] 2>/dev/null && printf "  ${DM}(%s sessions)${R}" "$run_sessions"
+            printf "\n"
+        fi
     fi
 
     # ── 6. Infrastructure ──

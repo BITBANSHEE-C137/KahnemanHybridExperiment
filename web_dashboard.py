@@ -39,6 +39,7 @@ WANDB_DIR = os.path.join(PROJECT_DIR, "wandb")
 CHECKPOINT_DIR = os.path.join(DATA_DIR, "checkpoints")
 SPOT_PRICE_FILE = "/tmp/spot_price.json"
 BOOTSTRAP_STATUS_FILE = "/tmp/bootstrap_status.json"
+COST_LEDGER_FILE = os.path.join(DATA_DIR, "cost", "cost_ledger.json")
 
 # Regex for training step lines
 STEP_RE = re.compile(
@@ -302,6 +303,15 @@ def read_bootstrap_status():
         return None
 
 
+def read_cost_ledger():
+    """Read the cost ledger JSON (maintained by cost-tracker.sh)."""
+    try:
+        with open(COST_LEDGER_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
 # ── Composite status builder ─────────────────────────────────────────────────
 
 def build_status():
@@ -382,6 +392,15 @@ def build_status():
         inst["savings"] = round(od_cost - spot_cost, 2)
         inst["savings_pct"] = round((1 - spot_cost / od_cost) * 100, 1)
 
+    # Total run cost from ledger (across all spot sessions)
+    ledger = cached("cost_ledger", 30, read_cost_ledger)
+    if ledger:
+        inst["total_run_cost"] = ledger.get("total_cost")
+        inst["total_sessions"] = len(ledger.get("sessions", []))
+    else:
+        inst["total_run_cost"] = spot_cost
+        inst["total_sessions"] = 1 if spot_cost else 0
+
     # Training time
     elapsed_s = latest["elapsed_s"] if latest else None
     remaining_s = round(eta_s, 0) if eta_s else None
@@ -438,6 +457,14 @@ app = Flask(__name__)
 @app.route("/api/status")
 def api_status():
     return jsonify(build_status())
+
+
+@app.route("/api/cost/total")
+def api_cost_total():
+    ledger = read_cost_ledger()
+    if ledger:
+        return jsonify(ledger)
+    return jsonify({"error": "no cost ledger"}), 404
 
 
 @app.route("/api/history")
@@ -1087,6 +1114,11 @@ body::before {
         </tr>
       </table>
       <div class="spot-stale" id="spot-stale" style="display:none"></div>
+      <div id="run-total-row" style="margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border);display:none">
+        <span style="color:var(--dim);font-size:13px">Run Total</span>
+        <span id="run-total-sessions" style="color:var(--dim);font-size:12px;margin-left:4px"></span>
+        <span style="float:right;font-weight:600;font-size:15px;color:var(--accent)" id="run-total-cost">--</span>
+      </div>
     </div>
 
     <!-- Infra -->
@@ -1439,6 +1471,17 @@ function updateUI(data) {
     }
     if (inst.ondemand_projected != null && inst.spot_projected != null) {
       $('delta-proj').textContent = '$' + (inst.ondemand_projected - inst.spot_projected).toFixed(2);
+    }
+
+    // Run total cost (across all spot sessions)
+    if (inst.total_run_cost != null) {
+      $('run-total-row').style.display = 'block';
+      $('run-total-cost').textContent = '$' + inst.total_run_cost.toFixed(2);
+      if (inst.total_sessions > 1) {
+        $('run-total-sessions').textContent = '(' + inst.total_sessions + ' sessions)';
+      } else {
+        $('run-total-sessions').textContent = '';
+      }
     }
   }
 

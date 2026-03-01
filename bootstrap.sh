@@ -10,7 +10,7 @@ DATA_DIR="$NVME/ml-lab"
 # ── Bootstrap status tracking ──
 BOOTSTRAP_STATUS="/tmp/bootstrap_status.json"
 
-STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Launch training"]'
+STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Setup cost tracker","Launch training"]'
 
 init_bootstrap_status() {
     python3 -c "
@@ -277,13 +277,23 @@ echo "$EXISTING" | grep -v update-spot-price | { cat; echo "$CRON_LINE"; } | sud
 echo "  spot price: cron installed (every 5 min)"
 step_done 13
 
-# ── Step 14: Launch training in tmux (resumes from latest checkpoint) ──
+# ── Step 14: Cost tracker — init ledger + cron every 5 minutes ──
 step_start 14
+echo "Setting up cost tracker..."
+sudo -u ubuntu bash -c "cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' bash cost-tracker.sh init >> /tmp/cost-tracker.log 2>&1" || true
+COST_CRON="*/5 * * * * cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' bash cost-tracker.sh update >> /tmp/cost-tracker.log 2>&1"
+EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
+echo "$EXISTING" | grep -v cost-tracker | { cat; echo "$COST_CRON"; } | sudo -u ubuntu crontab -
+echo "  cost tracker: initialized + cron installed (every 5 min)"
+step_done 14
+
+# ── Step 15: Launch training in tmux (resumes from latest checkpoint) ──
+step_start 15
 echo "Launching training..."
 sudo -u ubuntu setsid tmux new-session -d -s training -c "$PROJECT"
 sudo -u ubuntu tmux send-keys -t training "export WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' CHECKPOINT_DIR='$DATA_DIR/checkpoints' DATA_DIR='$DATA_DIR' PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && python3 -m src.training.joint_trainer --config configs/tiny.yaml" Enter
 echo "  training: LAUNCHED in tmux (will resume from latest checkpoint)"
-step_done 14
+step_done 15
 
 bootstrap_done
 
