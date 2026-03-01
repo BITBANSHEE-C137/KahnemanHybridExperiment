@@ -592,12 +592,26 @@ html { overflow-x: hidden; }
 body {
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   background: var(--bg);
+  background-image: url('/static/hero.png');
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--text);
   font-size: 13px;
   line-height: 1.5;
   overflow-x: hidden;
   min-width: 0;
 }
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 23, 0.88);
+  z-index: 0;
+  pointer-events: none;
+}
+.container { position: relative; z-index: 1; }
 .container {
   max-width: 1400px;
   margin: 0 auto;
@@ -880,11 +894,6 @@ body {
 </head>
 <body>
 <div class="container">
-
-  <!-- Hero -->
-  <div style="text-align:center;margin-bottom:12px">
-    <img src="/static/hero.png" alt="BitBanshee Research" style="width:100%;max-width:800px;border-radius:8px;border:1px solid var(--border)">
-  </div>
 
   <!-- Header -->
   <div class="header">
