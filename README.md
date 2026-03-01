@@ -12,9 +12,7 @@ We investigate whether a single Transformer can jointly learn autoregressive and
 
 Large language models generate text autoregressively — one token at a time, left to right. This is reliable but inherently sequential: every token must wait for the previous one. For many routine completions, this sequential deliberation is unnecessary.
 
-Kahneman's *Thinking, Fast and Slow* (2011) describes two cognitive systems in human reasoning: System 1 operates quickly and automatically with little effort, while System 2 allocates attention to effortful mental activities. We hypothesize that language models could benefit from a similar division — using a fast, parallel generation mode for routine text and reserving expensive sequential generation for passages that require careful reasoning.
-
-This project tests that hypothesis by training a single GPT-2 model with two objectives simultaneously:
+Kahneman's *Thinking, Fast and Slow* (2011) describes two cognitive systems in human reasoning: System 1 operates quickly and automatically with little effort, while System 2 allocates attention to effortful mental activities. We hypothesize that language models could benefit from a similar division, and test this by training a single GPT-2 model with two objectives simultaneously:
 
 - **System 1 (Masked Diffusion)**: Predicts all masked tokens in parallel using bidirectional attention, following the LLaDA framework (Nie et al., 2025). Fast but less precise.
 - **System 2 (Autoregressive)**: Standard left-to-right next-token prediction with causal attention. Slow but reliable.
@@ -33,7 +31,7 @@ Speculative decoding (Leviathan et al., 2023; Chen et al., 2023) uses a small dr
 
 ### Discrete Diffusion for Text
 
-Masked diffusion language models have recently shown strong results: Austin et al. (2021) introduced D3PM for discrete diffusion, LLaDA (Nie et al., 2025) demonstrated masked diffusion at the 8B parameter scale, MDLM (Lou et al., 2024) and SEDD (Sahoo et al., 2024) explored alternative noise schedules and score-based formulations. We adopt LLaDA's masking strategy but apply it jointly with an autoregressive objective on shared weights, which to our knowledge has only been explored by Dual Language Models (Zheng et al., 2024). DiffER (He et al., 2026) showed that even bidirectional diffusion models suffer from the reversal curse due to entity fragmentation under random token masking, proposing whole-entity masking as a remedy. Our architecture addresses a related problem differently: the confidence head learns to detect positions where System 1's token-level predictions are unreliable and escalates to System 2, sidestepping the need for entity-aware masking.
+Masked diffusion language models have recently shown strong results: Austin et al. (2021) introduced D3PM for discrete diffusion, LLaDA (Nie et al., 2025) demonstrated masked diffusion at the 8B parameter scale, MDLM (Lou et al., 2024) and SEDD (Sahoo et al., 2024) explored alternative noise schedules and score-based formulations. We adopt LLaDA's masking strategy but apply it jointly with an autoregressive objective on shared weights, which to our knowledge has only been explored by Dual Language Models (Samuel & Charpentier, 2025). DiffER (He et al., 2026) showed that even bidirectional diffusion models suffer from the reversal curse due to entity fragmentation under random token masking, proposing whole-entity masking as a remedy. Our architecture addresses a related problem differently: the confidence head learns to detect positions where System 1's token-level predictions are unreliable and escalates to System 2, sidestepping the need for entity-aware masking.
 
 ### Confidence-Based Routing
 
@@ -100,7 +98,7 @@ Three generation pipelines in `src/inference/generator.py`:
 
 1. **System 1 (Iterative Unmasking)**: Start fully masked → progressively unmask the most confident tokens over N steps → parallel generation.
 2. **System 2 (Autoregressive)**: Standard left-to-right generation with top-k sampling.
-3. **Hybrid**: System 1 generates first. If mean confidence falls below a threshold, escalate — take System 1's partial output as a prompt and continue with System 2.
+3. **Hybrid (Confidence-Gated Escalation)**: System 1 generates the full sequence via iterative unmasking. The confidence head then scores the complete output, producing a mean confidence across all positions. If this scalar exceeds the threshold, the System 1 output is accepted. Otherwise, the first quarter of System 1's tokens are kept as a prompt seed, and System 2 generates the remaining tokens autoregressively. The escalation decision is all-or-nothing based on mean confidence — individual low-confidence tokens do not trigger selective replacement.
 
 ## Model Tiers
 
@@ -243,12 +241,12 @@ Steps 50–7,000 from corrected re-evaluation (2026-03-01). Steps 8,000+ evaluat
 
 ## Planned Work
 
-- [ ] Complete training run to step 50,000
-- [ ] Run LAMBADA and WikiText-103 benchmarks at final checkpoint
-- [ ] Hybrid escalation evaluation — System 1 + selective System 2 at varying confidence thresholds
-- [ ] Full confidence calibration analysis at final checkpoint
-- [ ] Ablation experiments (loss weight sweep, confidence head depth, mask schedule) if compute budget permits
-- [ ] Scale to GPT-2 Medium (355M) tier
+1. Complete training run to step 50,000
+2. Run LAMBADA and WikiText-103 benchmarks at final checkpoint
+3. Hybrid escalation evaluation — System 1 + selective System 2 at varying confidence thresholds
+4. Full confidence calibration analysis at final checkpoint
+5. Ablation experiments (loss weight sweep, confidence head depth, mask schedule) if compute budget permits
+6. Scale to GPT-2 Medium (355M) tier
 
 ## Negative Results & Lessons Learned
 
@@ -355,10 +353,10 @@ Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 chec
 - Nie, S., et al. (2025). Large Language Diffusion Models. [arXiv:2502.09992](https://arxiv.org/abs/2502.09992)
 - Raffel, C., et al. (2020). Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer. *JMLR*, 21(140), 1–67. [arXiv:1910.10683](https://arxiv.org/abs/1910.10683)
 - Sahoo, S., Arriola, M., Schiff, Y., Gokaslan, A., Marroquin, E., Chiu, J. T., Rush, A., & Kuleshov, V. (2024). Simple and Effective Masked Diffusion Language Models. [arXiv:2406.07524](https://arxiv.org/abs/2406.07524)
+- Samuel, D., & Charpentier, L. G. G. (2025). Dual-objective Language Models: Training Efficiency Without Overfitting. [arXiv:2512.14549](https://arxiv.org/abs/2512.14549)
 - Shazeer, N., Mirhoseini, A., Maziarz, K., Davis, A., Le, Q., Hinton, G., & Dean, J. (2017). Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer. *ICLR 2017*. [arXiv:1701.06538](https://arxiv.org/abs/1701.06538)
 - Schuster, T., Fisch, A., Gupta, J., Dehghani, M., Bahri, D., Tran, V. Q., Tay, Y., & Metzler, D. (2022). Confident Adaptive Language Modeling. *NeurIPS 2022*. [arXiv:2207.07061](https://arxiv.org/abs/2207.07061)
 - Sloman, S. A. (1996). The empirical case for two systems of reasoning. *Psychological Bulletin*, 119(1), 3–22.
-- Zheng, K., et al. (2024). Dual Language Models. [arXiv:2512.14549](https://arxiv.org/abs/2512.14549)
 
 ## License
 
