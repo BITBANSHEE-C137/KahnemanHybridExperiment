@@ -1513,19 +1513,11 @@ function updateUI(data) {
   if (ev) {
     $('m-conf-acc').style.fontSize = '';
     $('m-conf-acc').textContent = ((ev.conf_accuracy ?? ev.conf_acc ?? 0) * 100).toFixed(1) + '%';
-    sparkBuffers.conf.push(ev.conf_accuracy ?? ev.conf_acc ?? 0);
-    if (sparkBuffers.conf.length > SPARK_MAX) sparkBuffers.conf.shift();
-    drawSparkline('spark-conf', sparkBuffers.conf, '#34d399');
-
     setRAG('m-conf-acc', ev.conf_accuracy ?? ev.conf_acc ?? 0, RAG.conf_acc);
 
     if (ev.conf_auroc != null) {
       $('m-auroc').style.fontSize = '';
       $('m-auroc').textContent = ev.conf_auroc.toFixed(4);
-      sparkBuffers.auroc.push(ev.conf_auroc);
-      if (sparkBuffers.auroc.length > SPARK_MAX) sparkBuffers.auroc.shift();
-      drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
-
       setRAG('m-auroc', ev.conf_auroc, RAG.auroc);
     }
 
@@ -1533,10 +1525,26 @@ function updateUI(data) {
     if (s1val != null) {
       $('m-s1-acc').style.fontSize = '';
       $('m-s1-acc').textContent = (s1val * 100).toFixed(1) + '%';
-      sparkBuffers.s1.push(s1val);
-      if (sparkBuffers.s1.length > SPARK_MAX) sparkBuffers.s1.shift();
-      drawSparkline('spark-s1', sparkBuffers.s1, '#34d399');
       setRAG('m-s1-acc', s1val, RAG.s1_acc);
+    }
+
+    // Only push to eval sparklines when a new eval step arrives
+    const evalStep = ev.step ?? null;
+    if (evalStep && evalStep !== lastEvalStep) {
+      lastEvalStep = evalStep;
+      sparkBuffers.conf.push(ev.conf_accuracy ?? ev.conf_acc ?? 0);
+      if (sparkBuffers.conf.length > SPARK_MAX) sparkBuffers.conf.shift();
+      if (ev.conf_auroc != null) {
+        sparkBuffers.auroc.push(ev.conf_auroc);
+        if (sparkBuffers.auroc.length > SPARK_MAX) sparkBuffers.auroc.shift();
+      }
+      if (s1val != null) {
+        sparkBuffers.s1.push(s1val);
+        if (sparkBuffers.s1.length > SPARK_MAX) sparkBuffers.s1.shift();
+      }
+      drawSparkline('spark-conf', sparkBuffers.conf, '#34d399');
+      drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
+      drawSparkline('spark-s1', sparkBuffers.s1, '#34d399');
     }
   } else {
     $('m-conf-acc').textContent = awaitMsg;
@@ -1660,6 +1668,16 @@ async function loadCharts() {
       evalChart.data.datasets[1].data = filtered.map(e => e.conf_auroc ?? null);
       evalChart.data.datasets[2].data = filtered.map(e => e.ar_ppl ?? e.ar_perplexity ?? null);
       evalChart.update();
+
+      // Seed eval sparklines from history
+      const evalTail = filtered.slice(-SPARK_MAX);
+      sparkBuffers.conf = evalTail.map(e => e.conf_accuracy ?? e.conf_acc ?? 0);
+      sparkBuffers.auroc = evalTail.map(e => e.conf_auroc ?? 0);
+      sparkBuffers.s1 = evalTail.map(e => e.s1_tok_acc ?? e.s1_token_accuracy ?? 0);
+      drawSparkline('spark-conf', sparkBuffers.conf, '#34d399');
+      drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
+      drawSparkline('spark-s1', sparkBuffers.s1, '#34d399');
+      if (filtered.length > 0) lastEvalStep = filtered[filtered.length - 1].step;
     }
   } catch (e) {
     console.error('Failed to load charts:', e);
