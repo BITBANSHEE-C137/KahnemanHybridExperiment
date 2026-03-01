@@ -222,16 +222,25 @@ draw() {
         printf "      ${S}Power${R} "; gauge "$pow_pct" "$G"; printf " ${B}%s${R}${DM}/%sW${R}\n" "${gpow%.*}" "${gpow_lim%.*}"
     fi
 
-    # ── 4. Eval ──
-    local latest_eval=$(ls -t "$EVAL_DIR"/*.json 2>/dev/null | head -1)
-    if [ -n "$latest_eval" ]; then
-        local ej=$(cat "$latest_eval")
-        local e_step=$(echo "$ej" | python3 -c "import sys,json; print(json.load(sys.stdin)['step'])" 2>/dev/null)
-        local e_ppl=$(echo "$ej" | python3 -c "import sys,json; print(f\"{json.load(sys.stdin)['ar_perplexity']:.0f}\")" 2>/dev/null)
-        local e_s1=$(echo "$ej" | python3 -c "import sys,json; print(f\"{json.load(sys.stdin)['s1_token_accuracy']*100:.1f}\")" 2>/dev/null)
-        local e_auroc=$(echo "$ej" | python3 -c "import sys,json; print(f\"{json.load(sys.stdin)['conf_auroc']:.3f}\")" 2>/dev/null)
-        local e_ece=$(echo "$ej" | python3 -c "import sys,json; print(f\"{json.load(sys.stdin)['conf_ece']:.4f}\")" 2>/dev/null)
-        local e_dloss=$(echo "$ej" | python3 -c "import sys,json; print(f\"{json.load(sys.stdin)['diff_loss']:.4f}\")" 2>/dev/null)
+    # ── 4. Eval (current run only: step <= current training step) ──
+    local eval_data=""
+    if [ "$step" -gt 0 ]; then
+        eval_data=$(python3 -c "
+import json, glob, os
+files = glob.glob('$EVAL_DIR/eval_step_*.json')
+best = None
+for f in files:
+    try:
+        d = json.load(open(f))
+        if d['step'] <= $step and (best is None or d['step'] > best['step']):
+            best = d
+    except: pass
+if best:
+    print(f\"{best['step']}|{best['ar_perplexity']:.0f}|{best['s1_token_accuracy']*100:.1f}|{best['conf_auroc']:.3f}|{best['conf_ece']:.4f}|{best['diff_loss']:.4f}\")
+" 2>/dev/null)
+    fi
+    if [ -n "$eval_data" ]; then
+        IFS='|' read -r e_step e_ppl e_s1 e_auroc e_ece e_dloss <<< "$eval_data"
         local auroc_pct=$(echo "$e_auroc * 100" | bc 2>/dev/null | cut -d. -f1)
         local ac="$RD"; [ "$auroc_pct" -gt 55 ] && ac="$Y"; [ "$auroc_pct" -gt 70 ] && ac="$G"
 
@@ -243,7 +252,9 @@ draw() {
         printf "   ${S}ECE${R} ${T}%s${R}" "$e_ece"
         printf "   ${S}Diff${R} ${T}%s${R}\n" "$e_dloss"
     else
-        printf "  ${A}◆${R} ${B}Eval${R}  ${DM}no data yet${R}\n"
+        local next_eval_step=$(( ((step / EVAL_EVERY) + 1) * EVAL_EVERY ))
+        [ "$step" -eq 0 ] && next_eval_step=$EVAL_EVERY
+        printf "  ${A}◆${R} ${B}Eval${R}  ${DM}awaiting eval @ step %s${R}\n" "$next_eval_step"
     fi
 
     # ── 5. Cost ──
