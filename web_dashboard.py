@@ -1138,6 +1138,7 @@ function drawSparkline(canvasId, data, color) {
 }
 
 // ── Chart refresh ────────────────────────────────────────────────────────
+let currentTrainStep = 0;
 let lastEvalStep = null;
 let lastChartRefresh = Date.now();
 const CHART_REFRESH_INTERVAL = 300000; // 5 min
@@ -1275,6 +1276,9 @@ function $(id) { return document.getElementById(id); }
 function updateUI(data) {
   $('timestamp').textContent = new Date(data.timestamp).toLocaleTimeString();
 
+  // Track current training step for chart filtering
+  currentTrainStep = data.current_step || 0;
+
   // Bootstrap
   if (data.bootstrap) updateBootstrap(data.bootstrap);
 
@@ -1394,11 +1398,9 @@ function updateUI(data) {
     $('m-auroc').style.fontSize = '11px';
   }
 
-  // Label eval chart when showing prior-run data
+  // Clear eval chart note
   const evalNote = $('eval-chart-note');
-  if (evalNote) {
-    evalNote.textContent = ev ? '' : '(prior run)';
-  }
+  if (evalNote) evalNote.textContent = '';
 
   // GPU
   const g = data.gpu;
@@ -1500,11 +1502,14 @@ async function loadCharts() {
     sparkBuffers.diff = tail.map(h => h.diff_loss);
     sparkBuffers.lr = tail.map(h => h.lr);
 
-    if (evals.length > 0) {
-      evalChart.data.labels = evals.map(e => e.step);
-      evalChart.data.datasets[0].data = evals.map(e => e.s1_tok_acc ?? e.s1_token_accuracy ?? null);
-      evalChart.data.datasets[1].data = evals.map(e => e.conf_auroc ?? null);
-      evalChart.data.datasets[2].data = evals.map(e => e.ar_ppl ?? e.ar_perplexity ?? null);
+    // Filter to current run: only show evals up to current training step
+    const maxStep = currentTrainStep || Infinity;
+    const filtered = evals.filter(e => e.step <= maxStep);
+    if (filtered.length > 0) {
+      evalChart.data.labels = filtered.map(e => e.step);
+      evalChart.data.datasets[0].data = filtered.map(e => e.s1_tok_acc ?? e.s1_token_accuracy ?? null);
+      evalChart.data.datasets[1].data = filtered.map(e => e.conf_auroc ?? null);
+      evalChart.data.datasets[2].data = filtered.map(e => e.ar_ppl ?? e.ar_perplexity ?? null);
       evalChart.update();
     }
   } catch (e) {
