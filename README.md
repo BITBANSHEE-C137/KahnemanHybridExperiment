@@ -43,6 +43,14 @@ Early exit mechanisms (Schuster et al., 2022) allow models to skip computation f
 
 T5 (Raffel et al., 2020) demonstrated that a single model can learn multiple objectives through multi-task training. Our joint training objective combines autoregressive, diffusion, and confidence losses with tunable weights, raising similar questions about objective interference and gradient balancing.
 
+### Mixture-of-Experts and Learned Gating
+
+Mixture-of-experts architectures use learned gating functions to route inputs to specialized sub-networks. Shazeer et al. (2017) introduced sparsely-gated MoE layers with a trainable gating network that selects a subset of expert feedforward blocks per token. Switch Transformers (Fedus et al., 2022) simplified this to top-1 routing, scaling to trillion-parameter models. Our confidence head functions as a binary gate that routes between two "experts" — but rather than selecting between feedforward sub-networks, it selects between inference *strategies* (parallel diffusion vs. sequential autoregressive). The routing decision is made per-token based on learned confidence, analogous to how MoE gates select experts based on learned token representations.
+
+### Uncertainty Estimation in Neural Networks
+
+Quantifying model uncertainty has a rich literature. MC Dropout (Gal & Ghahramani, 2016) treats dropout at inference time as approximate Bayesian inference, using prediction variance across stochastic forward passes as an uncertainty estimate. Deep Ensembles (Lakshminarayanan et al., 2017) achieve well-calibrated uncertainty through ensemble disagreement. More recently, Kadavath et al. (2022) showed that large language models can self-evaluate their confidence through prompting. Our approach differs from all three: we train an explicit confidence head that predicts per-token correctness from hidden states, requiring no multiple forward passes (unlike MC Dropout or ensembles) and no prompting (unlike self-evaluation). The tradeoff is that our confidence signal is trained end-to-end with a specific objective (System 1 correctness) rather than capturing general epistemic uncertainty.
+
 ## Architecture
 
 ![DualProcessGPT2 Architecture & Training](static/architecture-diagram.svg)
@@ -114,7 +122,7 @@ All models initialize from HuggingFace pretrained weights (not trained from scra
 
 - ~8M documents, ~9B tokens after GPT-2 BPE tokenization
 - Stored as flat uint16 binary files for zero-copy memmap loading
-- 5,000-document eval split from the final shard
+- 5,000-document eval split — the final 5,000 documents of the last preprocessing shard, selected deterministically (not random)
 - Preprocessing via `scripts/lean_preprocess.py` (reads cached parquet shards one at a time to stay under 16GB RAM)
 
 ### Configuration
@@ -270,16 +278,20 @@ Training across multiple spot instances required building a fully autonomous boo
 | **Random seed** | 42 (fixed for reproducibility) |
 | **Precision** | bfloat16 mixed precision |
 | **Code** | [github.com/BITBANSHEE-C137/KahnemanHybridExperiment](https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment) |
+| **Dependencies** | `requirements.txt` (minimum version floors); `requirements-lock.txt` (exact pinned versions from training environment) |
+| **Eval split** | Final 5,000 documents of the last preprocessing shard (deterministic). After tokenization: 5,678,421 tokens → 5,545 chunks at 1,024 tokens each. |
 
 To reproduce from scratch:
 
 ```bash
 git clone https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment.git
 cd KahnemanHybridExperiment
-pip install -r requirements.txt && pip install -e .
+pip install -r requirements-lock.txt && pip install -e .  # pinned versions for exact reproducibility
 python scripts/lean_preprocess.py          # ~5 hours, one-time
 python -m src.training.joint_trainer --config configs/tiny.yaml
 ```
+
+**Note on statistical variance:** Eval metrics are single-run values. Diffusion metrics (loss, S1 accuracy) involve stochastic masking; we report the mean over the full eval set (5,545 chunks) per checkpoint. The AR perplexity is deterministic given the same eval split. Confidence intervals across multiple masking samples are planned for the final evaluation.
 
 ## Raw Experiment Data
 
@@ -330,14 +342,19 @@ Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 chec
 - Austin, J., Johnson, D. D., Ho, J., Tarlow, D., & van den Berg, R. (2021). Structured Denoising Diffusion Models in Discrete State-Spaces. *NeurIPS 2021*. [arXiv:2107.03006](https://arxiv.org/abs/2107.03006)
 - Chen, C., Borgeaud, S., Irving, G., Lespiau, J.-B., Sifre, L., & Jumper, J. (2023). Accelerating Large Language Model Decoding with Speculative Sampling. [arXiv:2302.01318](https://arxiv.org/abs/2302.01318)
 - Evans, J. St. B. T. (2003). In two minds: dual-process accounts of reasoning. *Trends in Cognitive Sciences*, 7(10), 454–459.
+- Fedus, W., Zoph, B., & Shazeer, N. (2022). Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity. *JMLR*, 23(120), 1–39. [arXiv:2101.03961](https://arxiv.org/abs/2101.03961)
+- Gal, Y., & Ghahramani, Z. (2016). Dropout as a Bayesian Approximation: Representing Model Uncertainty in Deep Learning. *ICML 2016*. [arXiv:1506.02142](https://arxiv.org/abs/1506.02142)
 - Gokaslan, A., & Cohen, V. (2019). OpenWebText Corpus. [HuggingFace](https://huggingface.co/datasets/openwebtext)
 - Kahneman, D. (2011). *Thinking, Fast and Slow*. Farrar, Straus and Giroux.
+- Kadavath, S., et al. (2022). Language Models (Mostly) Know What They Know. [arXiv:2207.05221](https://arxiv.org/abs/2207.05221)
 - Leviathan, Y., Kalman, M., & Matias, Y. (2023). Fast Inference from Transformers via Speculative Decoding. *ICML 2023*. [arXiv:2211.17192](https://arxiv.org/abs/2211.17192)
+- Lakshminarayanan, B., Pritzel, A., & Blundell, C. (2017). Simple and Scalable Predictive Uncertainty Estimation using Deep Ensembles. *NeurIPS 2017*. [arXiv:1612.01474](https://arxiv.org/abs/1612.01474)
 - Liu, X., et al. (2024). Routing to the Expert: Efficient Reward-guided Ensemble of Large Language Models. [arXiv:2311.08692](https://arxiv.org/abs/2311.08692)
 - Lou, A., Meng, C., & Ermon, S. (2024). Discrete Diffusion Modeling by Estimating the Ratios of the Data Distribution. *ICML 2024*. [arXiv:2310.16834](https://arxiv.org/abs/2310.16834)
 - Nie, S., et al. (2025). Large Language Diffusion Models. [arXiv:2502.09992](https://arxiv.org/abs/2502.09992)
 - Raffel, C., et al. (2020). Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer. *JMLR*, 21(140), 1–67. [arXiv:1910.10683](https://arxiv.org/abs/1910.10683)
 - Sahoo, S., Arriola, M., Schiff, Y., Gokaslan, A., Marroquin, E., Chiu, J. T., Rush, A., & Kuleshov, V. (2024). Simple and Effective Masked Diffusion Language Models. [arXiv:2406.07524](https://arxiv.org/abs/2406.07524)
+- Shazeer, N., Mirhoseini, A., Maziarz, K., Davis, A., Le, Q., Hinton, G., & Dean, J. (2017). Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer. *ICLR 2017*. [arXiv:1701.06538](https://arxiv.org/abs/1701.06538)
 - Schuster, T., Fisch, A., Gupta, J., Dehghani, M., Bahri, D., Tran, V. Q., Tay, Y., & Metzler, D. (2022). Confident Adaptive Language Modeling. *NeurIPS 2022*. [arXiv:2207.07061](https://arxiv.org/abs/2207.07061)
 - Sloman, S. A. (1996). The empirical case for two systems of reasoning. *Psychological Bulletin*, 119(1), 3–22.
 - Zheng, K., et al. (2024). Dual Language Models. [arXiv:2512.14549](https://arxiv.org/abs/2512.14549)
