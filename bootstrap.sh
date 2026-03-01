@@ -7,20 +7,100 @@ PROJECT="/home/ubuntu/KahnemanHybridExperiment"
 NVME="/opt/dlami/nvme"
 DATA_DIR="$NVME/ml-lab"
 
-echo "=== Bootstrap.sh started at $(date -u) ==="
+# ── Bootstrap status tracking ──
+BOOTSTRAP_STATUS="/tmp/bootstrap_status.json"
 
-# ── Ephemeral NVMe setup ──
+STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Launch training"]'
+
+init_bootstrap_status() {
+    python3 -c "
+import json, time
+labels = json.loads('$STEP_LABELS')
+steps = []
+for i, label in enumerate(labels):
+    steps.append({'id': i, 'label': label, 'status': 'pending', 'started': None, 'elapsed': None})
+obj = {'status': 'running', 'started': time.time(), 'steps': steps}
+with open('${BOOTSTRAP_STATUS}.tmp', 'w') as f:
+    json.dump(obj, f)
+" && mv "${BOOTSTRAP_STATUS}.tmp" "$BOOTSTRAP_STATUS"
+}
+
+step_start() {
+    local n="$1"
+    python3 -c "
+import json, time
+with open('$BOOTSTRAP_STATUS') as f:
+    obj = json.load(f)
+obj['steps'][$n]['status'] = 'running'
+obj['steps'][$n]['started'] = time.time()
+with open('${BOOTSTRAP_STATUS}.tmp', 'w') as f:
+    json.dump(obj, f)
+" && mv "${BOOTSTRAP_STATUS}.tmp" "$BOOTSTRAP_STATUS"
+}
+
+step_done() {
+    local n="$1"
+    python3 -c "
+import json, time
+with open('$BOOTSTRAP_STATUS') as f:
+    obj = json.load(f)
+s = obj['steps'][$n]
+s['status'] = 'done'
+if s['started']:
+    s['elapsed'] = round(time.time() - s['started'], 1)
+with open('${BOOTSTRAP_STATUS}.tmp', 'w') as f:
+    json.dump(obj, f)
+" && mv "${BOOTSTRAP_STATUS}.tmp" "$BOOTSTRAP_STATUS"
+}
+
+step_fail() {
+    local n="$1"
+    python3 -c "
+import json, time
+with open('$BOOTSTRAP_STATUS') as f:
+    obj = json.load(f)
+s = obj['steps'][$n]
+s['status'] = 'failed'
+if s['started']:
+    s['elapsed'] = round(time.time() - s['started'], 1)
+obj['status'] = 'failed'
+with open('${BOOTSTRAP_STATUS}.tmp', 'w') as f:
+    json.dump(obj, f)
+" && mv "${BOOTSTRAP_STATUS}.tmp" "$BOOTSTRAP_STATUS"
+}
+
+bootstrap_done() {
+    python3 -c "
+import json, time
+with open('$BOOTSTRAP_STATUS') as f:
+    obj = json.load(f)
+obj['status'] = 'done'
+obj['finished'] = time.time()
+with open('${BOOTSTRAP_STATUS}.tmp', 'w') as f:
+    json.dump(obj, f)
+" && mv "${BOOTSTRAP_STATUS}.tmp" "$BOOTSTRAP_STATUS"
+}
+
+echo "=== Bootstrap.sh started at $(date -u) ==="
+init_bootstrap_status
+
+# ── Step 0: Ephemeral NVMe setup ──
+step_start 0
 echo "Setting up ephemeral NVMe at $DATA_DIR..."
 sudo mkdir -p "$DATA_DIR"/{hf_cache,checkpoints,logs,benchmarks,eval_metrics,preprocessed}
 sudo chown -R ubuntu:ubuntu "$DATA_DIR"
+step_done 0
 
-# ── Fetch secrets from Secrets Manager ──
+# ── Step 1: Fetch secrets from Secrets Manager ──
+step_start 1
 echo "Fetching secrets from Secrets Manager..."
 WANDB_API_KEY=$(aws secretsmanager get-secret-value --secret-id "ml-lab/wandb-api-key" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
 HF_TOKEN=$(aws secretsmanager get-secret-value --secret-id "ml-lab/hf-token" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
 SPOT_TOKEN=$(aws secretsmanager get-secret-value --secret-id "ml-lab/dashboard-spot-token" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
+step_done 1
 
-# ── Ubuntu user environment ──
+# ── Step 2: Ubuntu user environment ──
+step_start 2
 echo "Configuring ubuntu user environment..."
 # Clean old env vars
 sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d' /home/ubuntu/.bashrc
@@ -43,11 +123,15 @@ BASHRC
 
 # Git credentials
 sudo -u ubuntu bash -c "echo 'https://x-access-token:$GH_TOKEN@github.com' > ~/.git-credentials && git config --global credential.helper store"
+step_done 2
 
-# Pull latest code
+# ── Step 3: Pull latest code ──
+step_start 3
 sudo -u ubuntu bash -c "cd $PROJECT && git checkout -- . && git clean -fd && git pull --ff-only" || true
+step_done 3
 
-# ── Restore prior artifacts from S3 ──
+# ── Step 4: Restore prior artifacts from S3 ──
+step_start 4
 echo "Restoring prior artifacts from S3..."
 aws s3 sync "s3://$S3_BUCKET/checkpoints/" "$DATA_DIR/checkpoints/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/logs/" "$DATA_DIR/logs/" --region "$REGION" || true
@@ -55,103 +139,93 @@ aws s3 sync "s3://$S3_BUCKET/eval_metrics/" "$DATA_DIR/eval_metrics/" --region "
 aws s3 sync "s3://$S3_BUCKET/benchmarks/" "$DATA_DIR/benchmarks/" --region "$REGION" || true
 echo "Restored checkpoints:"
 ls -lh "$DATA_DIR/checkpoints/"*.pt 2>/dev/null || echo "  (none)"
+step_done 4
 
-# ── Sync pre-processed training data from S3 ──
+# ── Step 5: Sync pre-processed training data from S3 ──
+step_start 5
 echo "Syncing pre-processed data from S3..."
 aws s3 sync "s3://$S3_BUCKET/preprocessed/" "$DATA_DIR/preprocessed/" --region "$REGION" || true
 ls -lh "$DATA_DIR/preprocessed/" 2>/dev/null
+step_done 5
 
-# ── Fix ownership (S3 restores as root) ──
+# ── Step 6: Fix ownership (S3 restores as root) ──
+step_start 6
 sudo chown -R ubuntu:ubuntu "$DATA_DIR"
+step_done 6
 
-# ── 1. DNS update ──
-echo "Updating DNS..."
-sudo -u ubuntu bash "$PROJECT/update-dns.sh" || echo "WARNING: DNS update failed (non-fatal)"
+# ── Step 7: Update CloudFront origin to this instance's IP ──
+step_start 7
+echo "Updating CloudFront origin..."
+INSTANCE_IP=$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || echo "")
+CF_DIST_ID="EGWW28IMM7U2T"
+if [ -n "$INSTANCE_IP" ]; then
+    # Update origin.train.bitbanshee.com + console.bitbanshee.com A records
+    CHANGE_BATCH=$(cat <<DNSJSON
+{
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "origin.train.bitbanshee.com",
+        "Type": "A",
+        "TTL": 60,
+        "ResourceRecords": [{"Value": "$INSTANCE_IP"}]
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "console.bitbanshee.com",
+        "Type": "A",
+        "TTL": 60,
+        "ResourceRecords": [{"Value": "$INSTANCE_IP"}]
+      }
+    }
+  ]
+}
+DNSJSON
+    )
+    aws route53 change-resource-record-sets \
+        --hosted-zone-id Z03629483MIHQSCG59T8J \
+        --change-batch "$CHANGE_BATCH" \
+        --region "$REGION" 2>&1 || echo "WARNING: DNS origin update failed"
+    echo "  origin.train.bitbanshee.com -> $INSTANCE_IP"
+    echo "  console.bitbanshee.com -> $INSTANCE_IP (SSH)"
+else
+    echo "  WARNING: Could not determine instance public IP"
+fi
+step_done 7
 
-# ── 2. Start artifact sync daemon ──
+# ── Step 8: Start artifact sync daemon ──
+step_start 8
 echo "Starting sync daemon..."
 sudo touch /var/log/artifact-sync.log
 sudo chown ubuntu:ubuntu /var/log/artifact-sync.log
 sudo -u ubuntu bash -c "cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' nohup bash sync-checkpoints.sh >> /var/log/artifact-sync.log 2>&1 &"
 sleep 1
 pgrep -f sync-checkpoints.sh > /dev/null && echo "  sync daemon: RUNNING" || echo "  WARNING: sync daemon failed to start"
+step_done 8
 
-# ── 3. Install nginx + certbot if missing ──
-echo "Setting up nginx + TLS..."
+# ── Step 9: Install nginx if missing ──
+step_start 9
+echo "Setting up nginx (HTTP-only, TLS terminates at CloudFront)..."
 if ! command -v nginx &> /dev/null; then
     apt-get update -qq && apt-get install -y -qq nginx > /dev/null 2>&1
 fi
-if ! command -v certbot &> /dev/null; then
-    snap install --classic certbot 2>/dev/null || true
-    ln -sf /snap/bin/certbot /usr/bin/certbot 2>/dev/null || true
-fi
+step_done 9
 
-# ── 4. Configure nginx + TLS certificate ──
+# ── Step 10: Configure nginx (HTTP-only proxy — CloudFront handles TLS) ──
+step_start 10
 ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/dashboard
 rm -f /etc/nginx/sites-enabled/default
 
-# Try to restore TLS cert from S3 first
-if [ ! -f /etc/letsencrypt/live/train.bitbanshee.com/fullchain.pem ]; then
-    echo "  Restoring TLS certificate from S3..."
-    aws s3 cp "s3://$S3_BUCKET/deploy/tls/letsencrypt.tar.gz" /tmp/letsencrypt.tar.gz --region "$REGION" 2>/dev/null && \
-        tar xzf /tmp/letsencrypt.tar.gz -C /etc/ 2>/dev/null && \
-        echo "  TLS cert restored from S3" || \
-        echo "  No TLS backup in S3"
-fi
-
-# If still no cert, try certbot (may hit rate limits)
-if [ ! -f /etc/letsencrypt/live/train.bitbanshee.com/fullchain.pem ]; then
-    # HTTP-only config for certbot challenge
-    cat > /etc/nginx/sites-available/dashboard << 'NGINX_HTTP'
-server {
-    listen 80;
-    server_name train.bitbanshee.com;
-    location /.well-known/acme-challenge/ { root /var/www/html; }
-    location / { proxy_pass http://127.0.0.1:5000; proxy_set_header Host $host; }
-}
-NGINX_HTTP
-    systemctl start nginx 2>/dev/null || systemctl reload nginx
-
-    echo "  Obtaining TLS certificate..."
-    sleep 5  # brief wait for DNS propagation
-    if certbot certonly --webroot -w /var/www/html -d train.bitbanshee.com \
-        --non-interactive --agree-tos -m glenn@bitbanshee.com 2>&1 | tail -3; then
-        # Backup cert to S3 for future instances
-        echo "  Backing up TLS cert to S3..."
-        tar czf /tmp/letsencrypt.tar.gz -C /etc letsencrypt
-        aws s3 cp /tmp/letsencrypt.tar.gz "s3://$S3_BUCKET/deploy/tls/letsencrypt.tar.gz" --region "$REGION" 2>/dev/null || true
-    else
-        echo "  WARNING: certbot failed (rate limit?) — running HTTP-only"
-    fi
-fi
-
-# Configure nginx based on whether we have a cert
-if [ -f /etc/letsencrypt/live/train.bitbanshee.com/fullchain.pem ]; then
-    # Full TLS config
-    cat > /etc/nginx/sites-available/dashboard << 'NGINX_TLS'
+cat > /etc/nginx/sites-available/dashboard << 'NGINX_CF'
 limit_req_zone $binary_remote_addr zone=general:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=sse:1m rate=2r/s;
 
 server {
     listen 80;
-    server_name train.bitbanshee.com;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name train.bitbanshee.com;
-
-    ssl_certificate /etc/letsencrypt/live/train.bitbanshee.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/train.bitbanshee.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options nosniff always;
-    add_header X-Frame-Options DENY always;
-    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    server_name _;
 
     location / {
         limit_req zone=general burst=20 nodelay;
@@ -175,68 +249,43 @@ server {
         proxy_read_timeout 86400s;
     }
 }
-NGINX_TLS
-    nginx -t 2>&1 && systemctl reload nginx
-    echo "  nginx + TLS: CONFIGURED"
-else
-    # HTTP-only fallback (no TLS cert available)
-    cat > /etc/nginx/sites-available/dashboard << 'NGINX_HTTP_ONLY'
-limit_req_zone $binary_remote_addr zone=general:10m rate=30r/s;
-limit_req_zone $binary_remote_addr zone=sse:1m rate=2r/s;
+NGINX_CF
+nginx -t 2>&1 && systemctl reload nginx
+echo "  nginx: CONFIGURED (HTTP-only, CloudFront terminates TLS)"
+step_done 10
 
-server {
-    listen 80;
-    server_name train.bitbanshee.com;
-
-    location / {
-        limit_req zone=general burst=20 nodelay;
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /stream {
-        limit_req zone=sse burst=5 nodelay;
-        proxy_pass http://127.0.0.1:5000/stream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_set_header X-Accel-Buffering no;
-        proxy_set_header Connection "";
-        proxy_http_version 1.1;
-        proxy_read_timeout 86400s;
-    }
-}
-NGINX_HTTP_ONLY
-    nginx -t 2>&1 && systemctl reload nginx
-    echo "  nginx: CONFIGURED (HTTP-only, no TLS cert available)"
-fi
-
-# ── 5. Install Flask if missing ──
+# ── Step 11: Install Flask if missing ──
+step_start 11
 sudo -u ubuntu python3 -c "import flask" 2>/dev/null || sudo -u ubuntu pip install --user flask > /dev/null 2>&1
+step_done 11
 
-# ── 6. Start web dashboard ──
+# ── Step 12: Start web dashboard ──
+step_start 12
 echo "Starting web dashboard..."
 sudo -u ubuntu bash -c "cd $PROJECT && nohup python3 web_dashboard.py --port 5000 --spot-token '$SPOT_TOKEN' > /tmp/dashboard.log 2>&1 &"
 sleep 3
 curl -sf http://127.0.0.1:5000/api/status > /dev/null && echo "  web dashboard: RUNNING" || echo "  WARNING: web dashboard failed to start"
+step_done 12
 
-# ── 7. Spot price updater — run now + cron every 5 minutes ──
+# ── Step 13: Spot price updater — run now + cron every 5 minutes ──
+step_start 13
 echo "Setting up spot price updater..."
 sudo -u ubuntu bash -c "cd $PROJECT && bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1" || true &
 CRON_LINE="*/5 * * * * cd $PROJECT && bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1"
 EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
 echo "$EXISTING" | grep -v update-spot-price | { cat; echo "$CRON_LINE"; } | sudo -u ubuntu crontab -
 echo "  spot price: cron installed (every 5 min)"
+step_done 13
 
-# ── 8. Launch training in tmux (resumes from latest checkpoint) ──
+# ── Step 14: Launch training in tmux (resumes from latest checkpoint) ──
+step_start 14
 echo "Launching training..."
 sudo -u ubuntu setsid tmux new-session -d -s training -c "$PROJECT"
 sudo -u ubuntu tmux send-keys -t training "export WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' CHECKPOINT_DIR='$DATA_DIR/checkpoints' DATA_DIR='$DATA_DIR' PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && python3 -m src.training.joint_trainer --config configs/tiny.yaml" Enter
 echo "  training: LAUNCHED in tmux (will resume from latest checkpoint)"
+step_done 14
+
+bootstrap_done
 
 echo ""
 echo "=== Bootstrap.sh completed at $(date -u) ==="

@@ -26,15 +26,26 @@ echo "Updating $RECORD_NAME -> $PUBLIC_IP"
 
 CHANGE_BATCH=$(cat <<EOF
 {
-  "Changes": [{
-    "Action": "UPSERT",
-    "ResourceRecordSet": {
-      "Name": "$RECORD_NAME",
-      "Type": "A",
-      "TTL": $TTL,
-      "ResourceRecords": [{"Value": "$PUBLIC_IP"}]
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "$RECORD_NAME",
+        "Type": "A",
+        "TTL": $TTL,
+        "ResourceRecords": [{"Value": "$PUBLIC_IP"}]
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "console.bitbanshee.com",
+        "Type": "A",
+        "TTL": $TTL,
+        "ResourceRecords": [{"Value": "$PUBLIC_IP"}]
+      }
     }
-  }]
+  ]
 }
 EOF
 )
@@ -46,4 +57,6 @@ RESULT=$(aws route53 change-resource-record-sets \
   --output json 2>&1)
 
 echo "$RESULT"
-echo "DNS update submitted for $RECORD_NAME -> $PUBLIC_IP"
+echo "DNS update submitted:"
+echo "  $RECORD_NAME -> $PUBLIC_IP"
+echo "  console.bitbanshee.com -> $PUBLIC_IP (SSH)"
