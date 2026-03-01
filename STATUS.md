@@ -2,6 +2,8 @@
 
 **Last updated:** 2026-03-01
 
+> See also: [README.md](README.md) for research narrative and results | [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for ops and deployment details
+
 ## Live Dashboard
 
 **[train.bitbanshee.com](https://train.bitbanshee.com)** — real-time training metrics, GPU stats, loss curves, and cost tracking.
@@ -30,6 +32,8 @@
 **Trends:** Diffusion loss steadily declining (7.84 → 6.23 over 4k steps). S1 token accuracy 2.5× above random baseline. Confidence AUROC improving linearly (0.47 → 0.67). Step 2,000 eval from current run confirms prior trends reproducing.
 
 ## Infrastructure
+
+> Full details in [INFRASTRUCTURE.md](INFRASTRUCTURE.md) — spot recovery, bootstrap, dashboards, cost analysis.
 
 | Component | Status | Details |
 |---|---|---|
@@ -86,6 +90,8 @@
 - [x] Dashboard UX refresh — larger fonts, narrower layout, footer, S1 Acc tile
 
 ## Next Steps
+
+> See [README.md — Planned Work](README.md#planned-work) for the full research roadmap.
 
 - [ ] Complete training run (50,000 steps)
 - [ ] Run LAMBADA + WikiText-103 benchmarks at final checkpoint

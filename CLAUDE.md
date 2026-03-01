@@ -51,25 +51,27 @@ Initialize from HuggingFace pretrained weights. Do not train from scratch.
 ## Directory Structure
 
 ```
-dual-process-model/
-├── CLAUDE.md               # This file
-├── README.md
+KahnemanHybridExperiment/
+├── CLAUDE.md               # This file — project conventions for Claude Code
+├── README.md               # Research narrative (motivation, related work, results)
+├── INFRASTRUCTURE.md       # Ops & deployment (spot recovery, dashboards, cost)
+├── STATUS.md               # Live training status and environment details
 ├── requirements.txt
 ├── setup.py
 ├── configs/
-│   ├── tiny.yaml
-│   ├── small.yaml
-│   └── medium.yaml
+│   └── tiny.yaml           # GPT-2 Small training config
 ├── src/
-│   ├── model/              # Architecture
-│   ├── training/           # Training loops
-│   ├── inference/          # Generation pipelines
-│   ├── data/               # Data loading
-│   └── evaluation/         # Benchmarks & metrics
-├── scripts/                # Shell scripts & job launchers
-├── notebooks/              # Analysis only
-├── tests/                  # Unit tests
-└── paper/                  # Draft & figures
+│   ├── model/              # Architecture (dual_process_gpt2.py, masking.py)
+│   ├── training/           # Training loop (joint_trainer.py)
+│   ├── inference/          # Generation pipelines (generator.py)
+│   ├── data/               # Data loading (openwebtext.py)
+│   └── evaluation/         # Eval & metrics (evaluator.py, metrics.py)
+├── scripts/                # Benchmarks & data preprocessing
+├── tests/                  # pytest test suite
+├── bootstrap.sh            # Autonomous EC2 spot recovery
+├── web_dashboard.py        # Live web dashboard (Flask + SSE)
+├── monitor.sh              # Terminal training monitor (ANSI)
+└── dashboard.py            # Curses TUI job launcher
 ```
 
 ## GPU Environment
@@ -86,6 +88,15 @@ dual-process-model/
 - "Scaling Diffusion Language Models via Adaptation from Autoregressive Models" (ICLR 2025) — DiffuGPT
 - nanoGPT by Karpathy — clean GPT-2 reference implementation
 - "Chain of Thought Monitorability" (arxiv 2507.11473) — safety context
+
+## Documentation
+
+| Document | Contents |
+|----------|----------|
+| [README.md](README.md) | Research narrative — abstract, motivation, related work, architecture, results, reproducibility |
+| [INFRASTRUCTURE.md](INFRASTRUCTURE.md) | Operational details — AWS architecture, spot recovery, bootstrap, dashboards, cost analysis |
+| [STATUS.md](STATUS.md) | Live training status, environment versions, completed milestones, next steps |
+| [CLAUDE.md](CLAUDE.md) | This file — project conventions, code standards, GPU environment |
 
 ## Current Training Status (2026-03-01)
 

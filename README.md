@@ -4,14 +4,44 @@
 
 **[Live Dashboard](https://train.bitbanshee.com)** | **[siliconstrategy.ai](https://siliconstrategy.ai)**
 
-A research project exploring **dual-process language models** — a single Transformer that operates in two cognitive modes inspired by Kahneman's System 1 / System 2 framework from *Thinking, Fast and Slow*.
+## Abstract
 
-- **System 1 (Diffusion)**: Fast, parallel token generation via masked diffusion. Bidirectional attention. Default mode.
-- **System 2 (Autoregressive)**: Slow, sequential token generation via standard causal LM. Escalation mode.
+We investigate whether a single Transformer can jointly learn autoregressive and masked diffusion objectives through shared weights, producing a dual-process language model inspired by Kahneman's System 1 / System 2 framework. The architecture uses a trained confidence head to route between fast parallel generation (System 1, bidirectional diffusion) and slow sequential generation (System 2, causal autoregressive), with the only architectural difference between modes being the attention mask. Early results on GPT-2 Small (124M parameters, 20% through training) show that the confidence head achieves AUROC 0.79 in distinguishing correct from incorrect System 1 predictions, validating the core routing mechanism, while AR perplexity remains within 85% of the pretrained baseline despite objective interference.
 
-A trained **confidence head** decides whether System 1's output is trustworthy or whether to escalate to System 2. This is a System 1-led architecture — diffusion generates first, autoregressive reasoning only engages when confidence is low.
+## Motivation
 
-The key insight: both modes share the same Transformer weights. The only difference between them is the attention mask (bidirectional vs. causal). Joint training with both objectives produces weights that work in either mode.
+Large language models generate text autoregressively — one token at a time, left to right. This is reliable but inherently sequential: every token must wait for the previous one. For many routine completions, this sequential deliberation is unnecessary.
+
+Kahneman's *Thinking, Fast and Slow* (2011) describes two cognitive systems in human reasoning: System 1 operates quickly and automatically with little effort, while System 2 allocates attention to effortful mental activities. We hypothesize that language models could benefit from a similar division — using a fast, parallel generation mode for routine text and reserving expensive sequential generation for passages that require careful reasoning.
+
+This project tests that hypothesis by training a single GPT-2 model with two objectives simultaneously:
+
+- **System 1 (Masked Diffusion)**: Predicts all masked tokens in parallel using bidirectional attention, following the LLaDA framework (Nie et al., 2025). Fast but less precise.
+- **System 2 (Autoregressive)**: Standard left-to-right next-token prediction with causal attention. Slow but reliable.
+
+Both modes share the same Transformer weights — the only difference is the attention mask (bidirectional vs. causal). A trained confidence head learns to predict whether System 1's predictions are correct, enabling selective escalation to System 2 only when needed. The key question is whether shared weights can serve both objectives without catastrophic interference, and whether a lightweight confidence head can reliably mediate between the two modes.
+
+## Related Work
+
+### Dual-Process Theory in AI
+
+The dual-process framework originates from cognitive psychology (Kahneman, 2011; Sloman, 1996; Evans, 2003). Several recent works have applied this metaphor to neural networks, though typically as separate models rather than shared weights. Our approach unifies both "systems" in a single architecture where the only difference is the attention mask.
+
+### Speculative Decoding
+
+Speculative decoding (Leviathan et al., 2023; Chen et al., 2023) uses a small draft model to propose tokens that a larger model verifies in parallel. Our architecture inverts this pattern — the "fast" mode is not a smaller model but the same model with a different attention mask, and escalation is triggered by a learned confidence signal rather than verification rejection.
+
+### Discrete Diffusion for Text
+
+Masked diffusion language models have recently shown strong results: Austin et al. (2021) introduced D3PM for discrete diffusion, LLaDA (Nie et al., 2025) demonstrated masked diffusion at the 8B parameter scale, MDLM (Lou et al., 2024) and SEDD (Sahoo et al., 2024) explored alternative noise schedules and score-based formulations. We adopt LLaDA's masking strategy but apply it jointly with an autoregressive objective on shared weights, which to our knowledge has only been explored by Dual Language Models (Zheng et al., 2024).
+
+### Confidence-Based Routing
+
+Early exit mechanisms (Schuster et al., 2022) allow models to skip computation for easy inputs. Routing-based approaches (Liu et al., 2024) direct inputs to specialized sub-networks. Our confidence head serves a similar gating function but routes between generation *modes* (parallel vs. sequential) rather than between model components.
+
+### Multi-Objective Training
+
+T5 (Raffel et al., 2020) demonstrated that a single model can learn multiple objectives through multi-task training. Our joint training objective combines autoregressive, diffusion, and confidence losses with tunable weights, raising similar questions about objective interference and gradient balancing.
 
 ## Architecture
 
@@ -72,90 +102,53 @@ All experiments use the GPT-2 family with the same tokenizer (50,257 vocab):
 
 All models initialize from HuggingFace pretrained weights (not trained from scratch).
 
-## Project Structure
+## Training
 
-```
-KahnemanHybridExperiment/
-├── configs/
-│   └── tiny.yaml                    # GPT-2 Small training config
-├── scripts/
-│   ├── benchmark.py                 # LAMBADA + WikiText-103 evaluation
-│   ├── compare_systems.py           # System 1 vs 2 analysis
-│   ├── lean_preprocess.py           # Memory-efficient tokenization
-│   └── prepare_openwebtext.py       # Streaming data preprocessing
-├── src/
-│   ├── model/
-│   │   ├── dual_process_gpt2.py     # DualProcessGPT2 model
-│   │   └── masking.py               # LLaDA-style masked diffusion
-│   ├── training/
-│   │   └── joint_trainer.py         # Joint training loop
-│   ├── evaluation/
-│   │   ├── evaluator.py             # Eval loop (perplexity, accuracy, calibration)
-│   │   └── metrics.py               # AUROC, ECE implementations
-│   ├── inference/
-│   │   └── generator.py             # System 1, System 2, Hybrid generation
-│   ├── data/
-│   │   └── openwebtext.py           # Memmap + HuggingFace data loading
-│   └── utils/
-│       └── s3_sync.py               # Non-blocking S3 uploads, spot termination handler
-├── tests/
-│   ├── test_model.py                # Architecture, shapes, gradient flow, shared weights
-│   ├── test_training.py             # LR schedule, warmup
-│   ├── test_evaluation.py           # AUROC, ECE, full eval integration
-│   ├── test_data.py                 # Memmap dataset, chunking, dtypes
-│   ├── test_benchmark.py            # LAMBADA, WikiText end-to-end
-│   ├── test_compare.py              # System comparison analyses
-│   └── test_inference.py            # All three generation modes
-├── bootstrap.sh                     # Autonomous EC2 spot recovery (8 steps)
-├── sync-checkpoints.sh              # S3 artifact sync daemon
-├── update-dns.sh                    # Route53 DNS auto-update
-├── update-spot-price.sh             # Spot price monitoring (cron + IMDSv2)
-├── web_dashboard.py                 # Live web dashboard (Flask + SSE + Chart.js)
-├── monitor.sh                       # Terminal training monitor (bash + ANSI)
-├── dashboard.py                     # Curses TUI — job launcher + live monitor
-├── requirements.txt
-└── setup.py
-```
+### Data
 
-## Training Data
-
-[OpenWebText](https://huggingface.co/datasets/openwebtext) — an open-source recreation of OpenAI's WebText corpus.
+[OpenWebText](https://huggingface.co/datasets/openwebtext) (Gokaslan & Cohen, 2019) — an open-source recreation of OpenAI's WebText corpus.
 
 - ~8M documents, ~9B tokens after GPT-2 BPE tokenization
 - Stored as flat uint16 binary files for zero-copy memmap loading
 - 5,000-document eval split from the final shard
 - Preprocessing via `scripts/lean_preprocess.py` (reads cached parquet shards one at a time to stay under 16GB RAM)
 
-## Evaluation
+### Configuration
 
-### Internal Metrics (computed every 1,000 steps)
+Key hyperparameters for the Tiny (GPT-2 Small) config (`configs/tiny.yaml`):
+
+| Parameter | Value |
+|-----------|-------|
+| Batch size | 4 (× 8 gradient accumulation = 32 effective) |
+| Max steps | 50,000 |
+| Learning rate | 3e-4 → 3e-5 (cosine decay) |
+| Warmup steps | 2,000 |
+| Weight decay | 0.1 |
+| Precision | bfloat16 |
+| Optimizer | AdamW (β₁=0.9, β₂=0.95) |
+| Gradient clipping | 1.0 |
+| Mask ratio range | 0.1 – 1.0 |
+| Checkpoint interval | Every 1,000 steps |
+| Eval interval | Every 1,000 steps |
+
+### Evaluation Protocol
+
+**Internal metrics** (computed every 1,000 steps on held-out eval split):
 
 | Metric | Description |
 |--------|-------------|
 | **AR Perplexity** | exp(mean AR loss) — System 2 language modeling quality |
 | **Diffusion Loss** | Mean cross-entropy on masked positions — System 1 quality |
 | **S1 Token Accuracy** | Fraction of masked tokens correctly predicted by System 1 |
-| **Confidence Accuracy** | Binary accuracy of the confidence head (threshold 0.5) |
-| **Confidence ECE** | Expected Calibration Error — how well confidence matches actual accuracy |
 | **Confidence AUROC** | Area Under ROC Curve for confidence as a classifier of correct/incorrect predictions |
+| **Confidence ECE** | Expected Calibration Error — how well confidence matches actual accuracy |
 
-### External Benchmarks
+**External benchmarks** (at training completion):
 
-**LAMBADA** (last-word prediction):
-- System 2: Autoregressive accuracy on the final word
-- System 1: Mask the final word tokens, predict via bidirectional diffusion
-- System 2 perplexity on LAMBADA sequences
-
-**WikiText-103** (language modeling):
-- System 2: Standard autoregressive perplexity
-- System 1: Diffusion loss with 50% masking
-
-### System Comparison Analysis
-
-- Escalation rates at varying confidence thresholds
-- Throughput comparison (tokens/sec) across generation modes
-- Quality comparison of generated text (perplexity)
-- Confidence calibration analysis (ECE, AUROC, mean confidence)
+| Benchmark | System 2 Metric | System 1 Metric |
+|-----------|----------------|----------------|
+| **LAMBADA** | Last-word prediction accuracy | Masked last-word prediction accuracy |
+| **WikiText-103** | Standard AR perplexity | Diffusion loss (50% masking) |
 
 ## Results
 
@@ -165,17 +158,15 @@ KahnemanHybridExperiment/
 
 ### Success Criteria
 
-The experiment tests whether a single Transformer can learn both AR and diffusion objectives with shared weights, and whether a confidence head can learn to mediate between them. These are the target metrics at training completion (step 50,000):
-
 | Metric | Target | Rationale |
 |--------|--------|-----------|
-| **AR Perplexity (WikiText-103)** | < 40 | Pretrained GPT-2 Small baseline is ~31.5. Joint training adds overhead; staying within ~25% indicates the AR objective isn't degraded by weight sharing. |
-| **S1 Token Accuracy** | > 40% | System 1 should predict masked tokens well above random (~2%). LLaDA-style diffusion on GPT-2 scale should reach meaningful accuracy. |
+| **AR Perplexity** | < 40 | Pretrained GPT-2 Small baseline is ~31.5. Staying within ~25% indicates the AR objective isn't degraded by weight sharing. |
+| **S1 Token Accuracy** | > 40% | System 1 should predict masked tokens well above random (~2%). |
 | **Diffusion Loss** | < 4.0 | Steady decline from initial ~7.8 should continue as the bidirectional objective converges. |
 | **Confidence AUROC** | > 0.75 | The confidence head must reliably separate correct from incorrect System 1 predictions to make hybrid escalation useful. |
-| **Confidence ECE** | < 0.05 | Calibration — predicted confidence should match actual accuracy. Already well under target. |
-| **LAMBADA Accuracy (System 2)** | > 30% | Pretrained GPT-2 Small achieves ~36%. Joint training should preserve most of this capability. |
-| **Hybrid Escalation** | Measurable improvement | Hybrid mode (System 1 + selective System 2 escalation) should outperform System 1 alone, validating the dual-process architecture. |
+| **Confidence ECE** | < 0.05 | Predicted confidence should match actual accuracy. |
+| **LAMBADA Accuracy** | > 30% | Pretrained GPT-2 Small achieves ~36%. Joint training should preserve most of this capability. |
+| **Hybrid Escalation** | Measurable improvement | Hybrid mode should outperform System 1 alone, validating the dual-process architecture. |
 
 ### Eval Metrics Over Training
 
@@ -209,278 +200,132 @@ Steps 50–7,000 from corrected re-evaluation (2026-03-01). Steps 8,000+ evaluat
 ### Observations
 
 - **AUROC crossed the 0.75 target at step 8,000** and continues to climb (0.791 at step 10,000). The confidence head can now reliably distinguish correct from incorrect System 1 predictions, which validates the hybrid escalation mechanism. This is a key milestone — the dual-process architecture's core hypothesis (that a confidence head can mediate between fast and slow modes) is confirmed.
-- **AR perplexity** started at ~22 (better than pretrained GPT-2 Small's ~31.5 on WikiText-103) and has risen to ~26.5 by step 10,000. This upward drift is caused by objective interference — the diffusion loss (~5.4) contributes ~1.6&times; more gradient than the AR loss (~3.3) at equal weights (&lambda;=1.0), pulling shared weights toward bidirectional prediction. The model remains well within the < 40 target. The rate of drift is slowing (~0.5 PPL per 1k steps early &rarr; ~0.3 per 1k steps recently).
-- **Diffusion loss** continues its steady decline (7.91 &rarr; 5.41 over 10k steps), with 64% of the reduction toward the 4.0 target achieved. The rate has slowed from ~0.4/1k steps (early) to ~0.15/1k steps (recent), suggesting the target may be reached around step 20–25k.
+- **AR perplexity** started at ~22 (better than pretrained GPT-2 Small's ~31.5 on WikiText-103) and has risen to ~26.5 by step 10,000. This upward drift is caused by objective interference — the diffusion loss (~5.4) contributes ~1.6× more gradient than the AR loss (~3.3) at equal weights (λ=1.0), pulling shared weights toward bidirectional prediction. The model remains well within the < 40 target. The rate of drift is slowing (~0.5 PPL per 1k steps early → ~0.3 per 1k steps recently).
+- **Diffusion loss** continues its steady decline (7.91 → 5.41 over 10k steps), with 64% of the reduction toward the 4.0 target achieved. The rate has slowed from ~0.4/1k steps (early) to ~0.15/1k steps (recent), suggesting the target may be reached around step 20–25k.
 - **S1 token accuracy** is accelerating — grew from 11.8% at step 7,000 to 14.7% at step 10,000 (+2.9% in 3k steps vs +1.8% in the prior 3k steps). The 40% target will require significant further training but the trajectory is encouraging.
 - **Confidence ECE** remains low (< 0.017), well under the 0.05 target. The confidence head is well-calibrated throughout training.
-- **Confidence accuracy** continues its expected decline (96.3% &rarr; 87.7%) as System 1 improves and the binary classification task becomes harder.
-- **Spot resilience** validated across 4 runs and multiple recovery cycles — bootstrap autonomously recovers all services with zero manual intervention.
 
-### Current Training Metrics (Live)
+## Baselines & Ablations
 
-At step ~10,200 (cosine decay phase, LR 2.81e-4):
+*Planned for training completion. These comparisons will quantify the cost and benefit of joint training.*
 
-| Metric | Value | RAG Status |
-|--------|-------|------------|
-| AR Loss | 3.31 | Amber (target: < 3.0) |
-| Diff Loss | 5.24 | Amber (target: < 5.0) |
-| Conf Acc | 87.7% | Amber (target: > 90%) |
-| S1 Acc | 14.7% | Red (target: > 40%) |
-| AUROC | 0.791 | **Green** (target: > 0.75) |
+### Baselines
 
-### Remaining Benchmarks
+| Baseline | Description | Purpose |
+|----------|-------------|---------|
+| Pretrained GPT-2 | Off-the-shelf GPT-2 Small (no fine-tuning) | Upper bound for AR perplexity, LAMBADA accuracy |
+| AR-only fine-tuned | GPT-2 Small fine-tuned on OpenWebText with AR loss only | Measures the cost of adding the diffusion objective |
+| Diffusion-only | GPT-2 Small trained with diffusion loss only (no AR) | Measures the cost of adding the AR objective |
 
-These will be run at training completion (step 50,000):
+### Ablations
 
-- **LAMBADA** — last-word prediction accuracy (System 1 vs System 2 vs Hybrid)
-- **WikiText-103** — standard perplexity benchmark
-- **System Comparison** — escalation rates, throughput, quality across generation modes
-- **Confidence Calibration** — full analysis at final checkpoint
+| Ablation | Variable | Purpose |
+|----------|----------|---------|
+| Loss weight sweep | λ_ar, λ_diff ∈ {0.5, 1.0, 2.0} | Quantify objective interference, find optimal balance |
+| Confidence head depth | 1, 2, 3 layers | Minimum capacity needed for reliable routing |
+| Mask schedule | Uniform vs. cosine vs. linear | Effect on diffusion convergence rate |
 
-## Monitoring & Dashboards
+## Generated Samples
 
-Three monitoring interfaces share the same on-disk data sources but serve different use cases.
+*Samples will be added at steps 25,000 and 50,000 to qualitatively assess generation quality across all three inference modes (System 1, System 2, Hybrid).*
 
-### Data Flow
+## Planned Work
 
-```
-joint_trainer.py
-  ├─ wandb output.log ──────── step lines (ar_loss, diff_loss, conf_acc, lr, time)
-  │                             [eval] lines (ar_ppl, diff_loss, s1_tok_acc, conf_acc, conf_ece, conf_auroc)
-  ├─ eval_metrics/*.json ────── one JSON per eval checkpoint
-  ├─ checkpoints/*.pt ───────── model + optimizer state
-  └─ configs/tiny.yaml ──────── training hyperparameters
+- [ ] Complete training run to step 50,000
+- [ ] Run LAMBADA and WikiText-103 benchmarks at final checkpoint
+- [ ] Hybrid escalation evaluation — System 1 + selective System 2 at varying confidence thresholds
+- [ ] Full confidence calibration analysis at final checkpoint
+- [ ] Ablation experiments (loss weight sweep, confidence head depth, mask schedule) if compute budget permits
+- [ ] Scale to GPT-2 Medium (355M) tier
 
-/tmp/spot_price.json ────────── spot pricing (written by cron via update-spot-price.sh)
-/tmp/bootstrap_status.json ──── bootstrap progress (written by bootstrap.sh)
-EC2 IMDS v2 ─────────────────── instance type, lifecycle, AZ, boot time
-nvidia-smi ──────────────────── GPU util, VRAM, temp, power
-```
+## Negative Results & Lessons Learned
 
-### web_dashboard.py — Live Web Dashboard
+Documenting failures and unexpected behaviors is as important as reporting successes.
 
-![ML Lab Dashboard](static/ml-lab-dashboard.png)
+### Objective Interference
 
-Single-file Flask application (1,600 lines) serving an inline HTML/CSS/JS dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Designed for remote monitoring over CloudFront.
+AR perplexity drifts upward during training (22 → 26.5 over 10k steps) despite starting better than the pretrained baseline. Analysis shows the diffusion loss contributes ~1.6× more gradient magnitude than the AR loss at equal λ=1.0 weights, pulling shared weights toward bidirectional prediction at the expense of causal modeling. This is a known challenge in multi-objective training and motivates the planned loss weight ablation.
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Flask, Server-Sent Events (SSE) at `/stream` (10s interval) |
-| Frontend | Vanilla JS, Chart.js (loss curves + eval metrics), inline CSS |
-| Caching | Per-key TTL cache (2–60s) to avoid re-parsing on every SSE push |
-| Proxy | nginx (HTTP, port 80) → CloudFront (TLS termination) → `train.bitbanshee.com` |
+### Evaluation Bug: Double Label Shifting
 
-**Key features:**
-- **Live metrics cards** (6 tiles: AR Loss, Diff Loss, Conf Acc, AUROC, S1 Acc, LR) with RAG color coding and sparklines
-- **Loss curves chart** — AR loss + diffusion loss over training steps, auto-refreshes on new data
-- **Eval metrics chart** — S1 token accuracy, AUROC, AR perplexity; filtered to current run only
-- **GPU gauges** — utilization, VRAM, temperature, power with color thresholds
-- **Spot cost tracking** — live spot pricing, accumulated cost, projected run total
-- **Bootstrap progress panel** — step-by-step instance boot status (auto-hides when complete)
-- **Infrastructure status** — trainer/sync daemon health, checkpoint list, next milestones
+The evaluator, benchmark, and system comparison scripts all manually shifted labels before passing them to `compute_ar_loss()`, which internally calls `GPT2LMHeadModel.forward(labels=...)` — a function that auto-shifts labels. The double shift caused the model to predict 2 tokens ahead, inflating AR perplexity by ~1000× (showing ~20,000 instead of ~22–25). The bug was caught on 2026-03-01 by comparing eval perplexity against training loss. All 9 historical checkpoints were re-evaluated using `scripts/reeval_checkpoints.py`. Lesson: always validate eval metrics against training metrics for consistency.
 
-**API endpoints:**
+### Spot Instance Recovery
 
-| Endpoint | Description |
-|----------|------------|
-| `GET /api/status` | Full status payload (training, eval, GPU, cost, infra, bootstrap) |
-| `GET /api/history` | Training step data for loss chart |
-| `GET /api/eval/history` | Merged eval JSONs + log-parsed eval lines |
-| `GET /stream` | SSE stream — pushes `/api/status` every 10s |
-| `POST /api/spot-price` | Accepts spot price data from external updater (token-auth) |
+Training across multiple spot instances required building a fully autonomous bootstrap system (15 steps) to handle instance termination and recovery. The system was battle-tested across 4 recovery cycles. Key failure modes encountered and fixed: `crontab -l` returning exit code 1 under `set -o pipefail`, `pip install flask` breaking due to blinker version conflicts, and empty spot price API results crashing the price updater. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for full details.
 
-### monitor.sh — Terminal Dashboard
+## Reproducibility
 
-Bash script (430 lines) rendering a full-screen ANSI terminal dashboard. Same data sources as the web dashboard, but parsed directly in bash with `grep`/`bc`/`python3` one-liners. Designed for SSH sessions on the GPU instance.
+| Aspect | Details |
+|--------|---------|
+| **Hardware** | NVIDIA A10G (24GB VRAM), single GPU, AWS g5.2xlarge |
+| **Software** | PyTorch 2.6, transformers 5.2, Python 3.12 |
+| **Data** | OpenWebText (Gokaslan & Cohen, 2019), ~9B tokens |
+| **Config** | `configs/tiny.yaml` — all hyperparameters specified |
+| **Checkpoints** | Saved every 1,000 steps to S3, available on request |
+| **Random seed** | 42 (fixed for reproducibility) |
+| **Precision** | bfloat16 mixed precision |
+| **Code** | [github.com/BITBANSHEE-C137/KahnemanHybridExperiment](https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment) |
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  ◆ ML Training Dashboard                              14:32:08 UTC  │
-│  ◆ Progress    1,100/50,000  warmup  1h 2m elapsed  46h remaining   │
-│    ▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 2%   │
-│  ◆ Metrics                                                          │
-│    AR Loss   3.1242  ▁▂▃▄▅▆▇█ ↓      Conf Acc  0.9506             │
-│    Diff Loss 6.8470  ▁▂▃▄▅▆▇█ ↓      LR        1.65e-04           │
-│  ◆ GPU  NVIDIA A10G                                                 │
-│    Util  ████████░░ 82%      VRAM  ████████░░ 18.2/22G             │
-│    Temp  ███░░░░░░░ 34°C     Power ██████░░░░ 138/300W             │
-│  ◆ Eval  step 1000                                                  │
-│    AR PPL 20575   S1 Acc 4.9%   AUROC 0.550 ████░░   ECE 0.0028   │
-│  ◆ Cost  g5.xlarge · spot · us-east-1a · up 1h 5m                  │
-│    On-Demand  $1.0060/hr  $1.04  proj $47.28                       │
-│    Spot       $0.4253/hr  $0.44  proj $19.99                       │
-│    Savings    56.7%       $0.60  proj $27.29                       │
-│  ◆ Infra  ● trainer ● sync                                         │
-│    next eval 2000 in 900  ckpt 2000 in 900  warmup ends 2000       │
-│  ──────────────────────────────────────────────────────────────────  │
-│  ◆ Log                                                              │
-│    step: 1100 | ar_loss: 3.1242 | diff_loss: 6.8470 | ...          │
-│  ──────────────────────────────────────────────────────────────────  │
-│  refresh 15s  q=quit r=refresh                                      │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-**Features:** Progress bar, inline sparklines with trend arrows, GPU gauges with color thresholds, spot cost tracking, eval data filtered to current run only, auto-refresh with keyboard controls.
-
-```bash
-./monitor.sh        # 15s refresh (default)
-./monitor.sh 5      # 5s refresh
-```
-
-### dashboard.py — Curses Job Manager TUI
-
-Python curses application (880 lines) for interactive job management. Launches training, smoke tests, or pytest from a menu and monitors the running process with live output, GPU stats, and parsed metrics.
-
-```bash
-python dashboard.py              # Interactive menu
-python dashboard.py --job tiny   # Launch training directly
-python dashboard.py --job smoke  # Launch smoke test
-python dashboard.py --job test   # Launch pytest
-```
-
-### Comparison
-
-| Feature | web_dashboard.py | monitor.sh | dashboard.py |
-|---------|-----------------|------------|-------------|
-| Access | Browser (remote) | SSH terminal | SSH terminal |
-| Charts | Chart.js (loss + eval) | Sparklines (ANSI) | — |
-| RAG indicators | Color-coded metric cards | Color-coded gauges | — |
-| Cost tracking | Full (on-demand + spot) | Full | — |
-| Bootstrap status | Progress panel | — | — |
-| Job control | View only | View only | Launch + monitor |
-| Dependencies | Flask, nginx, CloudFront | bash, bc, python3 | Python curses |
-
-## Infrastructure
-
-### AWS Setup
-
-- **Compute**: EC2 Spot Fleet (g5.2xlarge / g6.xlarge) with NVIDIA A10G or L4 GPUs
-- **Storage**: Instance NVMe for fast I/O, S3 for persistence (`s3://ml-lab-004507070771/dual-system-research-data/`)
-- **Secrets**: AWS Secrets Manager for W&B and HuggingFace tokens
-- **Tracking**: [Weights & Biases](https://wandb.ai) for real-time experiment logging
-- **CDN/TLS**: CloudFront (`EGWW28IMM7U2T`) → ACM certificate → `train.bitbanshee.com`. Origin failover to S3 static page when instance is down.
-- **Dashboard**: [train.bitbanshee.com](https://train.bitbanshee.com) — live web UI with training progress, GPU stats, loss curves, and cost tracking
-
-### Spot Instance Resilience
-
-Training runs on spot instances with three layers of protection:
-
-1. **S3 Sync Daemon** (`sync-checkpoints.sh`): Uploads checkpoints, logs, metrics, and preprocessed data to S3 every 60 seconds.
-2. **SIGTERM Handler** (`SpotTerminationHandler`): Catches the 2-minute termination warning and performs a final S3 sync before the instance dies.
-3. **Checkpoint Resume** (`find_latest_checkpoint`): On startup, checks both local disk and S3 for the latest checkpoint, downloads if needed, and resumes training from that step.
-
-### Bootstrap
-
-`bootstrap.sh` handles full autonomous instance setup in 15 steps with real-time status tracking (written to `/tmp/bootstrap_status.json` for the dashboard to display):
-
-| Step | Action | Notes |
-|------|--------|-------|
-| 0 | NVMe ephemeral storage | Create data directories on fast local disk |
-| 1 | Fetch secrets | W&B, HuggingFace, dashboard tokens from Secrets Manager |
-| 2 | Configure environment | `.bashrc` env vars, git credentials |
-| 3 | Pull latest code | `git pull --ff-only` |
-| 4 | Restore artifacts from S3 | Checkpoints, logs, eval metrics, benchmarks (**bottleneck: ~3 min**) |
-| 5 | Sync preprocessed data | Tokenized training data from S3 |
-| 6 | Fix file ownership | S3 restores as root |
-| 7 | Update CloudFront DNS | `origin.train.bitbanshee.com` A record → instance IP |
-| 8 | Start sync daemon | `sync-checkpoints.sh` (60s interval) |
-| 9 | Install nginx | apt install (if missing) |
-| 10 | Configure nginx | HTTP-only reverse proxy (CloudFront handles TLS) |
-| 11 | Install Flask | pip install (if missing) |
-| 12 | Start web dashboard | Flask on :5000 |
-| 13 | Setup spot price updater | Initial run + cron every 5 min |
-| 14 | Launch training | tmux session, auto-resumes from latest checkpoint |
-
-Pulled from S3 on every boot (`s3://ml-lab-004507070771/dual-system-research-data/deploy/bootstrap.sh`). Tested across multiple spot recovery cycles with zero manual intervention.
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.11+
-- NVIDIA GPU with CUDA support
-- AWS credentials (for S3 sync, optional)
-- W&B account (for experiment tracking, optional)
-
-### Installation
+To reproduce from scratch:
 
 ```bash
 git clone https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment.git
 cd KahnemanHybridExperiment
-pip install -r requirements.txt
-pip install -e .
-```
-
-### Run Tests
-
-```bash
-pytest tests/ -v
-```
-
-### Smoke Test (< 5 minutes on GPU)
-
-```bash
-python -m src.training.joint_trainer --config configs/tiny.yaml --smoke_test
-```
-
-### Full Training
-
-```bash
-# Preprocess data (one-time, ~5 hours)
-python scripts/lean_preprocess.py
-
-# Train
+pip install -r requirements.txt && pip install -e .
+python scripts/lean_preprocess.py          # ~5 hours, one-time
 python -m src.training.joint_trainer --config configs/tiny.yaml
 ```
 
-### Benchmarks
+## Project Structure
 
-```bash
-python scripts/benchmark.py --checkpoint checkpoints/step_50000.pt --config configs/tiny.yaml
-python scripts/compare_systems.py --checkpoint checkpoints/step_50000.pt --config configs/tiny.yaml
+```
+KahnemanHybridExperiment/
+├── configs/
+│   └── tiny.yaml                    # GPT-2 Small training config
+├── scripts/
+│   ├── benchmark.py                 # LAMBADA + WikiText-103 evaluation
+│   ├── compare_systems.py           # System 1 vs 2 analysis
+│   ├── lean_preprocess.py           # Memory-efficient tokenization
+│   └── prepare_openwebtext.py       # Streaming data preprocessing
+├── src/
+│   ├── model/
+│   │   ├── dual_process_gpt2.py     # DualProcessGPT2 model
+│   │   └── masking.py               # LLaDA-style masked diffusion
+│   ├── training/
+│   │   └── joint_trainer.py         # Joint training loop
+│   ├── evaluation/
+│   │   ├── evaluator.py             # Eval loop (perplexity, accuracy, calibration)
+│   │   └── metrics.py               # AUROC, ECE implementations
+│   ├── inference/
+│   │   └── generator.py             # System 1, System 2, Hybrid generation
+│   ├── data/
+│   │   └── openwebtext.py           # Memmap + HuggingFace data loading
+│   └── utils/
+│       └── s3_sync.py               # Non-blocking S3 uploads, spot termination handler
+└── tests/                           # pytest test suite
 ```
 
-### Monitoring
+## Infrastructure
 
-**Web:** Visit [train.bitbanshee.com](https://train.bitbanshee.com) for the live web dashboard with charts, GPU stats, and cost tracking.
-
-**Terminal (read-only):**
-```bash
-./monitor.sh        # ANSI dashboard, 15s refresh
-./monitor.sh 5      # 5s refresh
-```
-
-**Terminal (job manager):**
-```bash
-python dashboard.py              # Interactive menu
-python dashboard.py --job tiny   # Launch training directly
-```
-
-## Training Configuration
-
-Key hyperparameters for the Tiny (GPT-2 Small) config:
-
-| Parameter | Value |
-|-----------|-------|
-| Batch size | 4 (× 8 gradient accumulation = 32 effective) |
-| Max steps | 50,000 |
-| Learning rate | 3e-4 → 3e-5 (cosine decay) |
-| Warmup steps | 2,000 |
-| Weight decay | 0.1 |
-| Precision | bfloat16 |
-| Optimizer | AdamW (β₁=0.9, β₂=0.95) |
-| Gradient clipping | 1.0 |
-| Mask ratio range | 0.1 – 1.0 |
-| Checkpoint interval | Every 1,000 steps |
-| Eval interval | Every 1,000 steps |
+Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 checkpoint sync, and a live web dashboard. See **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** for spot recovery architecture, monitoring dashboards, deployment details, and cost analysis.
 
 ## References
 
+- Austin, J., Johnson, D. D., Ho, J., Tarlow, D., & van den Berg, R. (2021). Structured Denoising Diffusion Models in Discrete State-Spaces. *NeurIPS 2021*. [arXiv:2107.03006](https://arxiv.org/abs/2107.03006)
+- Chen, C., Borgeaud, S., Irving, G., Lespiau, J.-B., Sifre, L., & Jumper, J. (2023). Accelerating Large Language Model Decoding with Speculative Sampling. [arXiv:2302.01318](https://arxiv.org/abs/2302.01318)
+- Evans, J. St. B. T. (2003). In two minds: dual-process accounts of reasoning. *Trends in Cognitive Sciences*, 7(10), 454–459.
+- Gokaslan, A., & Cohen, V. (2019). OpenWebText Corpus. [HuggingFace](https://huggingface.co/datasets/openwebtext)
 - Kahneman, D. (2011). *Thinking, Fast and Slow*. Farrar, Straus and Giroux.
-- [Dual Language Models](https://arxiv.org/abs/2512.14549) — shared-weight joint training of AR + diffusion objectives
-- [LLaDA: Large Language Diffusion with mAsking](https://arxiv.org/abs/2502.09992) — masked diffusion for language modeling at scale
-- [DiffuGPT: Scaling Diffusion Language Models via Adaptation from Autoregressive Models](https://openreview.net/forum?id=YOUR_ID) (ICLR 2025)
-- [nanoGPT](https://github.com/karpathy/nanoGPT) — clean GPT-2 reference implementation
+- Leviathan, Y., Kalman, M., & Matias, Y. (2023). Fast Inference from Transformers via Speculative Decoding. *ICML 2023*. [arXiv:2211.17192](https://arxiv.org/abs/2211.17192)
+- Liu, X., et al. (2024). Routing to the Expert: Efficient Reward-guided Ensemble of Large Language Models. [arXiv:2311.08692](https://arxiv.org/abs/2311.08692)
+- Lou, A., Meng, C., & Ermon, S. (2024). Discrete Diffusion Modeling by Estimating the Ratios of the Data Distribution. *ICML 2024*. [arXiv:2310.16834](https://arxiv.org/abs/2310.16834)
+- Nie, S., et al. (2025). Large Language Diffusion Models. [arXiv:2502.09992](https://arxiv.org/abs/2502.09992)
+- Raffel, C., et al. (2020). Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer. *JMLR*, 21(140), 1–67. [arXiv:1910.10683](https://arxiv.org/abs/1910.10683)
+- Sahoo, S., Arriola, M., Schiff, Y., Gokaslan, A., Marroquin, E., Chiu, J. T., Rush, A., & Kuleshov, V. (2024). Simple and Effective Masked Diffusion Language Models. [arXiv:2406.07524](https://arxiv.org/abs/2406.07524)
+- Schuster, T., Fisch, A., Gupta, J., Dehghani, M., Bahri, D., Tran, V. Q., Tay, Y., & Metzler, D. (2022). Confident Adaptive Language Modeling. *NeurIPS 2022*. [arXiv:2207.07061](https://arxiv.org/abs/2207.07061)
+- Sloman, S. A. (1996). The empirical case for two systems of reasoning. *Psychological Bulletin*, 119(1), 3–22.
+- Zheng, K., et al. (2024). Dual Language Models. [arXiv:2512.14549](https://arxiv.org/abs/2512.14549)
 
 ## License
 
