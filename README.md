@@ -6,7 +6,7 @@
 
 ## Abstract
 
-We investigate whether a single Transformer can jointly learn autoregressive and masked diffusion objectives through shared weights, producing a dual-process language model inspired by Kahneman's System 1 / System 2 framework. The architecture uses a trained confidence head to route between fast parallel generation (System 1, bidirectional diffusion) and slow sequential generation (System 2, causal autoregressive), with the only architectural difference between modes being the attention mask. Early results on GPT-2 Small (124M parameters, 20% through training) show that the confidence head achieves AUROC 0.79 in distinguishing correct from incorrect System 1 predictions, validating the core routing mechanism, while AR perplexity remains well below the pretrained GPT-2 Small baseline (26.5 vs 31.5) despite objective interference from joint training.
+We investigate whether a single Transformer can jointly learn autoregressive and masked diffusion objectives through shared weights, producing a dual-process language model inspired by Kahneman's System 1 / System 2 framework. The architecture uses a trained confidence head to route between fast parallel generation (System 1, iterative unmasking) and slow sequential generation (System 2, causal autoregressive), with the only architectural difference between modes being the attention mask. Early results on GPT-2 Small (124M parameters, 20% through training) show that the confidence head achieves AUROC 0.79 in distinguishing correct from incorrect System 1 predictions, validating the core routing mechanism, while AR perplexity remains well below the pretrained GPT-2 Small baseline (26.5 vs 31.5) despite objective interference from joint training.
 
 ## Motivation
 
@@ -65,7 +65,7 @@ T5 (Raffel et al., 2020) demonstrated that a single model can learn multiple obj
 
 ### Mixture-of-Experts and Learned Gating
 
-Mixture-of-experts architectures use learned gating functions to route inputs to specialized sub-networks. Shazeer et al. (2017) introduced sparsely-gated MoE layers with a trainable gating network that selects a subset of expert feedforward blocks per token. Switch Transformers (Fedus et al., 2022) simplified this to top-1 routing, scaling to trillion-parameter models. Our confidence head functions as a binary gate that routes between two "experts" — but rather than selecting between feedforward sub-networks, it selects between inference *strategies* (parallel diffusion vs. sequential autoregressive). The routing decision is made per-token based on learned confidence, analogous to how MoE gates select experts based on learned token representations.
+Mixture-of-experts architectures use learned gating functions to route inputs to specialized sub-networks. Shazeer et al. (2017) introduced sparsely-gated MoE layers with a trainable gating network that selects a subset of expert feedforward blocks per token. Switch Transformers (Fedus et al., 2022) simplified this to top-1 routing, scaling to trillion-parameter models. Our confidence head functions as a binary gate that routes between two "experts" — but rather than selecting between feedforward sub-networks, it selects between inference *strategies* (parallel iterative unmasking vs. sequential autoregressive). The routing decision is made per-token based on learned confidence, analogous to how MoE gates select experts based on learned token representations.
 
 ### Uncertainty Estimation in Neural Networks
 
