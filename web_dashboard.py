@@ -1303,7 +1303,7 @@ const RAG = {
   ar_loss:   { dir: 'lower',  green: 3.0, red: 5.0 },
   diff_loss: { dir: 'lower',  green: 5.0, red: 7.0 },
   conf_acc:  { dir: 'higher', green: 0.90, red: 0.75 },
-  auroc:     { dir: 'higher', green: 0.70, red: 0.55 },
+  auroc:     { dir: 'higher', green: 0.75, red: 0.55 },
 };
 
 // ── UI updater ───────────────────────────────────────────────────────────
