@@ -85,6 +85,8 @@ nvidia-smi ──────────────────── GPU util
 
 ### web_dashboard.py — Live Web Dashboard
 
+![ML Lab Dashboard](static/ml-lab-dashboard.png)
+
 Single-file Flask application (1,600 lines) serving an inline HTML/CSS/JS dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Designed for remote monitoring over CloudFront.
 
 | Layer | Technology |
@@ -117,36 +119,7 @@ Single-file Flask application (1,600 lines) serving an inline HTML/CSS/JS dashbo
 
 ![Terminal Dashboard](static/terminal-dashboard.png)
 
-Bash script (430 lines) rendering a full-screen ANSI terminal dashboard. Same data sources as the web dashboard, but parsed directly in bash with `grep`/`bc`/`python3` one-liners. Designed for SSH sessions on the GPU instance.
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  ◆ ML Training Dashboard                              14:32:08 UTC  │
-│  ◆ Progress    1,100/50,000  warmup  1h 2m elapsed  46h remaining   │
-│    ▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 2%   │
-│  ◆ Metrics                                                          │
-│    AR Loss   3.1242  ▁▂▃▄▅▆▇█ ↓      Conf Acc  0.9506             │
-│    Diff Loss 6.8470  ▁▂▃▄▅▆▇█ ↓      LR        1.65e-04           │
-│  ◆ GPU  NVIDIA A10G                                                 │
-│    Util  ████████░░ 82%      VRAM  ████████░░ 18.2/22G             │
-│    Temp  ███░░░░░░░ 34°C     Power ██████░░░░ 138/300W             │
-│  ◆ Eval  step 1000                                                  │
-│    AR PPL 20575   S1 Acc 4.9%   AUROC 0.550 ████░░   ECE 0.0028   │
-│  ◆ Cost  g5.xlarge · spot · us-east-1a · up 1h 5m                  │
-│    On-Demand  $1.0060/hr  $1.04  proj $47.28                       │
-│    Spot       $0.4253/hr  $0.44  proj $19.99                       │
-│    Savings    56.7%       $0.60  proj $27.29                       │
-│  ◆ Infra  ● trainer ● sync                                         │
-│    next eval 2000 in 900  ckpt 2000 in 900  warmup ends 2000       │
-│  ──────────────────────────────────────────────────────────────────  │
-│  ◆ Log                                                              │
-│    step: 1100 | ar_loss: 3.1242 | diff_loss: 6.8470 | ...          │
-│  ──────────────────────────────────────────────────────────────────  │
-│  refresh 15s  q=quit r=refresh                                      │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-**Features:** Progress bar, inline sparklines with trend arrows, GPU gauges with color thresholds, spot cost tracking, eval data filtered to current run only, auto-refresh with keyboard controls.
+Bash script (430 lines) rendering a full-screen ANSI terminal dashboard. Designed for SSH sessions on the GPU instance.
 
 ```bash
 ./monitor.sh        # 15s refresh (default)
