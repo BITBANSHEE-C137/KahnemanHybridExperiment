@@ -332,6 +332,10 @@ def build_status():
         phase = "warmup" if current_step <= warmup_steps else "cosine_decay"
 
     latest_eval = eval_lines[-1] if eval_lines else None
+    if latest_eval is None:
+        eval_jsons = cached("eval_jsons", 15, read_eval_jsons)
+        if eval_jsons:
+            latest_eval = eval_jsons[-1]
 
     # Live cost recomputation
     inst = dict(instance) if instance else {}
