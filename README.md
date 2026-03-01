@@ -159,7 +159,7 @@ KahnemanHybridExperiment/
 
 ## Results
 
-**Status: Training in progress** — GPT-2 Small (124M), currently at step ~2,300 (4.6%), cosine decay phase (warmup completed at step 2,000). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
+**Status: Training in progress** — GPT-2 Small (124M), currently at step ~7,500 (15%), cosine decay phase (LR 2.91e-4). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
 
 ### Success Criteria
 
@@ -177,7 +177,7 @@ The experiment tests whether a single Transformer can learn both AR and diffusio
 
 ### Eval Metrics Over Training
 
-Data from two training runs. Run 1 reached step 4,000 before spot termination with checkpoint frequency at 1,000 steps. Run 2 resumed from the step 1,000 checkpoint and is ongoing.
+Data from three training runs across multiple spot instances. Run 1 reached step 4,000 before spot termination. Run 2 resumed from the step 1,000 checkpoint and ran to step 2,000. Run 3 resumed from step 2,000 and is ongoing.
 
 | Step | AR PPL | Diff Loss | S1 Tok Acc | Conf Acc | Conf ECE | Conf AUROC | Run |
 |------|--------|-----------|-----------|----------|----------|------------|-----|
@@ -185,40 +185,43 @@ Data from two training runs. Run 1 reached step 4,000 before spot termination wi
 | 100 | 23,331 | 7.5697 | 3.2% | 96.8% | 0.0037 | 0.502 | 1 |
 | 1,000 | 20,575 | 6.7854 | 4.9% | 95.1% | 0.0028 | 0.550 | 2 |
 | 2,000 | 21,752 | 6.5495 | 6.5% | 93.5% | 0.0014 | 0.607 | 2 |
-| 3,000 | 21,412 | 6.5179 | 7.1% | 92.9% | 0.0057 | 0.628 | 1 |
-| 4,000 | 22,406 | 6.2339 | 8.6% | 91.5% | 0.0052 | 0.669 | 1 |
+| 3,000 | 22,828 | 6.5356 | 7.0% | 93.0% | 0.0038 | 0.629 | 3 |
+| 4,000 | 20,156 | 6.2058 | 8.6% | 91.5% | 0.0146 | 0.664 | 3 |
+| 5,000 | 20,283 | 6.0761 | 9.9% | 90.3% | 0.0135 | 0.693 | 3 |
+| 6,000 | 22,486 | 6.1530 | 9.6% | 90.7% | 0.0110 | 0.695 | 3 |
+| 7,000 | 19,562 | 6.0198 | 10.3% | 90.3% | 0.0074 | 0.724 | 3 |
 
 ### Progress vs. Targets
 
 | Metric | Best | Step | Target | Progress |
 |--------|------|------|--------|----------|
-| AR Perplexity | 19,060 | 50 | < 40 | Early — PPL expected to drop sharply past warmup |
-| S1 Token Accuracy | 8.6% | 4,000 | > 40% | 21% of target — 2.5× above random baseline |
-| Diffusion Loss | 6.23 | 4,000 | < 4.0 | 42% of reduction achieved (7.84 &rarr; 6.23 &rarr; 4.0) |
-| Confidence AUROC | 0.669 | 4,000 | > 0.75 | 68% of improvement achieved (0.50 &rarr; 0.67 &rarr; 0.75) |
-| Confidence ECE | 0.003 | 1,000 | < 0.05 | **Met** |
+| AR Perplexity | 19,060 | 50 | < 40 | Early — PPL has not yet begun to decline |
+| S1 Token Accuracy | 10.3% | 7,000 | > 40% | 26% of target — 3× above random baseline |
+| Diffusion Loss | 6.02 | 7,000 | < 4.0 | 47% of reduction achieved (7.84 &rarr; 6.02 &rarr; 4.0) |
+| Confidence AUROC | 0.724 | 7,000 | > 0.75 | 91% of improvement achieved (0.47 &rarr; 0.72 &rarr; 0.75) |
+| Confidence ECE | 0.001 | 2,000 | < 0.05 | **Met** |
 
 ### Observations
 
-- **Diffusion loss** is steadily declining (7.84 &rarr; 6.23 over 4k steps), showing System 1 is learning to predict masked tokens. The rate of decline (~0.4 per 1k steps) suggests the < 4.0 target is reachable by step 10–15k.
-- **S1 token accuracy** has grown 2.5× from random baseline (3.4% &rarr; 8.6%), with consistent improvement at each eval point. The trajectory suggests the bidirectional diffusion objective is converging.
-- **Confidence AUROC** is improving linearly (0.47 &rarr; 0.67, ~0.05 per 1k steps) — the confidence head is learning to distinguish correct from incorrect System 1 predictions, which is critical for the hybrid escalation mechanism. On current trajectory, the 0.75 target is reachable by step ~5,500.
-- **Confidence ECE** remains very low (< 0.006 after initial calibration), already meeting the target since step 100. The confidence head is well-calibrated throughout training.
-- **Confidence accuracy** is gradually declining (96.8% &rarr; 91.5%) as expected — early on, System 1 gets almost nothing right so predicting "wrong" for everything trivially achieves high accuracy. As S1 improves, the classification task becomes harder, and the accuracy/AUROC tradeoff shifts toward more informative predictions.
-- **AR perplexity** is still very high (~20k) — expected during warmup (step 1,500 of 2,000-step warmup) with the learning rate still ramping. Pretrained GPT-2 Small achieves ~31.5 PPL on WikiText-103; meaningful AR improvement typically begins after warmup completes and cosine decay takes effect.
-- **Spot resilience** validated across multiple recovery cycles — bootstrap autonomously recovers all 15 services (training, dashboard, sync, DNS, CloudFront origin, spot pricing) with zero manual intervention.
+- **Confidence AUROC** is approaching target: 0.47 &rarr; 0.72 over 7k steps (91% of the way to the 0.75 target). The confidence head is reliably learning to distinguish correct from incorrect System 1 predictions, which is critical for the hybrid escalation mechanism. On current trajectory, the target should be reached within the next 1–2k steps.
+- **Diffusion loss** continues to decline (7.84 &rarr; 6.02 over 7k steps), showing System 1 is learning to predict masked tokens. The rate of decline has slowed from ~0.4/1k steps (early) to ~0.1/1k steps (recent), which may reflect diminishing returns or the need for more training.
+- **S1 token accuracy** has grown 3× from random baseline (3.4% &rarr; 10.3%), with consistent improvement. The diffusion objective is converging but will need significant further training to approach the 40% target.
+- **Confidence ECE** remains very low (< 0.015), well under the 0.05 target since step 100. The confidence head is well-calibrated throughout training.
+- **Confidence accuracy** has gradually declined from 96.8% to 90.3% as expected — early on, System 1 gets almost nothing right so predicting "wrong" for everything trivially achieves high accuracy. As S1 improves, the classification task becomes harder, and the accuracy/AUROC tradeoff shifts toward more informative predictions.
+- **AR perplexity** remains very high (~19–23k) and is not yet showing a clear downward trend, despite being 5,500 steps into the cosine decay phase. Pretrained GPT-2 Small achieves ~31.5 PPL on WikiText-103. This is the metric to watch — if AR PPL doesn't begin declining in the next few thousand steps, the joint training objective may be interfering with autoregressive learning.
+- **Spot resilience** validated across 3 runs and multiple recovery cycles — bootstrap autonomously recovers all services with zero manual intervention.
 
 ### Current Training Metrics (Live)
 
-At step ~2,300 (cosine decay phase, LR 3.0e-4):
+At step ~7,500 (cosine decay phase, LR 2.91e-4):
 
 | Metric | Value | RAG Status |
 |--------|-------|------------|
-| AR Loss | 3.26 | Amber (target: < 3.0) |
-| Diff Loss | 6.54 | Amber (target: < 5.0) |
-| Conf Acc | 93.5% | Green (target: > 90%) |
-| S1 Acc | 6.5% | Red (target: > 40%) |
-| AUROC | 0.607 | Red (target: > 0.75) |
+| AR Loss | 3.19 | Amber (target: < 3.0) |
+| Diff Loss | 5.78 | Amber (target: < 5.0) |
+| Conf Acc | 90.3% | Green (target: > 90%) |
+| S1 Acc | 10.3% | Red (target: > 40%) |
+| AUROC | 0.724 | Amber (target: > 0.75) |
 
 ### Remaining Benchmarks
 
