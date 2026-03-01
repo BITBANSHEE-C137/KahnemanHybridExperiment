@@ -159,7 +159,7 @@ KahnemanHybridExperiment/
 
 ## Results
 
-**Status: Training in progress** — GPT-2 Small (124M), currently at step ~1,500 (3.0%), warmup phase. Resumed from step 1,000 checkpoint after spot recovery. Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
+**Status: Training in progress** — GPT-2 Small (124M), currently at step ~2,300 (4.6%), cosine decay phase (warmup completed at step 2,000). Track live at [train.bitbanshee.com](https://train.bitbanshee.com).
 
 ### Success Criteria
 
@@ -184,7 +184,7 @@ Data from two training runs. Run 1 reached step 4,000 before spot termination wi
 | 50 | 19,060 | 7.8397 | 3.4% | 96.6% | 0.0499 | 0.467 | 1 |
 | 100 | 23,331 | 7.5697 | 3.2% | 96.8% | 0.0037 | 0.502 | 1 |
 | 1,000 | 20,575 | 6.7854 | 4.9% | 95.1% | 0.0028 | 0.550 | 2 |
-| 2,000 | 25,008 | 6.6630 | 6.0% | 94.0% | 0.0030 | 0.594 | 1 |
+| 2,000 | 21,752 | 6.5495 | 6.5% | 93.5% | 0.0014 | 0.607 | 2 |
 | 3,000 | 21,412 | 6.5179 | 7.1% | 92.9% | 0.0057 | 0.628 | 1 |
 | 4,000 | 22,406 | 6.2339 | 8.6% | 91.5% | 0.0052 | 0.669 | 1 |
 
@@ -210,14 +210,15 @@ Data from two training runs. Run 1 reached step 4,000 before spot termination wi
 
 ### Current Training Metrics (Live)
 
-At step ~1,500 (warmup phase, LR 2.25e-4 ramping to 3.0e-4):
+At step ~2,300 (cosine decay phase, LR 3.0e-4):
 
 | Metric | Value | RAG Status |
 |--------|-------|------------|
-| AR Loss | 3.12 | Amber (target: < 3.0) |
-| Diff Loss | 6.59 | Amber (target: < 5.0) |
-| Conf Acc | 95.1% | Green (target: > 90%) |
-| AUROC | 0.550 | Red (target: > 0.75) |
+| AR Loss | 3.26 | Amber (target: < 3.0) |
+| Diff Loss | 6.54 | Amber (target: < 5.0) |
+| Conf Acc | 93.5% | Green (target: > 90%) |
+| S1 Acc | 6.5% | Red (target: > 40%) |
+| AUROC | 0.607 | Red (target: > 0.75) |
 
 ### Remaining Benchmarks
 
@@ -262,12 +263,11 @@ Single-file Flask application (1,600 lines) serving an inline HTML/CSS/JS dashbo
 | Proxy | nginx (HTTP, port 80) → CloudFront (TLS termination) → `train.bitbanshee.com` |
 
 **Key features:**
-- **Live metrics cards** with RAG (red/amber/green) color coding based on proximity to training targets
+- **Live metrics cards** (6 tiles: AR Loss, Diff Loss, Conf Acc, AUROC, S1 Acc, LR) with RAG color coding and sparklines
 - **Loss curves chart** — AR loss + diffusion loss over training steps, auto-refreshes on new data
 - **Eval metrics chart** — S1 token accuracy, AUROC, AR perplexity; filtered to current run only
-- **Sparklines** on each metric (last 30 data points)
 - **GPU gauges** — utilization, VRAM, temperature, power with color thresholds
-- **Cost tracking** — on-demand vs spot pricing, live savings computation, projected run cost
+- **Spot cost tracking** — live spot pricing, accumulated cost, projected run total
 - **Bootstrap progress panel** — step-by-step instance boot status (auto-hides when complete)
 - **Infrastructure status** — trainer/sync daemon health, checkpoint list, next milestones
 

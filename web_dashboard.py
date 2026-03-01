@@ -610,7 +610,7 @@ body::before {
 }
 .container { position: relative; z-index: 1; }
 .container {
-  max-width: 1400px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 12px;
   overflow: hidden;
@@ -619,21 +619,33 @@ body::before {
 /* Header */
 .header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px 14px 12px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   margin-bottom: 12px;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
-.header h1 { font-size: 20px; font-weight: 600; white-space: nowrap; }
-.header .meta { color: var(--dim); font-size: 15px; }
-.header-links { display: flex; gap: 10px; font-size: 15px; }
-.header-links a { color: var(--accent); text-decoration: none; white-space: nowrap; }
-.header-links a:hover { text-decoration: underline; }
+.header h1 { font-size: 22px; font-weight: 600; white-space: nowrap; }
+.header-sub { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; width: 100%; justify-content: space-between; }
+.header .meta { color: var(--dim); font-size: 14px; }
+.header-links { display: flex; gap: 8px; font-size: 13px; }
+.header-links a {
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  transition: border-color 0.2s, background 0.2s;
+}
+.header-links a:hover {
+  border-color: var(--accent);
+  background: rgba(232, 121, 84, 0.1);
+}
 .pulse {
   display: inline-block;
   width: 8px; height: 8px;
@@ -698,7 +710,7 @@ body::before {
 /* Metric boxes */
 .metrics-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
 }
 .metric-box {
@@ -721,16 +733,11 @@ body::before {
   font-size: 13px;
   color: var(--dim);
   margin-bottom: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .metric-box .value {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .metric-box .sub { font-size: 13px; color: var(--dim); margin-top: 2px; }
 .metric-box canvas { margin-top: 4px; }
@@ -780,7 +787,7 @@ body::before {
 
 /* GPU bars */
 .bar-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
-.bar-label { width: 75px; font-size: 15px; color: var(--dim); flex-shrink: 0; }
+.bar-label { width: 90px; font-size: 15px; color: var(--dim); flex-shrink: 0; }
 .bar-outer {
   flex: 1; height: 16px; min-width: 0;
   background: var(--bg); border-radius: 3px; overflow: hidden;
@@ -791,7 +798,7 @@ body::before {
   display: flex; align-items: center; padding-left: 5px;
   font-size: 12px; font-weight: 600; color: #000;
 }
-.bar-val { width: 80px; text-align: right; font-size: 15px; flex-shrink: 0; white-space: nowrap; }
+.bar-val { width: 110px; text-align: right; font-size: 15px; flex-shrink: 0; white-space: nowrap; }
 
 /* Badges */
 .badge {
@@ -895,6 +902,32 @@ body::before {
   .grid { grid-template-columns: 1fr; }
   .bs-steps { grid-template-columns: 1fr; }
 }
+
+/* Footer */
+.footer {
+  margin-top: 16px;
+  padding: 24px 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 17px;
+  color: var(--dim);
+}
+.footer-links { display: flex; gap: 8px; font-size: 15px; }
+.footer-links a {
+  color: var(--text);
+  text-decoration: none;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  transition: border-color 0.2s, background 0.2s;
+}
+.footer-links a:hover {
+  border-color: var(--accent);
+  background: rgba(232, 121, 84, 0.1);
+}
 </style>
 </head>
 <body>
@@ -902,15 +935,17 @@ body::before {
 
   <!-- Header -->
   <div class="header">
-    <div><h1><span class="pulse" id="pulse"></span>ML Training Dashboard</h1></div>
-    <div class="header-links">
-      <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
-      <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
-      <a href="https://siliconstrategy.ai" target="_blank">siliconstrategy.ai</a>
-    </div>
-    <div class="meta">
-      <span id="conn-status">Connecting...</span> &middot;
-      <span id="timestamp"></span>
+    <h1><span class="pulse" id="pulse"></span>ML Training Dashboard</h1>
+    <div class="header-sub">
+      <div class="header-links">
+        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
+        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
+        <a href="https://siliconstrategy.ai" target="_blank">siliconstrategy.ai</a>
+      </div>
+      <div class="meta">
+        <span id="conn-status">Connecting...</span> &middot;
+        <span id="timestamp"></span>
+      </div>
     </div>
   </div>
 
@@ -967,6 +1002,11 @@ body::before {
           <canvas id="spark-auroc" width="100" height="28"></canvas>
         </div>
         <div class="metric-box">
+          <div class="label">S1 Acc</div>
+          <div class="value" id="m-s1-acc">--</div>
+          <canvas id="spark-s1" width="100" height="28"></canvas>
+        </div>
+        <div class="metric-box">
           <div class="label">LR</div>
           <div class="value" id="m-lr">--</div>
           <canvas id="spark-lr" width="100" height="28"></canvas>
@@ -1014,7 +1054,7 @@ body::before {
 
     <!-- Instance & Cost -->
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px; margin-bottom:8px">
+      <div style="margin-bottom:8px">
         <h2 style="margin-bottom:0">Instance & Cost</h2>
         <div class="inst-row">
           <span class="inst-item"><span class="inst-val" id="inst-type">--</span></span>
@@ -1056,7 +1096,7 @@ body::before {
       </div>
       <div style="margin-bottom:6px">
         <span style="font-size: 15px;color:var(--dim)">Next milestones:</span>
-        <div id="milestones" style="font-size: 15px;margin-top:2px">--</div>
+        <div id="milestones" style="font-size: 14px;margin-top:2px;line-height:1.6">--</div>
       </div>
       <div style="margin-bottom:6px">
         <span style="font-size: 15px;color:var(--dim)">Checkpoints:</span>
@@ -1074,6 +1114,15 @@ body::before {
   <div class="card" style="margin-top:12px">
     <h2>Log Tail</h2>
     <div class="log-box" id="log-tail">--</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>KahnemanHybridExperiment</span>
+    <div class="footer-links">
+      <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
+      <a href="https://www.linkedin.com/in/gwrowe/" target="_blank">LinkedIn</a>
+    </div>
   </div>
 </div>
 
@@ -1123,7 +1172,7 @@ const evalChart = new Chart(document.getElementById('chart-eval'), {
 });
 
 // ── Sparklines ───────────────────────────────────────────────────────────
-const sparkBuffers = { ar: [], diff: [], conf: [], auroc: [], lr: [] };
+const sparkBuffers = { ar: [], diff: [], conf: [], auroc: [], s1: [], lr: [] };
 const SPARK_MAX = 30;
 
 function drawSparkline(canvasId, data, color) {
@@ -1304,6 +1353,7 @@ const RAG = {
   diff_loss: { dir: 'lower',  green: 5.0, red: 7.0 },
   conf_acc:  { dir: 'higher', green: 0.90, red: 0.75 },
   auroc:     { dir: 'higher', green: 0.75, red: 0.58 },
+  s1_acc:   { dir: 'higher', green: 0.10, red: 0.05 },
 };
 
 // ── UI updater ───────────────────────────────────────────────────────────
@@ -1433,11 +1483,23 @@ function updateUI(data) {
 
       setRAG('m-auroc', ev.conf_auroc, RAG.auroc);
     }
+
+    const s1val = ev.s1_tok_acc ?? ev.s1_token_accuracy ?? null;
+    if (s1val != null) {
+      $('m-s1-acc').style.fontSize = '';
+      $('m-s1-acc').textContent = (s1val * 100).toFixed(1) + '%';
+      sparkBuffers.s1.push(s1val);
+      if (sparkBuffers.s1.length > SPARK_MAX) sparkBuffers.s1.shift();
+      drawSparkline('spark-s1', sparkBuffers.s1, '#34d399');
+      setRAG('m-s1-acc', s1val, RAG.s1_acc);
+    }
   } else {
     $('m-conf-acc').textContent = awaitMsg;
     $('m-conf-acc').style.fontSize = '11px';
     $('m-auroc').textContent = awaitMsg;
     $('m-auroc').style.fontSize = '11px';
+    $('m-s1-acc').textContent = awaitMsg;
+    $('m-s1-acc').style.fontSize = '11px';
   }
 
   // Clear eval chart note

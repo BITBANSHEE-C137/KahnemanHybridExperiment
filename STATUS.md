@@ -1,6 +1,6 @@
 # Project Status — Dual-Process Language Model
 
-**Last updated:** 2026-02-28
+**Last updated:** 2026-03-01
 
 ## Live Dashboard
 
@@ -10,21 +10,24 @@
 
 | Metric | Value |
 |---|---|
-| Current step | ~200 / 50,000 (resuming from step 100 checkpoint) |
-| Phase | Warmup (cosine decay begins at step 2,000) |
+| Current step | ~2,300 / 50,000 (4.6%) |
+| Phase | Cosine decay (warmup completed at step 2,000) |
 | Instance | g5.2xlarge (NVIDIA A10G, spot) |
 
 **Note:** Steps 100–4,000+ from the initial run were lost across spot terminations before checkpoint frequency was increased. Checkpoint interval is now every 1,000 steps (was 5,000). The eval history below is from the prior run and represents validated training dynamics.
 
-### Eval History (prior run)
+### Eval History
 
-| Step | AR PPL | Diff Loss | S1 Token Acc | Conf ECE | Conf AUROC |
-|------|--------|-----------|-------------|----------|------------|
-| 1,000 | 22,005 | 6.88 | 5.2% | 0.0002 | 0.548 |
-| 2,000 | 25,008 | 6.66 | 6.0% | 0.0030 | 0.594 |
-| 3,000 | 21,412 | 6.52 | 7.1% | 0.0057 | 0.628 |
+| Step | AR PPL | Diff Loss | S1 Token Acc | Conf Acc | Conf ECE | Conf AUROC | Run |
+|------|--------|-----------|-------------|----------|----------|------------|-----|
+| 50 | 19,060 | 7.8397 | 3.4% | 96.6% | 0.0499 | 0.467 | 1 |
+| 100 | 23,331 | 7.5697 | 3.2% | 96.8% | 0.0037 | 0.502 | 1 |
+| 1,000 | 20,575 | 6.7854 | 4.9% | 95.1% | 0.0028 | 0.550 | 2 |
+| 2,000 | 21,752 | 6.5495 | 6.5% | 93.5% | 0.0014 | 0.607 | 2 |
+| 3,000 | 21,412 | 6.5179 | 7.1% | 92.9% | 0.0057 | 0.628 | 1 |
+| 4,000 | 22,406 | 6.2339 | 8.6% | 91.5% | 0.0052 | 0.669 | 1 |
 
-**Trends:** Diffusion loss steadily declining (7.84 → 6.52). S1 token accuracy doubled from random baseline. Confidence AUROC improving (0.47 → 0.63), indicating the confidence head is learning to distinguish correct from incorrect predictions. These trends are expected to reproduce and continue in the current run.
+**Trends:** Diffusion loss steadily declining (7.84 → 6.23 over 4k steps). S1 token accuracy 2.5× above random baseline. Confidence AUROC improving linearly (0.47 → 0.67). Step 2,000 eval from current run confirms prior trends reproducing.
 
 ## Infrastructure
 
@@ -35,8 +38,8 @@
 | EBS root volume | 100GB | OS + Python 3.12 + ML stack |
 | Ephemeral NVMe | 419GB | `/opt/dlami/nvme` — runtime data |
 | Bootstrap | Autonomous | Fully autonomous spot recovery with TLS cert backup/restore |
-| Web dashboard | Live | [train.bitbanshee.com](https://train.bitbanshee.com) — nginx + Flask |
-| DNS | Automated | Route53 A record updated on boot via bootstrap |
+| Web dashboard | Live | [train.bitbanshee.com](https://train.bitbanshee.com) — CloudFront + nginx + Flask |
+| DNS | Automated | `train.bitbanshee.com` → CloudFront ALIAS; `origin.train.bitbanshee.com` → EC2 A record (bootstrap-managed) |
 | Spot price | Automated | Cron job updates dashboard every 5 minutes |
 | Sync daemon | Active | S3 artifact sync every 60 seconds |
 
@@ -78,6 +81,9 @@
 - [x] Spot price monitoring via cron + IMDSv2 auto-detection
 - [x] TLS cert backup/restore via S3 (handles Let's Encrypt rate limits)
 - [x] Bootstrap battle-tested across 4 spot recovery cycles
+- [x] CloudFront + ACM TLS (no more certbot/Let’s Encrypt)
+- [x] S3 fallback page when instance is down
+- [x] Dashboard UX refresh — larger fonts, narrower layout, footer, S1 Acc tile
 
 ## Next Steps
 
