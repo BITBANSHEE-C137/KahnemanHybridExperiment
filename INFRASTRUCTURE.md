@@ -29,7 +29,7 @@
 
 Training runs on spot instances with three layers of protection:
 
-1. **S3 Sync Daemon** (`sync-checkpoints.sh`): Uploads checkpoints, logs, metrics, and preprocessed data to S3 every 60 seconds.
+1. **S3 Sync Daemon** (`sync-checkpoints.sh`): Uploads checkpoints, logs, metrics, and preprocessed data to S3 every 60 seconds. The daemon runs under `set -uo pipefail` — if an individual `aws s3 sync` call fails (network issues, throttling), that cycle's output is logged but the daemon continues on the next 60-second interval. Training is not blocked by sync failures.
 2. **SIGTERM Handler** (`SpotTerminationHandler` in `src/utils/s3_sync.py`): Catches the 2-minute termination warning and performs a final S3 sync before the instance dies.
 3. **Checkpoint Resume** (`find_latest_checkpoint`): On startup, checks both local disk and S3 for the latest checkpoint, downloads if needed, and resumes training from that step.
 
@@ -43,7 +43,7 @@ Training runs on spot instances with three layers of protection:
 | 1 | Fetch secrets | W&B, HuggingFace, dashboard tokens from Secrets Manager |
 | 2 | Configure environment | `.bashrc` env vars, git credentials |
 | 3 | Pull latest code | `git pull --ff-only` |
-| 4 | Restore artifacts from S3 | Checkpoints, logs, eval metrics, benchmarks (**bottleneck: ~3 min**) |
+| 4 | Restore artifacts from S3 | Checkpoints, logs, eval metrics, benchmarks (**bottleneck: ~3 min** — downloads all checkpoints at ~1.4 GB each, plus logs, eval metrics, and benchmarks) |
 | 5 | Sync preprocessed data | Tokenized training data from S3 |
 | 6 | Fix file ownership | S3 restores as root |
 | 7 | Update CloudFront DNS | `origin.train.bitbanshee.com` A record → instance IP |
@@ -61,6 +61,7 @@ Training runs on spot instances with three layers of protection:
 - **Local retention**: Last 3 checkpoints (automatic cleanup)
 - **S3 retention**: All checkpoints preserved
 - **Format**: PyTorch `.pt` files containing model state, optimizer state, scheduler state, step counter, and RNG states
+- **File size**: ~1.4 GB per checkpoint (GPT-2 Small; dominated by optimizer state)
 - **Resume logic**: On startup, compares local and S3 checkpoints, downloads the latest if S3 is ahead
 
 ## Monitoring & Dashboards
@@ -184,7 +185,11 @@ Spot pricing varies by instance type and availability zone. The `update-spot-pri
 
 ### Projected Training Cost
 
-For a 50,000-step run at ~4.7 steps/sec:
-- Wall time: ~3 hours per 50k steps (including eval overhead)
-- Spot cost: ~$1.30–$2.15 per full run
-- S3 storage: negligible (~$0.02/month for checkpoints and logs)
+**Pure compute estimate** (uninterrupted):
+- 50,000 steps at ~4.7 steps/sec = ~3 hours of GPU time (excluding eval pauses)
+- g5.2xlarge spot: ~$1.30 per complete run
+- g6.xlarge spot: ~$0.90 per complete run
+
+**Actual wall time** is significantly longer due to spot interruptions, bootstrap recovery (~5 min per cycle), and instance availability gaps. The current training run (~12,000 steps) has spanned 4 spot allocations over several days. A reliable cost-per-run estimate requires a complete uninterrupted run.
+
+S3 storage: negligible (~$0.02/month for checkpoints and logs)

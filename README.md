@@ -6,7 +6,7 @@
 
 ## Abstract
 
-We investigate whether a single Transformer can jointly learn autoregressive and masked diffusion objectives through shared weights, producing a dual-process language model inspired by Kahneman's System 1 / System 2 framework. The architecture uses a trained confidence head to route between fast parallel generation (System 1, bidirectional diffusion) and slow sequential generation (System 2, causal autoregressive), with the only architectural difference between modes being the attention mask. Early results on GPT-2 Small (124M parameters, 20% through training) show that the confidence head achieves AUROC 0.79 in distinguishing correct from incorrect System 1 predictions, validating the core routing mechanism, while AR perplexity remains within 85% of the pretrained baseline despite objective interference.
+We investigate whether a single Transformer can jointly learn autoregressive and masked diffusion objectives through shared weights, producing a dual-process language model inspired by Kahneman's System 1 / System 2 framework. The architecture uses a trained confidence head to route between fast parallel generation (System 1, bidirectional diffusion) and slow sequential generation (System 2, causal autoregressive), with the only architectural difference between modes being the attention mask. Early results on GPT-2 Small (124M parameters, 20% through training) show that the confidence head achieves AUROC 0.79 in distinguishing correct from incorrect System 1 predictions, validating the core routing mechanism, while AR perplexity remains well below the pretrained GPT-2 Small baseline (26.5 vs 31.5) despite objective interference from joint training.
 
 ## Motivation
 
@@ -31,7 +31,7 @@ Speculative decoding (Leviathan et al., 2023; Chen et al., 2023) uses a small dr
 
 ### Discrete Diffusion for Text
 
-Masked diffusion language models have recently shown strong results: Austin et al. (2021) introduced D3PM for discrete diffusion, LLaDA (Nie et al., 2025) demonstrated masked diffusion at the 8B parameter scale, MDLM (Lou et al., 2024) and SEDD (Sahoo et al., 2024) explored alternative noise schedules and score-based formulations. We adopt LLaDA's masking strategy but apply it jointly with an autoregressive objective on shared weights, which to our knowledge has only been explored by Dual Language Models (Samuel & Charpentier, 2025). DiffER (He et al., 2026) showed that even bidirectional diffusion models suffer from the reversal curse due to entity fragmentation under random token masking, proposing whole-entity masking as a remedy. Our architecture addresses a related problem differently: the confidence head learns to detect positions where System 1's token-level predictions are unreliable and escalates to System 2, sidestepping the need for entity-aware masking.
+Masked diffusion language models have recently shown strong results: Austin et al. (2021) introduced D3PM for discrete diffusion, LLaDA (Nie et al., 2025) demonstrated masked diffusion at the 8B parameter scale, MDLM (Sahoo et al., 2024) and SEDD (Lou et al., 2024) explored alternative noise schedules and score-based formulations. We adopt LLaDA's masking strategy but apply it jointly with an autoregressive objective on shared weights, which to our knowledge has only been explored by Dual Language Models (Samuel & Charpentier, 2025). DiffER (He et al., 2026) showed that even bidirectional diffusion models suffer from the reversal curse due to entity fragmentation under random token masking, proposing whole-entity masking as a remedy. Our architecture addresses a related problem differently: the confidence head learns to detect positions where System 1's token-level predictions are unreliable and escalates to System 2, sidestepping the need for entity-aware masking.
 
 ### Confidence-Based Routing
 
@@ -213,6 +213,7 @@ Steps 50–7,000 from corrected re-evaluation (2026-03-01). Steps 8,000+ evaluat
 - **AR perplexity** started at ~22 (better than pretrained GPT-2 Small's ~31.5 on WikiText-103) and has risen to ~26.5 by step 10,000. This upward drift is caused by objective interference — the diffusion loss (~5.4) contributes ~1.6× more gradient than the AR loss (~3.3) at equal weights (λ=1.0), pulling shared weights toward bidirectional prediction. The model remains well within the < 40 target. The rate of drift is slowing (~0.5 PPL per 1k steps early → ~0.3 per 1k steps recently).
 - **Diffusion loss** continues its steady decline (7.91 → 5.41 over 10k steps), with 64% of the reduction toward the 4.0 target achieved. The rate has slowed from ~0.4/1k steps (early) to ~0.15/1k steps (recent), suggesting the target may be reached around step 20–25k.
 - **S1 token accuracy** is accelerating — grew from 11.8% at step 7,000 to 14.7% at step 10,000 (+2.9% in 3k steps vs +1.8% in the prior 3k steps). The 40% target will require significant further training but the trajectory is encouraging.
+- **Confidence accuracy** declines from 96.3% to 87.7% over 10k steps. This is expected: confidence accuracy measures binary classification of correct vs. incorrect System 1 predictions, and the task becomes harder as System 1 improves — a rising base rate of correct predictions makes it increasingly difficult to discriminate. The declining accuracy is offset by rising AUROC, which measures discrimination quality independent of threshold.
 - **Confidence ECE** remains low (< 0.017), well under the 0.05 target. The confidence head is well-calibrated throughout training.
 
 ## Baselines & Ablations
@@ -277,7 +278,7 @@ Training across multiple spot instances required building a fully autonomous boo
 | **Precision** | bfloat16 mixed precision |
 | **Code** | [github.com/BITBANSHEE-C137/KahnemanHybridExperiment](https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment) |
 | **Dependencies** | `requirements.txt` (minimum version floors); `requirements-lock.txt` (exact pinned versions from training environment) |
-| **Eval split** | Final 5,000 documents of the last preprocessing shard (deterministic). After tokenization: 5,678,421 tokens → 5,545 chunks at 1,024 tokens each. |
+| **Eval split** | Final 5,000 documents of the last preprocessing shard (deterministic). After tokenization: 5,678,421 tokens → 5,545 complete chunks at 1,024 tokens (341 trailing tokens discarded). |
 
 To reproduce from scratch:
 
@@ -308,11 +309,16 @@ See [`experiments/README.md`](experiments/README.md) for column descriptions and
 KahnemanHybridExperiment/
 ├── configs/
 │   └── tiny.yaml                    # GPT-2 Small training config
+├── experiments/
+│   ├── README.md                    # Column descriptions, re-export instructions
+│   ├── eval_metrics.csv             # Checkpoint evaluation metrics
+│   └── training_steps.csv           # Step-level training losses
 ├── scripts/
 │   ├── benchmark.py                 # LAMBADA + WikiText-103 evaluation
 │   ├── compare_systems.py           # System 1 vs 2 analysis
 │   ├── lean_preprocess.py           # Memory-efficient tokenization
-│   └── prepare_openwebtext.py       # Streaming data preprocessing
+│   ├── prepare_openwebtext.py       # Streaming data preprocessing
+│   └── reeval_checkpoints.py        # Re-evaluation after double-shift fix
 ├── src/
 │   ├── model/
 │   │   ├── dual_process_gpt2.py     # DualProcessGPT2 model
@@ -328,7 +334,12 @@ KahnemanHybridExperiment/
 │   │   └── openwebtext.py           # Memmap + HuggingFace data loading
 │   └── utils/
 │       └── s3_sync.py               # Non-blocking S3 uploads, spot termination handler
-└── tests/                           # pytest test suite
+├── tests/                           # pytest test suite
+├── INFRASTRUCTURE.md                # Spot recovery, dashboards, deployment, cost
+├── LICENSE                          # MIT License
+├── requirements.txt                 # Minimum version floors
+├── requirements-lock.txt            # Exact pinned versions from training environment
+└── setup.py
 ```
 
 ## Infrastructure
