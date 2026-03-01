@@ -19,6 +19,28 @@ Kahneman's *Thinking, Fast and Slow* (2011) describes two cognitive systems in h
 
 Both modes share the same Transformer weights — the only difference is the attention mask (bidirectional vs. causal). A trained confidence head learns to predict whether System 1's predictions are correct, enabling selective escalation to System 2 only when needed. The key question is whether shared weights can serve both objectives without catastrophic interference, and whether a lightweight confidence head can reliably mediate between the two modes.
 
+## Economic Drivers
+
+The scientific motivation above addresses whether dual-process inference is *possible*. The following addresses why it matters commercially — if the mechanism works (and the confidence head's AUROC of 0.79 at step 10,000 suggests it does), the implications extend beyond research.
+
+### Inference Cost Asymmetry
+
+Autoregressive inference is inherently sequential — each token waits for the previous one, binding GPU compute for the full generation duration. For routine completions where the model is highly confident in its predictions, this sequential deliberation is the computational equivalent of assigning a senior engineer to sort mail. The compute is consumed regardless of task difficulty.
+
+System 1 parallel generation sidesteps this by predicting multiple tokens simultaneously through bidirectional attention. The confidence head acts as a cost-aware router: only escalate to expensive sequential inference when the model itself signals uncertainty. If current S1 accuracy trends continue (14.7% at step 10,000 and accelerating), a working hybrid system could handle a meaningful fraction of tokens through the cheaper parallel path, reducing per-request inference cost proportionally for those positions.
+
+### Operational Simplification
+
+Current speculative decoding approaches require two separate models — a lightweight draft model and a larger verifier — which doubles the deployment surface: two model artifacts to version, two serving endpoints to scale, two CI/CD pipelines to maintain, and an orchestration layer to coordinate them. Failure modes multiply with each additional component.
+
+A single dual-process model collapses this to one artifact with two inference modes. The same weights serve both fast and slow generation; only the attention mask changes. Versioning, testing, monitoring, and debugging apply to one model, not two. The confidence threshold is a single tunable parameter replacing an entire orchestration layer. This is a meaningful reduction in operational complexity for teams deploying inference at scale.
+
+### Shifting Risk Calculus
+
+Shipping fast-but-less-validated outputs has traditionally conflicted with engineering culture around correctness guarantees. But inference cost at scale is now a first-order business constraint, and the risk calculus is shifting accordingly. Recent industry dynamics — aggressive investment in speculative methods, rapid productionization of draft-verify pipelines — signal that speed-accuracy tradeoffs are moving from research curiosity to operational priority.
+
+The dual-process architecture makes this tradeoff explicit and measurable rather than implicit and binary. The confidence head provides a calibrated signal (ECE consistently below 0.02 across training) for how much risk each prediction carries. This transforms a binary “fast vs. safe” decision into a continuous, tunable cost-risk dial — deployable with a single threshold parameter and backed by a quantifiable confidence metric.
+
 ## Related Work
 
 ### Dual-Process Theory in AI
