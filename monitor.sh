@@ -81,7 +81,8 @@ pbar() {
     # Progress bar: pbar <value> <max> <width> <color>
     local cur=$1 mx=$2 w=$3 clr=${4:-$G}
     [ "$mx" -eq 0 ] && mx=1
-    local filled=$((cur * w / mx)) empty=$((w - filled))
+    local filled=$((cur * w / mx))
+    local empty=$((w - filled))
     [ "$filled" -gt "$w" ] && filled=$w && empty=0
     printf "${clr}"
     for ((i=0; i<filled; i++)); do printf "▓"; done
@@ -99,7 +100,8 @@ gauge() {
     printf "${color}"
     for ((i=0; i<full; i++)); do printf "█"; done
     [ "$part" -gt 0 ] && [ "$full" -lt "$w" ] && printf "${blocks[$part]}"
-    local total=$((full + (part > 0 ? 1 : 0))) rem=$((w - total))
+    local total=$((full + (part > 0 ? 1 : 0)))
+    local rem=$((w - total))
     printf "${DM}"
     for ((i=0; i<rem; i++)); do printf "░"; done
     printf "${R}"
