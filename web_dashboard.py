@@ -1434,7 +1434,10 @@ const RAG = {
 
 // ── UI updater ───────────────────────────────────────────────────────────
 function updateUI(data) {
-  $('timestamp').textContent = new Date(data.timestamp).toLocaleTimeString();
+  const _ts = new Date(data.timestamp);
+  const _et = _ts.toLocaleTimeString('en-US', {timeZone:'America/New_York', hour:'numeric', minute:'2-digit'});
+  const _utc = _ts.toLocaleTimeString('en-US', {timeZone:'UTC', hour:'2-digit', minute:'2-digit', hour12:false});
+  $('timestamp').textContent = _et + ' ET / ' + _utc + ' UTC';
 
   // Track current training step for chart filtering
   currentTrainStep = data.current_step || 0;
