@@ -332,10 +332,6 @@ def build_status():
         phase = "warmup" if current_step <= warmup_steps else "cosine_decay"
 
     latest_eval = eval_lines[-1] if eval_lines else None
-    if latest_eval is None:
-        eval_jsons = cached("eval_jsons", 15, read_eval_jsons)
-        if eval_jsons:
-            latest_eval = eval_jsons[-1]
 
     # Live cost recomputation
     inst = dict(instance) if instance else {}
@@ -414,6 +410,7 @@ def build_status():
         "elapsed_seconds": round(elapsed_s, 0) if elapsed_s else None,
         "latest_train": latest,
         "latest_eval": latest_eval,
+        "next_eval_step": ((current_step // eval_every) + 1) * eval_every if current_step > 0 and latest_eval is None else None,
         "gpu": gpu,
         "infra": infra,
         "milestones": milestones,
@@ -1003,7 +1000,7 @@ body::before {
 
     <!-- Eval chart -->
     <div class="card">
-      <h2>Eval Metrics</h2>
+      <h2>Eval Metrics <span id="eval-chart-note" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim)"></span></h2>
       <div class="chart-container"><canvas id="chart-eval"></canvas></div>
     </div>
 
@@ -1360,29 +1357,47 @@ function updateUI(data) {
   if (t) {
     $('m-ar-loss').textContent = t.ar_loss.toFixed(4);
     $('m-diff-loss').textContent = t.diff_loss.toFixed(4);
-    $('m-conf-acc').textContent = (t.conf_acc * 100).toFixed(1) + '%';
     $('m-lr').textContent = t.lr.toExponential(2);
 
     sparkBuffers.ar.push(t.ar_loss);
     sparkBuffers.diff.push(t.diff_loss);
-    sparkBuffers.conf.push(t.conf_acc);
     sparkBuffers.lr.push(t.lr);
-    for (const k of Object.keys(sparkBuffers)) {
+    for (const k of ['ar', 'diff', 'lr']) {
       if (sparkBuffers[k].length > SPARK_MAX) sparkBuffers[k].shift();
     }
     drawSparkline('spark-ar', sparkBuffers.ar, '#60a5fa');
     drawSparkline('spark-diff', sparkBuffers.diff, '#fb923c');
-    drawSparkline('spark-conf', sparkBuffers.conf, '#34d399');
     drawSparkline('spark-lr', sparkBuffers.lr, '#a78bfa');
   }
 
-  // AUROC (from eval, updates at eval intervals)
+  // Eval-sourced metrics (only from current run)
   const ev = data.latest_eval;
-  if (ev && ev.conf_auroc != null) {
-    $('m-auroc').textContent = ev.conf_auroc.toFixed(4);
-    sparkBuffers.auroc.push(ev.conf_auroc);
-    if (sparkBuffers.auroc.length > SPARK_MAX) sparkBuffers.auroc.shift();
-    drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
+  const awaitMsg = data.next_eval_step ? 'eval @ ' + data.next_eval_step.toLocaleString() : '--';
+  if (ev) {
+    $('m-conf-acc').style.fontSize = '';
+    $('m-conf-acc').textContent = ((ev.conf_accuracy ?? ev.conf_acc ?? 0) * 100).toFixed(1) + '%';
+    sparkBuffers.conf.push(ev.conf_accuracy ?? ev.conf_acc ?? 0);
+    if (sparkBuffers.conf.length > SPARK_MAX) sparkBuffers.conf.shift();
+    drawSparkline('spark-conf', sparkBuffers.conf, '#34d399');
+
+    if (ev.conf_auroc != null) {
+      $('m-auroc').style.fontSize = '';
+      $('m-auroc').textContent = ev.conf_auroc.toFixed(4);
+      sparkBuffers.auroc.push(ev.conf_auroc);
+      if (sparkBuffers.auroc.length > SPARK_MAX) sparkBuffers.auroc.shift();
+      drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
+    }
+  } else {
+    $('m-conf-acc').textContent = awaitMsg;
+    $('m-conf-acc').style.fontSize = '11px';
+    $('m-auroc').textContent = awaitMsg;
+    $('m-auroc').style.fontSize = '11px';
+  }
+
+  // Label eval chart when showing prior-run data
+  const evalNote = $('eval-chart-note');
+  if (evalNote) {
+    evalNote.textContent = ev ? '' : '(prior run)';
   }
 
   // GPU
@@ -1483,12 +1498,9 @@ async function loadCharts() {
     const tail = hist.slice(-SPARK_MAX);
     sparkBuffers.ar = tail.map(h => h.ar_loss);
     sparkBuffers.diff = tail.map(h => h.diff_loss);
-    sparkBuffers.conf = tail.map(h => h.conf_acc);
     sparkBuffers.lr = tail.map(h => h.lr);
 
     if (evals.length > 0) {
-      sparkBuffers.auroc = evals.map(e => e.conf_auroc ?? null).filter(v => v != null);
-      drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
       evalChart.data.labels = evals.map(e => e.step);
       evalChart.data.datasets[0].data = evals.map(e => e.s1_tok_acc ?? e.s1_token_accuracy ?? null);
       evalChart.data.datasets[1].data = evals.map(e => e.conf_auroc ?? null);
