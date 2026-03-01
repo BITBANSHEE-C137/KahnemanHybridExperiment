@@ -235,6 +235,8 @@ nvidia-smi ──────────────────── GPU util
 
 ### web_dashboard.py — Live Web Dashboard
 
+![ML Lab Dashboard](static/ml-lab-dashboard.png)
+
 Single-file Flask application (1,600 lines) serving an inline HTML/CSS/JS dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Designed for remote monitoring over CloudFront.
 
 | Layer | Technology |
