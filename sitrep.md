@@ -1,14 +1,14 @@
-# Sitrep — 2026-03-02 3:00 AM ET / 07:00 UTC
+# Sitrep — 2026-03-02 3:30 AM ET / 07:30 UTC
 
-## v1 Training — running, healthy, 48% complete
+## v1 Training — running, healthy, 49% complete
 
-- **Step ~24,200 / 50,000** (48.4%)
+- **Step ~24,600 / 50,000** (49.2%)
 - GPU: 99% utilization, 16.3 / 22 GB VRAM, 50°C
 - Rate: ~830 steps/hr (4.3s/step)
-- ETA to 50k: ~22.2 hours at current rate
+- ETA to 50k: ~22.0 hours at current rate
 - Spot price: $0.4377/hr (g5.2xlarge)
-- Spot cost so far: $12.28 — projected total: $25.38 (64% savings vs on-demand)
-- Instance up 28h26m since bootstrap (2026-03-01 02:33 UTC)
+- Spot cost so far: $12.50 — projected total: $25.41 (64% savings vs on-demand)
+- Instance up 28h56m since bootstrap (2026-03-01 02:33 UTC)
 
 ## Eval trajectory (step 17k → 24k)
 
@@ -23,7 +23,7 @@
 | 23000 | 28.8   | 4.72      | 21.5%  | 0.857 | 0.0082 |
 | 24000 | 28.7   | 4.35      | 23.6%  | 0.858 | 0.0073 |
 
-Live at step ~24,200: ar_loss 3.45, diff_loss 5.23, conf_acc 0.852
+Live at step ~24,600: ar_loss 3.62, diff_loss 4.09, conf_acc 0.852
 
 ## Target status (5 of 5)
 
@@ -35,10 +35,10 @@ Live at step ~24,200: ar_loss 3.45, diff_loss 5.23, conf_acc 0.852
 
 ## Trends since last auto-sitrep
 
-- +400 steps (~23,800 → ~24,200)
-- Diff loss: 4.72 → 4.35
-- S1 accuracy: 21.5% → 23.6%
-- AUROC: 0.857 → 0.858
+- +400 steps (~24,200 → ~24,600)
+- Diff loss: 4.35 → 4.35
+- S1 accuracy: 23.6% → 23.6%
+- AUROC: 0.858 → 0.858
 
 ## Code & infra
 
