@@ -11,7 +11,6 @@ A confidence head on top of the diffusion output decides whether to escalate.
 import torch
 import torch.nn as nn
 from transformers import GPT2LMHeadModel, GPT2Config
-from typing import Optional
 
 
 class ConfidenceHead(nn.Module):
@@ -170,23 +169,10 @@ class DualProcessGPT2(nn.Module):
         Returns:
             Tuple of:
                 - logits: Next-token predictions (B, T, V)
-                - hidden_states: Transformer hidden states (B, T, D)
+                - hidden_states: None (not needed for AR mode)
         """
-        # Use HF's built-in causal mask by not overriding
         outputs = self.transformer(input_ids, output_hidden_states=False)
-        logits = outputs.logits
-
-        # Get hidden states for potential confidence scoring
-        transformer_model = self.transformer.transformer
-        inputs_embeds = transformer_model.wte(input_ids)
-        position_ids = torch.arange(input_ids.size(1), device=input_ids.device).unsqueeze(0)
-        position_embeds = transformer_model.wpe(position_ids)
-        hidden = transformer_model.drop(inputs_embeds + position_embeds)
-
-        # Re-derive from logits to avoid double forward
-        # We can get hidden from the lm_head inverse, but simpler to just
-        # note that for AR mode we don't need hidden states for confidence
-        return logits, None
+        return outputs.logits, None
 
     def compute_ar_loss(
         self,

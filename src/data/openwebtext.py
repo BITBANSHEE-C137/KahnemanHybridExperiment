@@ -182,6 +182,11 @@ def create_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
 def create_eval_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
     """Create a DataLoader for evaluation.
 
+    NOTE: The pre-processed eval binary (openwebtext_eval.bin) overlaps with
+    the training data. lean_preprocess.py writes all docs to the train file,
+    then extracts the last 5000 docs of the final shard into the eval file.
+    Eval therefore tracks memorization/learning, not generalization.
+
     Uses pre-processed eval binary if available, otherwise falls back to
     HuggingFace (last N documents of OpenWebText). Smoke tests always use
     HuggingFace fallback.

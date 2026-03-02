@@ -126,6 +126,54 @@ trend() {
     fi
 }
 
+# ── Sitrep view ──────────────────────────────────────────────────────────
+_show_sitrep=0
+draw_sitrep() {
+    clear
+    local now=$(date -u '+%H:%M:%S UTC')
+    printf "\n"
+    printf "  ${A}${B}◆${R} ${B}${T}Sitrep${R}  ${DM}${now}${R}\n"
+    sep
+
+    local sitrep_file="$PROJECT_DIR/sitrep.md"
+    if [ ! -f "$sitrep_file" ]; then
+        printf "  ${DM}No sitrep.md found${R}\n"
+    else
+        while IFS= read -r line || [ -n "$line" ]; do
+            if [[ "$line" =~ ^## ]]; then
+                # Section header — accent + bold
+                local htext="${line#\#\# }"
+                printf "  ${A}${B}%s${R}\n" "$htext"
+            elif [[ "$line" =~ ^# ]]; then
+                # Top-level header — accent + bold
+                local htext="${line#\# }"
+                printf "\n  ${A}${B}%s${R}\n" "$htext"
+            elif [[ "$line" =~ ^[[:space:]]*[-\*][[:space:]] ]]; then
+                # Bullet line — apply inline formatting
+                local formatted="$line"
+                # Bold: **text** → bold
+                formatted=$(echo "$formatted" | sed -E "s/\*\*([^*]+)\*\*/$(printf '\e[1m')\1$(printf '\e[0m')/g")
+                # Inline code: \`text\` → cyan
+                formatted=$(echo "$formatted" | sed -E "s/\`([^\`]+)\`/$(printf '\e[38;5;110m')\1$(printf '\e[0m')/g")
+                printf "  %b\n" "$formatted"
+            elif [ -z "$line" ]; then
+                printf "\n"
+            else
+                # Plain text — apply inline formatting
+                local formatted="$line"
+                formatted=$(echo "$formatted" | sed -E "s/\*\*([^*]+)\*\*/$(printf '\e[1m')\1$(printf '\e[0m')/g")
+                formatted=$(echo "$formatted" | sed -E "s/\`([^\`]+)\`/$(printf '\e[38;5;110m')\1$(printf '\e[0m')/g")
+                printf "  %b\n" "$formatted"
+            fi
+        done < "$sitrep_file"
+    fi
+
+    sep
+    printf "  ${DM}press any key to return${R}\n"
+    read -rsn1
+}
+
+
 # ── Main draw ─────────────────────────────────────────────────────────────
 draw() {
     clear
@@ -402,7 +450,7 @@ print(f'{total:.2f}|{sessions}')
         printf "    ${DM}No log file found${R}\n"
     fi
     sep
-    printf "  ${DM}refresh ${INTERVAL}s${R}  ${DM}q${R}${S}=quit ${DM}r${R}${S}=refresh${R}\n"
+    printf "  ${DM}refresh ${INTERVAL}s${R}  ${DM}q${R}${S}=quit  ${DM}r${R}${S}=refresh  ${DM}s${R}${S}=sitrep${R}\n"
 }
 
 # ── Key handling ──────────────────────────────────────────────────────────
@@ -413,6 +461,7 @@ wait_with_keys() {
             case "$key" in
                 q|Q) printf "\n"; exit 0 ;;
                 r|R) return 0 ;;
+                s|S) _show_sitrep=1; return 0 ;;
             esac
         fi
         remaining=$((remaining - 1))
@@ -423,6 +472,11 @@ trap 'printf "\e[?25h\n"; exit 0' INT TERM EXIT
 printf "\e[?25l"  # hide cursor
 
 while true; do
+    if [ "$_show_sitrep" = 1 ]; then
+        draw_sitrep
+        _show_sitrep=0
+        continue
+    fi
     draw
     wait_with_keys "$INTERVAL"
 done

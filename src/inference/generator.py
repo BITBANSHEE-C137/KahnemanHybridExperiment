@@ -1,6 +1,6 @@
 """Inference pipelines for dual-process generation.
 
-System 1 (diffusion): Iterative unmasking — start fully masked, progressively reveal tokens.
+System 1 (iterative unmasking): Start fully masked, progressively reveal tokens by confidence.
 System 2 (autoregressive): Standard left-to-right token generation.
 Hybrid: System 1 generates first; if confidence is low, escalate to System 2.
 """
@@ -20,11 +20,14 @@ def generate_system1(
     num_steps: int = 10,
     temperature: float = 1.0,
     device: torch.device = torch.device("cpu"),
-) -> torch.Tensor:
-    """Generate a sequence using System 1 (iterative diffusion unmasking).
+    prompt_ids: Optional[torch.Tensor] = None,
+) -> tuple[torch.Tensor, float]:
+    """Generate a sequence using System 1 (iterative unmasking).
 
     Starts with a fully masked sequence and progressively unmasks tokens
     over `num_steps` rounds, revealing the most confident predictions first.
+    Accumulates confidence scores at the moment each position is revealed,
+    matching the distribution the confidence head was trained on.
 
     Args:
         model: Trained DualProcessGPT2 model.
@@ -33,15 +36,26 @@ def generate_system1(
         num_steps: Number of unmasking rounds.
         temperature: Sampling temperature.
         device: Device to generate on.
+        prompt_ids: Optional prompt tokens (1, P) to keep unmasked as a prefix.
 
     Returns:
-        Generated token IDs of shape (1, seq_len).
+        Tuple of (generated_ids (1, seq_len), mean_confidence float).
     """
     model.eval()
 
     # Start fully masked
     ids = torch.full((1, seq_len), mask_token_id, dtype=torch.long, device=device)
     mask = torch.ones(1, seq_len, dtype=torch.bool, device=device)
+
+    # If prompt provided, pin those positions as unmasked
+    if prompt_ids is not None:
+        P = prompt_ids.size(1)
+        ids[0, :P] = prompt_ids[0, :P]
+        mask[0, :P] = False
+
+    # Accumulators for confidence at the moment each position is revealed
+    accumulated_conf = torch.zeros(1, seq_len, device=device)
+    conf_count = torch.zeros(1, seq_len, device=device)
 
     tokens_per_step = max(1, seq_len // num_steps)
 
@@ -67,20 +81,28 @@ def generate_system1(
         flat_conf = conf_scores.view(-1)
         _, top_indices = flat_conf.topk(to_unmask)
 
-        # Unmask those positions
+        # Unmask those positions and record confidence
         for idx in top_indices:
             row = idx // seq_len
             col = idx % seq_len
             ids[row, col] = sampled[row, col]
             mask[row, col] = False
+            accumulated_conf[row, col] = torch.sigmoid(confidence[row, col])
+            conf_count[row, col] = 1.0
 
     # Fill any remaining masks (shouldn't happen, but safety)
     if mask.any():
-        logits, _, _ = model.forward_system1(ids, mask)
+        logits, confidence, _ = model.forward_system1(ids, mask)
         final_preds = logits.argmax(dim=-1)
         ids[mask] = final_preds[mask]
+        # Record confidence for these fallback positions too
+        conf_at_remaining = torch.sigmoid(confidence)
+        accumulated_conf[mask] = conf_at_remaining[mask]
+        conf_count[mask] = 1.0
 
-    return ids
+    mean_confidence = (accumulated_conf.sum() / conf_count.sum().clamp(min=1)).item()
+
+    return ids, mean_confidence
 
 
 @torch.no_grad()
@@ -139,31 +161,34 @@ def generate_hybrid(
     max_ar_tokens: int = 128,
     temperature: float = 1.0,
     device: torch.device = torch.device("cpu"),
+    prompt_ids: Optional[torch.Tensor] = None,
 ) -> tuple[torch.Tensor, str]:
     """Hybrid generation: System 1 first, escalate to System 2 if confidence is low.
+
+    Confidence is accumulated during the System 1 unmasking loop (at the moment
+    each position is revealed), matching the distribution the head was trained on.
 
     Args:
         model: Trained DualProcessGPT2 model.
         seq_len: Target sequence length for System 1.
         mask_token_id: Token ID used for masking.
         confidence_threshold: Minimum mean confidence to accept System 1 output.
-        num_diffusion_steps: Diffusion unmasking steps.
+        num_diffusion_steps: Iterative unmasking steps.
         max_ar_tokens: Max tokens if escalating to System 2.
         temperature: Sampling temperature.
         device: Device to generate on.
+        prompt_ids: Optional prompt tokens (1, P) to keep unmasked as a prefix.
 
     Returns:
         Tuple of (generated_ids, system_used) where system_used is "system1" or "system2".
     """
     model.eval()
 
-    # Try System 1 first
-    ids = generate_system1(model, seq_len, mask_token_id, num_diffusion_steps, temperature, device)
-
-    # Score confidence on the final output
-    mask_dummy = torch.zeros(1, seq_len, dtype=torch.bool, device=device)
-    _, confidence, _ = model.forward_system1(ids, mask_dummy)
-    mean_conf = torch.sigmoid(confidence).mean().item()
+    # Try System 1 first — confidence is accumulated during unmasking
+    ids, mean_conf = generate_system1(
+        model, seq_len, mask_token_id, num_diffusion_steps, temperature, device,
+        prompt_ids=prompt_ids,
+    )
 
     if mean_conf >= confidence_threshold:
         return ids, "system1"

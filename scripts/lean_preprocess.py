@@ -101,6 +101,11 @@ print(f"\nTotal: {total_docs:,} docs, {train_tokens:,} tokens")
 print(f"Train file: {train_path} ({train_path.stat().st_size / (1024**3):.2f} GB)")
 
 # Write eval split from last EVAL_DOCS of the final shard data
+# NOTE: These eval docs OVERLAP with the training data. The main loop above
+# writes ALL docs (including the last shard) to openwebtext_train.bin, then
+# this section re-reads the last shard and extracts the final 5000 docs into
+# openwebtext_eval.bin. This is intentional at project scale -- eval tracks
+# memorization/learning progress, not generalization to unseen data.
 # Re-read the last shard to get eval docs
 print(f"\nWriting eval split ({EVAL_DOCS} docs from last shard)...")
 last_table = pq.read_table(parquet_files[-1], columns=["text"])
