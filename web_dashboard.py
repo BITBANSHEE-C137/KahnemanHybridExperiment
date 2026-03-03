@@ -331,12 +331,19 @@ def build_status():
     current_step = latest["step"] if latest else 0
     progress_pct = (current_step / max_steps * 100) if max_steps else 0
 
-    # ETA
+    # ETA — use steps per second from recent steps for accuracy
     eta_s = None
     phase = "idle"
     if latest and len(steps) >= 2:
         elapsed = latest["elapsed_s"]
-        sps = current_step / elapsed if elapsed > 0 else 0
+        # Use recent window (last 50 steps) for more accurate rate estimate
+        window = steps[-50:] if len(steps) >= 50 else steps
+        if len(window) >= 2:
+            step_delta = window[-1]["step"] - window[0]["step"]
+            time_delta = window[-1]["elapsed_s"] - window[0]["elapsed_s"]
+            sps = step_delta / time_delta if time_delta > 0 else 0
+        else:
+            sps = current_step / elapsed if elapsed > 0 else 0
         remaining = max_steps - current_step
         eta_s = remaining / sps if sps > 0 else None
         phase = "warmup" if current_step <= warmup_steps else "cosine_decay"
@@ -394,14 +401,43 @@ def build_status():
 
     # Total run cost from ledger (across all spot sessions)
     ledger = cached("cost_ledger", 30, read_cost_ledger)
+    sessions_breakdown = []
+    total_training_time_s = None
     if ledger:
         inst["total_run_cost"] = ledger.get("total_cost")
-        inst["total_sessions"] = len(ledger.get("sessions", []))
+        sessions = ledger.get("sessions", [])
+        inst["total_sessions"] = len(sessions)
+        # Compute per-session durations and total training time
+        total_time = 0.0
+        for sess in sessions:
+            boot = sess.get("boot_time")
+            end = sess.get("end_time")
+            duration_s = None
+            if boot:
+                try:
+                    boot_dt = datetime.fromisoformat(boot)
+                    end_dt = datetime.fromisoformat(end) if end else now
+                    duration_s = max(0, (end_dt - boot_dt).total_seconds())
+                    total_time += duration_s
+                except (ValueError, TypeError):
+                    pass
+            sessions_breakdown.append({
+                "instance_id": sess.get("instance_id", "?"),
+                "instance_type": sess.get("instance_type", "?"),
+                "az": sess.get("az", "?"),
+                "boot_time": boot,
+                "duration_s": duration_s,
+                "steps_start": sess.get("steps_start"),
+                "steps_end": sess.get("steps_end"),
+                "spot_cost": sess.get("spot_cost", 0),
+                "finalized": sess.get("finalized", False),
+            })
+        total_training_time_s = total_time if total_time > 0 else None
     else:
         inst["total_run_cost"] = spot_cost
         inst["total_sessions"] = 1 if spot_cost else 0
 
-    # Training time
+    # Training time — use total across all instances, not just current
     elapsed_s = latest["elapsed_s"] if latest else None
     remaining_s = round(eta_s, 0) if eta_s else None
 
@@ -433,6 +469,8 @@ def build_status():
         "gpu": gpu,
         "infra": infra,
         "milestones": milestones,
+        "total_training_time_s": round(total_training_time_s, 0) if total_training_time_s else None,
+        "sessions_breakdown": sessions_breakdown,
         "instance": inst,
         "bootstrap": cached("bootstrap", 2, read_bootstrap_status),
         "log_tail": log_tail,
@@ -946,6 +984,78 @@ body::before {
   .bs-steps { grid-template-columns: 1fr; }
 }
 
+/* Mobile header — hamburger menu */
+.header-hamburger {
+  display: none;
+  background: none;
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+}
+.header-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.header-menu.open { display: flex; }
+.header-menu a {
+  color: var(--text);
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.header-menu a:hover { background: var(--bg); }
+
+@media (max-width: 540px) {
+  .header-links { display: none; }
+  .header-hamburger { display: block; }
+  .header h1 { font-size: 17px; }
+  .header-sub { position: relative; }
+  .modal-content { padding: 18px 16px; width: 95%; }
+  .sitrep-body { font-size: 13px; }
+}
+
+/* Session breakdown table */
+.session-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+.session-tbl th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  font-weight: 400;
+  padding: 4px 6px 4px 0;
+  text-align: left;
+  white-space: nowrap;
+}
+.session-tbl td {
+  padding: 3px 6px 3px 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.session-tbl td.dim { color: var(--dim); }
+
 /* Footer */
 .footer {
   margin-top: 16px;
@@ -1007,7 +1117,16 @@ body::before {
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
         <a href="https://siliconstrategy.ai" target="_blank">siliconstrategy.ai</a>
+        <a href="/reports/" target="_blank">Reports</a>
         <a href="#" onclick="openSitrep();return false">Sitrep</a>
+      </div>
+      <button class="header-hamburger" onclick="document.getElementById('header-menu').classList.toggle('open')">&#9776;</button>
+      <div class="header-menu" id="header-menu">
+        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
+        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
+        <a href="https://siliconstrategy.ai" target="_blank">siliconstrategy.ai</a>
+        <a href="/reports/" target="_blank">Reports</a>
+        <a href="#" onclick="document.getElementById('header-menu').classList.remove('open');openSitrep();return false">Sitrep</a>
       </div>
       <div class="meta">
         <span id="conn-status">Connecting...</span> &middot;
@@ -1034,7 +1153,8 @@ body::before {
     <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size: 16px">
       <span>Step <strong id="cur-step">--</strong> / <span id="max-step">--</span></span>
       <span>Phase: <strong id="phase">--</strong></span>
-      <span>Elapsed: <strong id="elapsed">--</strong></span>
+      <span>Total Time: <strong id="total-time">--</strong></span>
+      <span>Instance: <strong id="elapsed">--</strong></span>
       <span>Remaining: <strong id="eta">--</strong></span>
     </div>
     <div class="progress-outer">
@@ -1165,6 +1285,12 @@ body::before {
         <span id="run-total-sessions" style="color:var(--dim);font-size:12px;margin-left:4px"></span>
         <span style="float:right;font-weight:600;font-size:15px;color:var(--accent)" id="run-total-cost">--</span>
       </div>
+      <div id="sessions-breakdown" style="display:none;margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border)">
+        <span style="color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:0.06em">Instance History</span>
+        <table class="session-tbl" id="sessions-table">
+          <tr><th>#</th><th>AZ</th><th>Steps</th><th>Duration</th><th>Cost</th></tr>
+        </table>
+      </div>
     </div>
 
     <!-- Infra -->
@@ -1200,6 +1326,7 @@ body::before {
   <div class="footer">
     <span>KahnemanHybridExperiment</span>
     <div class="footer-links">
+      <a href="/reports/" target="_blank">Reports</a>
       <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
       <a href="https://www.linkedin.com/in/gwrowe/" target="_blank">LinkedIn</a>
     </div>
@@ -1452,6 +1579,7 @@ function updateUI(data) {
   $('cur-step').textContent = data.current_step.toLocaleString();
   $('max-step').textContent = data.max_steps.toLocaleString();
   $('phase').textContent = data.phase;
+  $('total-time').textContent = data.total_training_time_s ? fmtTime(data.total_training_time_s) : fmtTime(data.elapsed_seconds);
   $('elapsed').textContent = fmtTime(data.elapsed_seconds);
   $('eta').textContent = fmtTime(data.eta_seconds);
   const pct = data.progress_pct;
@@ -1528,6 +1656,24 @@ function updateUI(data) {
         $('run-total-sessions').textContent = '';
       }
     }
+  }
+
+  // Session breakdown (instance history)
+  const sessions = data.sessions_breakdown;
+  if (sessions && sessions.length > 1) {
+    $('sessions-breakdown').style.display = 'block';
+    const tbl = $('sessions-table');
+    tbl.innerHTML = '<tr><th>#</th><th>AZ</th><th>Steps</th><th>Duration</th><th>Cost</th></tr>';
+    sessions.forEach((s, i) => {
+      const az = s.az ? s.az.replace('us-east-1', '1') : '?';
+      const steps = (s.steps_start != null && s.steps_end != null)
+        ? (s.steps_start/1000).toFixed(1) + 'k\u2192' + (s.steps_end/1000).toFixed(1) + 'k'
+        : '--';
+      const dur = s.duration_s != null ? fmtTime(s.duration_s) : '--';
+      const cost = s.spot_cost != null ? '$' + s.spot_cost.toFixed(2) : '--';
+      const cls = s.finalized ? '' : ' style="color:var(--accent)"';
+      tbl.innerHTML += '<tr' + cls + '><td class="dim">' + (i+1) + '</td><td>' + esc(az) + '</td><td>' + steps + '</td><td>' + dur + '</td><td>' + cost + '</td></tr>';
+    });
   }
 
   // Live metrics
