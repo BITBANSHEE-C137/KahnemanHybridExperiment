@@ -1,15 +1,15 @@
-# Sitrep — 2026-03-03 3:30 AM ET / 07:30 UTC
+# Sitrep — 2026-03-03 4:00 AM ET / 08:00 UTC
 
 ## v1 Training — running, healthy, 85% complete
 
-- **Step ~42,300 / 50,000** (84.6%)
+- **Step ~42,700 / 50,000** (85.4%)
 - GPU: 100% utilization, 16.3 / 22 GB VRAM, 50°C
 - Rate: ~830 steps/hr (4.3s/step)
 - ETA to 50k: ~1.6 hours at current rate
 - Spot price: $0.4502/hr (g5.2xlarge)
-- Spot cost (this instance): $4.10 — projected: $4.85 (63% savings vs on-demand)
-- Total cost across 4 instance(s): $23.11
-- Instance up 9h05m since bootstrap (2026-03-02 22:24 UTC) — spot recovery from prior instance (checkpoint restored from S3)
+- Spot cost (this instance): $4.33 — projected: $5.07 (63% savings vs on-demand)
+- Total cost across 4 instance(s): $23.34
+- Instance up 9h35m since bootstrap (2026-03-02 22:24 UTC) — spot recovery from prior instance (checkpoint restored from S3)
 
 ## Eval trajectory (step 35k → 42k)
 
@@ -24,7 +24,7 @@
 | 41000 | 27.4   | 4.12      | 27.6%  | 0.867 | 0.0054 |
 | 42000 | 27.3   | 4.46      | 23.6%  | 0.857 | 0.0078 |
 
-Live at step ~42,300: ar_loss 3.35, diff_loss 4.33, conf_acc 0.854
+Live at step ~42,700: ar_loss 3.33, diff_loss 4.08, conf_acc 0.854
 
 ## Target status (5 of 5)
 
@@ -36,10 +36,10 @@ Live at step ~42,300: ar_loss 3.35, diff_loss 4.33, conf_acc 0.854
 
 ## Trends since last auto-sitrep
 
-- +500 steps (~41,800 → ~42,300)
-- Diff loss: 4.12 → 4.46
-- S1 accuracy: 27.6% → 23.6%
-- AUROC: 0.867 → 0.857
+- +400 steps (~42,300 → ~42,700)
+- Diff loss: 4.46 → 4.46
+- S1 accuracy: 23.6% → 23.6%
+- AUROC: 0.857 → 0.857
 
 ## Spot instance history (4 instances)
 
@@ -50,9 +50,9 @@ Training has survived 3 spot reclaims via checkpoint recovery. Each new instance
 | 1 | us-east-1a | 2,300→28,700 | 2026-03-01 02:33 | $14.66 |
 | 2 | us-east-1f | 28,800→31,800 | 2026-03-02 12:25 | $2.14 |
 | 3 | us-east-1b | 31,800→35,000 | 2026-03-02 17:17 | $2.25 |
-| 4 | us-east-1b | 35,000→42,200 | 2026-03-02 22:24 | $4.07 |
+| 4 | us-east-1b | 35,000→42,600 | 2026-03-02 22:24 | $4.29 |
 
-**Total spot cost across all instances: $23.11**
+**Total spot cost across all instances: $23.34**
 
 ## Code & infra
 
