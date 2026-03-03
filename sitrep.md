@@ -1,15 +1,15 @@
-# Sitrep — 2026-03-03 10:30 AM ET / 14:30 UTC
+# Sitrep — 2026-03-03 11:00 AM ET / 15:00 UTC
 
-## v1 Training — running, healthy, 96% complete
+## v1 Training — running, healthy, 97% complete
 
-- **Step ~48,000 / 50,000** (96.0%)
-- GPU: 98% utilization, 16.3 / 22 GB VRAM, 48°C
+- **Step ~48,400 / 50,000** (96.8%)
+- GPU: 98% utilization, 16.3 / 22 GB VRAM, 50°C
 - Rate: ~830 steps/hr (4.3s/step)
-- ETA to 50k: ~0.7 hours at current rate
-- Spot price: $0.4502/hr (g5.2xlarge)
-- Spot cost (this instance): $7.25 — projected: $7.56 (63% savings vs on-demand)
-- Total cost across 4 instance(s): $26.26
-- Instance up 16h05m since bootstrap (2026-03-02 22:24 UTC) — spot recovery from prior instance (checkpoint restored from S3)
+- ETA to 50k: ~0.5 hours at current rate
+- Spot price: $0.4511/hr (g5.2xlarge)
+- Spot cost (this instance): $7.48 — projected: $7.73 (63% savings vs on-demand)
+- Total cost across 4 instance(s): $26.49
+- Instance up 16h35m since bootstrap (2026-03-02 22:24 UTC) — spot recovery from prior instance (checkpoint restored from S3)
 
 ## Eval trajectory (step 41k → 48k)
 
@@ -24,7 +24,7 @@
 | 47000 | 27.0   | 4.23      | 24.8%  | 0.868 | 0.0109 |
 | 48000 | 26.9   | 4.47      | 22.8%  | 0.855 | 0.0093 |
 
-Live at step ~48,000: ar_loss 3.41, diff_loss 3.89, conf_acc 0.852
+Live at step ~48,400: ar_loss 3.33, diff_loss 4.54, conf_acc 0.856
 
 ## Target status (5 of 5)
 
@@ -36,10 +36,10 @@ Live at step ~48,000: ar_loss 3.41, diff_loss 3.89, conf_acc 0.852
 
 ## Trends since last auto-sitrep
 
-- +400 steps (~47,600 → ~48,000)
-- Diff loss: 4.23 → 4.47
-- S1 accuracy: 24.8% → 22.8%
-- AUROC: 0.868 → 0.855
+- +400 steps (~48,000 → ~48,400)
+- Diff loss: 4.47 → 4.47
+- S1 accuracy: 22.8% → 22.8%
+- AUROC: 0.855 → 0.855
 
 ## Spot instance history (4 instances)
 
@@ -50,9 +50,9 @@ Training has survived 3 spot reclaims via checkpoint recovery. Each new instance
 | 1 | us-east-1a | 2,300→28,700 | 2026-03-01 02:33 | $14.66 |
 | 2 | us-east-1f | 28,800→31,800 | 2026-03-02 12:25 | $2.14 |
 | 3 | us-east-1b | 31,800→35,000 | 2026-03-02 17:17 | $2.25 |
-| 4 | us-east-1b | 35,000→48,000 | 2026-03-02 22:24 | $7.22 |
+| 4 | us-east-1b | 35,000→48,400 | 2026-03-02 22:24 | $7.44 |
 
-**Total spot cost across all instances: $26.26**
+**Total spot cost across all instances: $26.49**
 
 ## Code & infra
 
