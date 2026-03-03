@@ -1,4 +1,4 @@
-# Sitrep — 2026-03-03 1:00 PM ET / 17:00 UTC
+# Sitrep — 2026-03-03 1:30 PM ET / 17:30 UTC
 
 ## v1 Training — running, healthy, 100% complete
 
@@ -7,9 +7,9 @@
 - Rate: ~830 steps/hr (4.3s/step)
 - ETA to 50k: ~0.0 hours at current rate
 - Spot price: $0.4511/hr (g5.2xlarge)
-- Spot cost (this instance): $8.38 — projected: $8.38 (63% savings vs on-demand)
-- Total cost across 4 instance(s): $27.39
-- Instance up 18h35m since bootstrap (2026-03-02 22:24 UTC) — spot recovery from prior instance (checkpoint restored from S3)
+- Spot cost (this instance): $8.61 — projected: $8.61 (63% savings vs on-demand)
+- Total cost across 4 instance(s): $27.62
+- Instance up 19h05m since bootstrap (2026-03-02 22:24 UTC) — spot recovery from prior instance (checkpoint restored from S3)
 
 ## Eval trajectory (step 43k → 50k)
 
@@ -36,10 +36,10 @@ Live at step ~50,000: ar_loss 3.32, diff_loss 3.97, conf_acc 0.855
 
 ## Trends since last auto-sitrep
 
-- +300 steps (~49,700 → ~50,000)
-- Diff loss: 4.44 → 4.13
-- S1 accuracy: 23.6% → 28.7%
-- AUROC: 0.861 → 0.854
+- +0 steps (~50,000 → ~50,000)
+- Diff loss: 4.13 → 4.13
+- S1 accuracy: 28.7% → 28.7%
+- AUROC: 0.854 → 0.854
 
 ## Spot instance history (4 instances)
 
@@ -50,9 +50,9 @@ Training has survived 3 spot reclaims via checkpoint recovery. Each new instance
 | 1 | us-east-1a | 2,300→28,700 | 2026-03-01 02:33 | $14.66 |
 | 2 | us-east-1f | 28,800→31,800 | 2026-03-02 12:25 | $2.14 |
 | 3 | us-east-1b | 31,800→35,000 | 2026-03-02 17:17 | $2.25 |
-| 4 | us-east-1b | 35,000→50,000 | 2026-03-02 22:24 | $8.34 |
+| 4 | us-east-1b | 35,000→50,000 | 2026-03-02 22:24 | $8.57 |
 
-**Total spot cost across all instances: $27.39**
+**Total spot cost across all instances: $27.62**
 
 ## Code & infra
 
