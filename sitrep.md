@@ -1,15 +1,15 @@
-# Sitrep — 2026-03-02 8:30 PM ET / 00:30 UTC
+# Sitrep — 2026-03-02 9:00 PM ET / 01:00 UTC
 
-## v1 Training — running, healthy, 73% complete
+## v1 Training — running, healthy, 74% complete
 
-- **Step ~36,500 / 50,000** (73.0%)
+- **Step ~36,900 / 50,000** (73.8%)
 - GPU: 100% utilization, 16.3 / 22 GB VRAM, 49°C
 - Rate: ~830 steps/hr (4.3s/step)
-- ETA to 50k: ~0.7 hours at current rate
+- ETA to 50k: ~0.8 hours at current rate
 - Spot price: $0.4516/hr (g5.2xlarge)
-- Spot cost (this instance): $0.94 — projected: $1.29 (63% savings vs on-demand)
-- Total cost across 4 instance(s): $19.95
-- Instance up 2h05m since bootstrap (2026-03-02 22:24 UTC) — spot recovery from prior instance (checkpoint restored from S3)
+- Spot cost (this instance): $1.17 — projected: $1.59 (63% savings vs on-demand)
+- Total cost across 4 instance(s): $20.18
+- Instance up 2h35m since bootstrap (2026-03-02 22:24 UTC) — spot recovery from prior instance (checkpoint restored from S3)
 
 ## Eval trajectory (step 29k → 36k)
 
@@ -24,7 +24,7 @@
 | 35000 | 27.7   | 3.98      | 28.5%  | 0.867 | 0.0090 |
 | 36000 | 27.8   | 4.34      | 24.2%  | 0.863 | 0.0114 |
 
-Live at step ~36,500: ar_loss 3.48, diff_loss 4.52, conf_acc 0.855
+Live at step ~36,900: ar_loss 3.29, diff_loss 5.07, conf_acc 0.855
 
 ## Target status (5 of 5)
 
@@ -36,7 +36,7 @@ Live at step ~36,500: ar_loss 3.48, diff_loss 4.52, conf_acc 0.855
 
 ## Trends since last auto-sitrep
 
-- +400 steps (~36,100 → ~36,500)
+- +400 steps (~36,500 → ~36,900)
 - Diff loss: 4.34 → 4.34
 - S1 accuracy: 24.2% → 24.2%
 - AUROC: 0.863 → 0.863
@@ -50,9 +50,9 @@ Training has survived 3 spot reclaims via checkpoint recovery. Each new instance
 | 1 | us-east-1a | 2,300→28,700 | 2026-03-01 02:33 | $14.66 |
 | 2 | us-east-1f | 28,800→31,800 | 2026-03-02 12:25 | $2.14 |
 | 3 | us-east-1b | 31,800→35,000 | 2026-03-02 17:17 | $2.25 |
-| 4 | us-east-1b | 35,000→36,400 | 2026-03-02 22:24 | $0.91 |
+| 4 | us-east-1b | 35,000→36,800 | 2026-03-02 22:24 | $1.13 |
 
-**Total spot cost across all instances: $19.95**
+**Total spot cost across all instances: $20.18**
 
 ## Code & infra
 
