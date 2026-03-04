@@ -482,6 +482,11 @@ def build_status():
         "total_training_time_s": round(total_training_time_s, 0) if total_training_time_s else None,
         "sessions_breakdown": sessions_breakdown,
         "instance": inst,
+        "cost_controls": {
+            "max_budget": float(os.environ.get("MAX_BUDGET", 50)),
+            "max_spot_price": float(os.environ.get("MAX_SPOT_PRICE", 0.75)),
+            "fleet_id": os.environ.get("FLEET_ID", ""),
+        },
         "bootstrap": cached("bootstrap", 2, read_bootstrap_status),
         "log_tail": log_tail,
         "config_summary": {
@@ -1338,6 +1343,7 @@ body::before {
         <span id="run-total-sessions" style="color:var(--dim);font-size:12px;margin-left:4px"></span>
         <span style="float:right;font-weight:600;font-size:15px;color:var(--accent)" id="run-total-cost">--</span>
       </div>
+      <div style="margin-top:6px;font-size:13px;" id="cost-controls"></div>
       <div id="sessions-breakdown" style="display:none;margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border)">
         <span style="color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:0.06em">Instance History</span>
         <table class="session-tbl" id="sessions-table">
@@ -1706,6 +1712,27 @@ function updateUI(data) {
         $('run-total-sessions').textContent = '(' + inst.total_sessions + ' sessions)';
       } else {
         $('run-total-sessions').textContent = '(1 session)';
+      }
+    }
+
+    // Cost controls display
+    if (data.cost_controls && data.cost_controls.max_budget > 0) {
+      const cc = data.cost_controls;
+      const totalCost = inst.total_run_cost || 0;
+      const budgetPct = (totalCost / cc.max_budget * 100);
+      const budgetColor = budgetPct > 90 ? 'var(--red)' : budgetPct > 70 ? 'var(--yellow)' : 'var(--green)';
+      const spotRate = inst.spot_rate || 0;
+      const spotPct = cc.max_spot_price > 0 ? (spotRate / cc.max_spot_price * 100) : 0;
+      const spotColor = spotPct > 80 ? 'var(--red)' : spotPct > 50 ? 'var(--yellow)' : 'var(--green)';
+
+      const ccEl = document.getElementById('cost-controls');
+      if (ccEl) {
+        ccEl.innerHTML =
+          '<span style="color:' + budgetColor + '">Budget: $' + totalCost.toFixed(2) + ' / $' + cc.max_budget.toFixed(0) + '</span>' +
+          ' <span style="color:var(--dim)">|</span> ' +
+          '<span style="color:' + spotColor + '">Spot ceiling: $' + cc.max_spot_price.toFixed(2) + '/hr</span>' +
+          ' <span style="color:var(--dim)">|</span> ' +
+          '<span>Rate: $' + spotRate.toFixed(4) + '/hr</span>';
       }
     }
   }
