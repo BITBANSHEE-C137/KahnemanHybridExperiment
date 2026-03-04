@@ -84,6 +84,17 @@ with open('${BOOTSTRAP_STATUS}.tmp', 'w') as f:
 echo "=== Bootstrap.sh started at $(date -u) ==="
 init_bootstrap_status
 
+# Publish bootstrap beacon to S3 (read by fallback page)
+FALLBACK_BUCKET="train-bitbanshee-fallback"
+python3 -c "
+import json, time
+from datetime import datetime, timezone
+obj = {'status':'bootstrapping','started':datetime.now(timezone.utc).isoformat()}
+print(json.dumps(obj))
+" > /tmp/bootstrap_beacon.json
+aws s3 cp /tmp/bootstrap_beacon.json "s3://$FALLBACK_BUCKET/bootstrap_beacon.json" \
+    --region "$REGION" --content-type "application/json" --cache-control "no-cache" 2>/dev/null || true
+
 # ── Step 0: Ephemeral NVMe setup ──
 step_start 0
 echo "Setting up ephemeral NVMe at $DATA_DIR..."
@@ -317,6 +328,16 @@ echo "  training: LAUNCHED in tmux (v2, resumes from latest checkpoint if availa
 step_done 17
 
 bootstrap_done
+
+# Update beacon: bootstrap complete
+python3 -c "
+import json, time
+from datetime import datetime, timezone
+obj = {'status':'ready','finished':datetime.now(timezone.utc).isoformat()}
+print(json.dumps(obj))
+" > /tmp/bootstrap_beacon.json
+aws s3 cp /tmp/bootstrap_beacon.json "s3://$FALLBACK_BUCKET/bootstrap_beacon.json" \
+    --region "$REGION" --content-type "application/json" --cache-control "no-cache" 2>/dev/null || true
 
 echo ""
 echo "=== Bootstrap.sh completed at $(date -u) ==="
