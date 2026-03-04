@@ -1,655 +1,10 @@
-#!/usr/bin/env python3
-"""
-ML Training Dashboard — single-file Flask web UI.
-
-Monitors training progress by reading log files and eval JSONs from disk.
-No project-specific imports; configure the paths/regexes at the top.
-
-Spot price: The instance role lacks ec2:DescribeSpotPriceHistory, so spot
-pricing is fed externally via POST /api/spot-price or a JSON file at
-/tmp/spot_price.json.  A helper one-liner is printed at startup.
-
-Usage:
-    pip install flask pyyaml
-    python web_dashboard.py                # http://127.0.0.1:5000 (behind nginx)
-    python web_dashboard.py --port 8080
-    python web_dashboard.py --spot-token SECRET  # require token for POST /api/spot-price
-"""
-
-import argparse
-import glob
-import json
-import os
-import re
-import subprocess
-import time
-import threading
-import urllib.request
-from datetime import datetime, timezone
-
-import yaml
-from flask import Flask, Response, jsonify, request, abort
-
-# ── Configuration ────────────────────────────────────────────────────────────
-PROJECT_DIR = "/home/ubuntu/KahnemanHybridExperiment"
-DATA_DIR = "/opt/dlami/nvme/ml-lab"
-EVAL_DIR = os.path.join(DATA_DIR, "eval_metrics")
-CONFIG_PATH = os.path.join(PROJECT_DIR, "configs/tiny.yaml")
-WANDB_DIR = os.path.join(PROJECT_DIR, "wandb")
-CHECKPOINT_DIR = os.path.join(DATA_DIR, "checkpoints")
-SPOT_PRICE_FILE = "/tmp/spot_price.json"
-BOOTSTRAP_STATUS_FILE = "/tmp/bootstrap_status.json"
-COST_LEDGER_FILE = os.path.join(DATA_DIR, "cost", "cost_ledger.json")
-
-# Regex for training step lines
-STEP_RE = re.compile(
-    r"^step:\s*(?P<step>\d+)\s*\|"
-    r"\s*ar_loss:\s*(?P<ar_loss>[\d.]+)\s*\|"
-    r"\s*diff_loss:\s*(?P<diff_loss>[\d.]+)\s*\|"
-    r"\s*conf_acc:\s*(?P<conf_acc>[\d.]+)\s*\|"
-    r"\s*lr:\s*(?P<lr>[\d.eE+-]+)\s*\|"
-    r"\s*time:\s*(?P<time>[\d.]+)s"
-)
-
-# Regex for eval lines
-EVAL_RE = re.compile(
-    r"^\[eval\]\s*step:\s*(?P<step>\d+)\s*\|"
-    r"\s*ar_ppl:\s*(?P<ar_ppl>[\d.]+)\s*\|"
-    r"\s*diff_loss:\s*(?P<diff_loss>[\d.]+)\s*\|"
-    r"\s*s1_tok_acc:\s*(?P<s1_tok_acc>[\d.]+)\s*\|"
-    r"\s*conf_acc:\s*(?P<conf_acc>[\d.]+)\s*\|"
-    r"\s*conf_ece:\s*(?P<conf_ece>[\d.]+)\s*\|"
-    r"\s*conf_auroc:\s*(?P<conf_auroc>[\d.]+)"
-)
-
-SSE_INTERVAL = 10  # seconds between SSE pushes
-SSE_MAX_CONNECTIONS = 10
-_sse_connections = 0
-_sse_lock = threading.Lock()
-
-# On-demand pricing (USD/hr) — add entries as needed
-INSTANCE_PRICES = {
-    "g6.xlarge": 0.8048,
-    "g6.2xlarge": 0.9776,
-    "g6.4xlarge": 1.3232,
-    "g6.8xlarge": 2.0144,
-    "g5.xlarge": 1.006,
-    "g5.2xlarge": 1.212,
-    "g5.4xlarge": 1.624,
-    "p4d.24xlarge": 32.7726,
-}
-
-# ── Caching layer ────────────────────────────────────────────────────────────
-_cache = {}
-_cache_lock = threading.Lock()
-
-
-def cached(key, ttl, fn):
-    """Return cached value if fresh, otherwise call fn() and cache it."""
-    now = time.time()
-    with _cache_lock:
-        if key in _cache and now - _cache[key]["t"] < ttl:
-            return _cache[key]["v"]
-    val = fn()
-    with _cache_lock:
-        _cache[key] = {"v": val, "t": time.time()}
-    return val
-
-
-# ── Data readers ─────────────────────────────────────────────────────────────
-
-def find_output_log():
-    """Find the W&B output.log, preferring latest-run symlink."""
-    latest = os.path.join(WANDB_DIR, "latest-run", "files", "output.log")
-    if os.path.isfile(latest):
-        return latest
-    runs = sorted(glob.glob(os.path.join(WANDB_DIR, "run-*/files/output.log")))
-    return runs[-1] if runs else None
-
-
-def parse_training_steps():
-    log = find_output_log()
-    if not log:
-        return []
-    steps = []
-    with open(log, "r") as f:
-        for line in f:
-            m = STEP_RE.match(line.strip())
-            if m:
-                steps.append({
-                    "step": int(m.group("step")),
-                    "ar_loss": float(m.group("ar_loss")),
-                    "diff_loss": float(m.group("diff_loss")),
-                    "conf_acc": float(m.group("conf_acc")),
-                    "lr": float(m.group("lr")),
-                    "elapsed_s": float(m.group("time")),
-                })
-    return steps
-
-
-def parse_eval_lines():
-    log = find_output_log()
-    if not log:
-        return []
-    evals = []
-    with open(log, "r") as f:
-        for line in f:
-            m = EVAL_RE.match(line.strip())
-            if m:
-                evals.append({
-                    "step": int(m.group("step")),
-                    "ar_ppl": float(m.group("ar_ppl")),
-                    "diff_loss": float(m.group("diff_loss")),
-                    "s1_tok_acc": float(m.group("s1_tok_acc")),
-                    "conf_acc": float(m.group("conf_acc")),
-                    "conf_ece": float(m.group("conf_ece")),
-                    "conf_auroc": float(m.group("conf_auroc")),
-                })
-    return evals
-
-
-def read_eval_jsons():
-    pattern = os.path.join(EVAL_DIR, "eval_step_*.json")
-    files = sorted(glob.glob(pattern))
-    results = []
-    for fp in files:
-        try:
-            with open(fp) as f:
-                results.append(json.load(f))
-        except (json.JSONDecodeError, IOError):
-            continue
-    results.sort(key=lambda x: x.get("step", 0))
-    return results
-
-
-def get_gpu_stats():
-    try:
-        out = subprocess.check_output(
-            ["nvidia-smi",
-             "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit,name",
-             "--format=csv,noheader,nounits"],
-            timeout=5, text=True
-        ).strip()
-        parts = [p.strip() for p in out.split(",")]
-        return {
-            "gpu_util": float(parts[0]),
-            "vram_used_mb": float(parts[1]),
-            "vram_total_mb": float(parts[2]),
-            "temp_c": float(parts[3]),
-            "power_w": float(parts[4]),
-            "power_limit_w": float(parts[5]),
-            "name": parts[6],
-        }
-    except Exception:
-        return None
-
-
-def get_infra_status():
-    def is_running(pattern):
-        try:
-            subprocess.check_output(["pgrep", "-f", pattern], timeout=3)
-            return True
-        except Exception:
-            return False
-
-    checkpoints = []
-    if os.path.isdir(CHECKPOINT_DIR):
-        checkpoints = sorted(os.listdir(CHECKPOINT_DIR))
-
-    return {
-        "trainer_running": is_running("joint_trainer"),
-        "sync_running": is_running("sync-checkpoint"),
-        "checkpoints": checkpoints,
-    }
-
-
-def read_config():
-    try:
-        with open(CONFIG_PATH) as f:
-            return yaml.safe_load(f)
-    except Exception:
-        return {}
-
-
-def get_log_tail(n=20):
-    log = find_output_log()
-    if not log:
-        return []
-    try:
-        with open(log, "r") as f:
-            lines = f.readlines()
-        return [l.rstrip() for l in lines[-n:]]
-    except Exception:
-        return []
-
-
-def get_instance_info():
-    """Get EC2 instance type, lifecycle, boot time, and AZ."""
-    info = {
-        "instance_type": None,
-        "lifecycle": None,
-        "az": None,
-        "boot_time_utc": None,
-        "uptime_seconds": None,
-        "ondemand_price_per_hour": None,
-    }
-    # EC2 metadata (IMDSv2)
-    try:
-        token_req = urllib.request.Request(
-            "http://169.254.169.254/latest/api/token",
-            method="PUT",
-            headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
-        )
-        token = urllib.request.urlopen(token_req, timeout=2).read().decode()
-
-        def _meta(path):
-            r = urllib.request.Request(
-                f"http://169.254.169.254/latest/meta-data/{path}",
-                headers={"X-aws-ec2-metadata-token": token},
-            )
-            return urllib.request.urlopen(r, timeout=2).read().decode().strip()
-
-        info["instance_type"] = _meta("instance-type")
-        info["lifecycle"] = _meta("instance-life-cycle")  # "spot" or "on-demand"
-        info["az"] = _meta("placement/availability-zone")
-    except Exception:
-        pass
-
-    # Boot time
-    try:
-        boot_str = subprocess.check_output(["uptime", "-s"], timeout=3, text=True).strip()
-        boot_dt = datetime.strptime(boot_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-        info["boot_time_utc"] = boot_dt.isoformat()
-        info["uptime_seconds"] = max(0, (datetime.now(timezone.utc) - boot_dt).total_seconds())
-    except Exception:
-        pass
-
-    # On-demand price
-    itype = info["instance_type"]
-    if itype and itype in INSTANCE_PRICES:
-        info["ondemand_price_per_hour"] = INSTANCE_PRICES[itype]
-
-    return info
-
-
-def read_spot_price():
-    """Read spot price data from the external JSON file."""
-    try:
-        with open(SPOT_PRICE_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return None
-
-
-def write_spot_price(data):
-    """Write spot price data to the JSON file."""
-    with open(SPOT_PRICE_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def read_bootstrap_status():
-    """Read bootstrap progress from the status JSON written by bootstrap.sh."""
-    try:
-        with open(BOOTSTRAP_STATUS_FILE) as f:
-            data = json.load(f)
-        # Compute total elapsed
-        started = data.get("started")
-        finished = data.get("finished")
-        if started:
-            end = finished if finished else time.time()
-            data["total_elapsed_s"] = round(end - started, 1)
-        return data
-    except Exception:
-        return None
-
-
-def read_cost_ledger():
-    """Read the cost ledger JSON (maintained by cost-tracker.sh)."""
-    try:
-        with open(COST_LEDGER_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return None
-
-
-# ── Composite status builder ─────────────────────────────────────────────────
-
-def build_status():
-    steps = cached("steps", 5, parse_training_steps)
-    eval_lines = cached("eval_lines", 5, parse_eval_lines)
-    gpu = cached("gpu", 5, get_gpu_stats)
-    infra = cached("infra", 10, get_infra_status)
-    config = cached("config", 60, read_config)
-    instance = cached("instance", 30, get_instance_info)
-    spot_data = cached("spot", 15, read_spot_price)
-    log_tail = get_log_tail(20)
-
-    max_steps = config.get("training", {}).get("max_steps", 50000)
-    warmup_steps = config.get("training", {}).get("warmup_steps", 2000)
-
-    latest = steps[-1] if steps else None
-    current_step = latest["step"] if latest else 0
-    progress_pct = (current_step / max_steps * 100) if max_steps else 0
-
-    # ETA — use steps per second from recent steps for accuracy
-    eta_s = None
-    phase = "idle"
-    if latest and len(steps) >= 2:
-        elapsed = latest["elapsed_s"]
-        # Use recent window (last 50 steps) for more accurate rate estimate
-        window = steps[-50:] if len(steps) >= 50 else steps
-        if len(window) >= 2:
-            step_delta = window[-1]["step"] - window[0]["step"]
-            time_delta = window[-1]["elapsed_s"] - window[0]["elapsed_s"]
-            sps = step_delta / time_delta if time_delta > 0 else 0
-        else:
-            sps = current_step / elapsed if elapsed > 0 else 0
-        remaining = max_steps - current_step
-        eta_s = remaining / sps if sps > 0 else None
-        phase = "warmup" if current_step <= warmup_steps else "cosine_decay"
-
-    latest_eval = eval_lines[-1] if eval_lines else None
-
-    # Live cost recomputation
-    inst = dict(instance) if instance else {}
-    now = datetime.now(timezone.utc)
-    uptime_s = None
-    if inst.get("boot_time_utc"):
-        boot_dt = datetime.fromisoformat(inst["boot_time_utc"])
-        uptime_s = max(0, (now - boot_dt).total_seconds())
-        inst["uptime_seconds"] = uptime_s
-
-    # On-demand cost
-    od_rate = inst.get("ondemand_price_per_hour")
-    od_cost = round(od_rate * uptime_s / 3600, 4) if od_rate and uptime_s else None
-
-    # Spot cost — computed from price history segments
-    spot_rate = None
-    spot_cost = None
-    if spot_data and uptime_s and inst.get("boot_time_utc"):
-        spot_rate = spot_data.get("current_price")
-        history = spot_data.get("price_history", [])
-        if history:
-            boot_ts = datetime.fromisoformat(inst["boot_time_utc"]).timestamp()
-            now_ts = now.timestamp()
-            # Sort by timestamp ascending
-            history = sorted(history, key=lambda x: x["timestamp"])
-            total = 0.0
-            for i, seg in enumerate(history):
-                seg_start = max(seg["timestamp"], boot_ts)
-                seg_end = history[i + 1]["timestamp"] if i + 1 < len(history) else now_ts
-                seg_end = min(seg_end, now_ts)
-                if seg_start < seg_end:
-                    total += seg["price"] * (seg_end - seg_start) / 3600
-            spot_cost = round(total, 4)
-        elif spot_rate:
-            spot_cost = round(spot_rate * uptime_s / 3600, 4)
-
-    # Projected totals
-    od_projected = round(od_cost / current_step * max_steps, 2) if od_cost and current_step > 0 else None
-    spot_projected = round(spot_cost / current_step * max_steps, 2) if spot_cost and current_step > 0 else None
-
-    inst["ondemand_cost"] = od_cost
-    inst["ondemand_projected"] = od_projected
-    inst["spot_rate"] = spot_rate
-    inst["spot_cost"] = spot_cost
-    inst["spot_projected"] = spot_projected
-    inst["spot_updated"] = spot_data.get("updated") if spot_data else None
-    if od_cost and spot_cost:
-        inst["savings"] = round(od_cost - spot_cost, 2)
-        inst["savings_pct"] = round((1 - spot_cost / od_cost) * 100, 1)
-
-    # Total run cost from ledger (across all spot sessions)
-    ledger = cached("cost_ledger", 30, read_cost_ledger)
-    sessions_breakdown = []
-    total_training_time_s = None
-    if ledger:
-        inst["total_run_cost"] = ledger.get("total_cost")
-        sessions = ledger.get("sessions", [])
-        inst["total_sessions"] = len(sessions)
-        # Compute per-session durations and total training time
-        total_time = 0.0
-        for sess in sessions:
-            boot = sess.get("boot_time")
-            end = sess.get("end_time")
-            duration_s = None
-            if boot:
-                try:
-                    boot_dt = datetime.fromisoformat(boot)
-                    end_dt = datetime.fromisoformat(end) if end else now
-                    duration_s = max(0, (end_dt - boot_dt).total_seconds())
-                    total_time += duration_s
-                except (ValueError, TypeError):
-                    pass
-            sessions_breakdown.append({
-                "instance_id": sess.get("instance_id", "?"),
-                "instance_type": sess.get("instance_type", "?"),
-                "az": sess.get("az", "?"),
-                "boot_time": boot,
-                "duration_s": duration_s,
-                "steps_start": sess.get("steps_start"),
-                "steps_end": sess.get("steps_end"),
-                "spot_cost": sess.get("spot_cost", 0),
-                "finalized": sess.get("finalized", False),
-            })
-        total_training_time_s = total_time if total_time > 0 else None
-    else:
-        inst["total_run_cost"] = spot_cost
-        inst["total_sessions"] = 1 if spot_cost else 0
-
-    # Training time — use total across all instances, not just current
-    elapsed_s = latest["elapsed_s"] if latest else None
-    remaining_s = round(eta_s, 0) if eta_s else None
-
-    # Next milestones
-    tcfg = config.get("training", {})
-    ckpt_every = tcfg.get("checkpoint_every", 5000)
-    eval_every = tcfg.get("eval_every", 1000)
-    milestones = []
-    if current_step > 0:
-        next_eval = ((current_step // eval_every) + 1) * eval_every
-        next_ckpt = ((current_step // ckpt_every) + 1) * ckpt_every
-        milestones.append({"label": "next eval", "step": next_eval})
-        milestones.append({"label": "next checkpoint", "step": next_ckpt})
-        if current_step <= warmup_steps:
-            milestones.append({"label": "warmup ends", "step": warmup_steps})
-        milestones.sort(key=lambda x: x["step"])
-
-    return {
-        "timestamp": now.isoformat(),
-        "current_step": current_step,
-        "max_steps": max_steps,
-        "progress_pct": round(progress_pct, 2),
-        "phase": phase,
-        "eta_seconds": remaining_s,
-        "elapsed_seconds": round(elapsed_s, 0) if elapsed_s else None,
-        "latest_train": latest,
-        "latest_eval": latest_eval,
-        "next_eval_step": ((current_step // eval_every) + 1) * eval_every if current_step > 0 and latest_eval is None else None,
-        "gpu": gpu,
-        "infra": infra,
-        "milestones": milestones,
-        "total_training_time_s": round(total_training_time_s, 0) if total_training_time_s else None,
-        "sessions_breakdown": sessions_breakdown,
-        "instance": inst,
-        "bootstrap": cached("bootstrap", 2, read_bootstrap_status),
-        "log_tail": log_tail,
-        "config_summary": {
-            "model": config.get("model", {}).get("name", "?"),
-            "batch_size": tcfg.get("batch_size"),
-            "grad_accum": tcfg.get("gradient_accumulation_steps"),
-            "lr": tcfg.get("learning_rate"),
-            "warmup_steps": warmup_steps,
-            "max_steps": max_steps,
-            "checkpoint_every": ckpt_every,
-            "eval_every": eval_every,
-        },
-    }
-
-
-# ── Flask app ─────────────────────────────────────────────────────────────────
-
-app = Flask(__name__)
-
-
-@app.route("/api/status")
-def api_status():
-    return jsonify(build_status())
-
-
-@app.route("/api/cost/total")
-def api_cost_total():
-    ledger = read_cost_ledger()
-    if ledger:
-        return jsonify(ledger)
-    return jsonify({"error": "no cost ledger"}), 404
-
-
-@app.route("/api/history")
-def api_history():
-    steps = cached("steps", 5, parse_training_steps)
-    return jsonify(steps)
-
-
-@app.route("/api/eval/history")
-def api_eval_history():
-    eval_jsons = cached("eval_jsons", 15, read_eval_jsons)
-    eval_lines = cached("eval_lines", 5, parse_eval_lines)
-    seen = {e.get("step") for e in eval_jsons}
-    merged = list(eval_jsons)
-    for e in eval_lines:
-        if e["step"] not in seen:
-            merged.append(e)
-    merged.sort(key=lambda x: x.get("step", 0))
-    return jsonify(merged)
-
-
-@app.route("/api/spot-price", methods=["GET"])
-def api_spot_price_get():
-    data = read_spot_price()
-    if data:
-        return jsonify(data)
-    return jsonify({"error": "no spot price data"}), 404
-
-
-@app.route("/api/spot-price", methods=["POST"])
-def api_spot_price_post():
-    """Accept spot price data from an external source (e.g. local AWS CLI).
-
-    Requires Authorization: Bearer <token> header when --spot-token is set.
-
-    Expected JSON:
-    {
-      "current_price": 0.3765,
-      "az": "us-east-1b",
-      "updated": "2026-02-28T16:00:00Z",
-      "price_history": [
-        {"timestamp": 1740700000, "price": 0.3771},
-        {"timestamp": 1740720000, "price": 0.3765}
-      ]
-    }
-    """
-    # Token auth
-    if app.config.get("SPOT_TOKEN"):
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer ") or auth[7:] != app.config["SPOT_TOKEN"]:
-            abort(403)
-
-    # Payload size guard (redundant with nginx, but defense-in-depth)
-    if request.content_length and request.content_length > 100_000:
-        return jsonify({"error": "payload too large"}), 413
-
-    data = request.get_json(silent=True)
-    if not data or not isinstance(data, dict):
-        return jsonify({"error": "invalid JSON"}), 400
-
-    # Validate required field
-    cp = data.get("current_price")
-    if cp is None:
-        return jsonify({"error": "missing current_price"}), 400
-    try:
-        cp = float(cp)
-    except (TypeError, ValueError):
-        return jsonify({"error": "current_price must be a number"}), 400
-    if not (0 < cp < 1000):
-        return jsonify({"error": "current_price out of range"}), 400
-    data["current_price"] = cp
-
-    # Validate optional price_history
-    history = data.get("price_history")
-    if history is not None:
-        if not isinstance(history, list):
-            return jsonify({"error": "price_history must be a list"}), 400
-        for entry in history:
-            if not isinstance(entry, dict):
-                return jsonify({"error": "price_history entries must be objects"}), 400
-            if "timestamp" not in entry or "price" not in entry:
-                return jsonify({"error": "price_history entries need timestamp and price"}), 400
-            try:
-                entry["timestamp"] = float(entry["timestamp"])
-                entry["price"] = float(entry["price"])
-            except (TypeError, ValueError):
-                return jsonify({"error": "invalid types in price_history"}), 400
-
-    data["updated"] = data.get("updated", datetime.now(timezone.utc).isoformat())
-    write_spot_price(data)
-    # Bust cache
-    with _cache_lock:
-        _cache.pop("spot", None)
-    return jsonify({"ok": True})
-
-
-@app.route("/stream")
-def stream():
-    global _sse_connections
-    with _sse_lock:
-        if _sse_connections >= SSE_MAX_CONNECTIONS:
-            return jsonify({"error": "too many SSE connections"}), 429
-        _sse_connections += 1
-
-    def generate():
-        global _sse_connections
-        try:
-            while True:
-                data = json.dumps(build_status())
-                yield f"data: {data}\n\n"
-                time.sleep(SSE_INTERVAL)
-        finally:
-            with _sse_lock:
-                _sse_connections -= 1
-
-    return Response(generate(), mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-
-SITREP_FILE = os.path.join(PROJECT_DIR, "sitrep.md")
-
-
-@app.route("/api/sitrep")
-def api_sitrep():
-    if not os.path.isfile(SITREP_FILE):
-        return jsonify({"content": "_No sitrep available yet._", "modified": None})
-    mtime = os.path.getmtime(SITREP_FILE)
-    modified = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
-    with open(SITREP_FILE) as f:
-        text = f.read()
-    return jsonify({"content": text, "modified": modified})
-
-
-@app.route("/")
-def index():
-    return HTML_PAGE
-
-
-# ── Inline HTML/CSS/JS ────────────────────────────────────────────────────────
-
-HTML_PAGE = r"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dual-Process Language Model — Dashboard</title>
-<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
 :root {
@@ -669,7 +24,7 @@ html { overflow-x: hidden; }
 body {
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   background: var(--bg);
-  background-image: url('/static/hero.png');
+  background-image: url('/hero.png');
   background-size: cover;
   background-position: center top;
   background-repeat: no-repeat;
@@ -1119,6 +474,12 @@ body::before {
 </style>
 </head>
 <body>
+
+<!-- Offline banner (hidden by default, shown when SSE fails 3+ times) -->
+<div id="offline-banner" style="display:none; background:#92400e; color:#fbbf24; text-align:center; padding:8px; font-size:13px; position:sticky; top:0; z-index:100;">
+  &#9889; Offline &mdash; showing last synced data
+</div>
+
 <div class="container">
 
   <!-- Header -->
@@ -1212,7 +573,7 @@ body::before {
     </div>
 
     <!-- GPU -->
-    <div class="card">
+    <div class="card" id="card-gpu">
       <h2>GPU</h2>
       <div id="gpu-name" style="color:var(--dim);font-size:15px;margin-bottom:8px">--</div>
       <div class="gpu-metric">
@@ -1304,7 +665,7 @@ body::before {
     </div>
 
     <!-- Infra -->
-    <div class="card">
+    <div class="card" id="card-infra">
       <h2>Infrastructure</h2>
       <div style="margin-bottom:6px">
         <span class="badge" id="badge-trainer">Trainer: ?</span>
@@ -1327,14 +688,14 @@ body::before {
   </div>
 
   <!-- Log tail (full width, outside grid) -->
-  <div class="card" style="margin-top:12px">
+  <div class="card" id="card-log" style="margin-top:12px">
     <h2>Log Tail</h2>
     <div class="log-box" id="log-tail">--</div>
   </div>
 
   <!-- Footer -->
   <div class="footer">
-    <span>Dual-Process Language Model</span>
+    <span>Dual-Process Language Model <span id="source-indicator" style="font-size:11px; color:var(--dim);"></span></span>
     <div class="footer-links">
       <a href="https://bitbanshee.com" target="_blank">bitbanshee.com</a>
       <a href="/reports/" target="_blank">Reports</a>
@@ -1759,23 +1120,29 @@ function updateUI(data) {
   const evalNote = $('eval-chart-note');
   if (evalNote) evalNote.textContent = '';
 
-  // GPU
+  // GPU — hide card when data is null
   const g = data.gpu;
+  const gpuCard = $('card-gpu');
   if (g) {
+    gpuCard.style.display = '';
     $('gpu-name').textContent = g.name;
     setGpuMetric('gpu-util', g.gpu_util,
       g.gpu_util.toFixed(0) + '%');
     setGpuMetric('gpu-vram', g.vram_used_mb / g.vram_total_mb * 100,
       (g.vram_used_mb/1024).toFixed(1) + ' / ' + (g.vram_total_mb/1024).toFixed(1) + ' GB');
     setGpuMetric('gpu-temp', g.temp_c,
-      g.temp_c.toFixed(0) + '°C', tempColor);
+      g.temp_c.toFixed(0) + '\u00b0C', tempColor);
     setGpuMetric('gpu-power', g.power_w / g.power_limit_w * 100,
       g.power_w.toFixed(0) + ' / ' + g.power_limit_w.toFixed(0) + ' W');
+  } else {
+    gpuCard.style.display = 'none';
   }
 
-  // Infra
+  // Infra — hide card when data is null
   const inf = data.infra;
+  const infraCard = $('card-infra');
   if (inf) {
+    infraCard.style.display = '';
     setBadge('badge-trainer', 'Trainer', inf.trainer_running);
     setBadge('badge-sync', 'Sync', inf.sync_running);
     const ckptEl = $('ckpt-list');
@@ -1784,6 +1151,8 @@ function updateUI(data) {
     } else {
       ckptEl.textContent = 'None yet';
     }
+  } else {
+    infraCard.style.display = 'none';
   }
 
   // Milestones
@@ -1808,14 +1177,18 @@ function updateUI(data) {
       ' | eval@' + cfg.eval_every + ' | ckpt@' + cfg.checkpoint_every;
   }
 
-  // Log tail
+  // Log tail — hide card when empty
+  const logCard = $('card-log');
   const logEl = $('log-tail');
   if (data.log_tail && data.log_tail.length > 0) {
+    logCard.style.display = '';
     logEl.innerHTML = data.log_tail.map(line => {
       if (line.startsWith('[eval]')) return '<span class="eval-line">' + esc(line) + '</span>';
       return '<span class="step-line">' + esc(line) + '</span>';
     }).join('\n');
     logEl.scrollTop = logEl.scrollHeight;
+  } else {
+    logCard.style.display = 'none';
   }
 }
 
@@ -1899,19 +1272,87 @@ async function loadCharts() {
   }
 }
 
+// ── Offline / connectivity state ─────────────────────────────────────────
+let sseFailCount = 0;
+let sseConnected = false;
+let pollInterval = null;
+
+function setSourceIndicator(mode) {
+  const el = $('source-indicator');
+  if (!el) return;
+  if (mode === 'live') {
+    el.innerHTML = '<span style="color:#34d399;">&#9679;</span> Live';
+  } else if (mode === 'cached') {
+    el.innerHTML = '<span style="color:#fbbf24;">&#9679;</span> Cached';
+  } else {
+    el.textContent = '';
+  }
+}
+
+function showOfflineBanner() {
+  const banner = $('offline-banner');
+  if (banner) banner.style.display = 'block';
+}
+
+function hideOfflineBanner() {
+  const banner = $('offline-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+function startPollFallback() {
+  if (pollInterval) return; // already polling
+  pollInterval = setInterval(async () => {
+    try {
+      const res = await fetch('/api/status');
+      if (res.ok) {
+        const data = await res.json();
+        updateUI(data);
+        setSourceIndicator('cached');
+      }
+    } catch (e) {
+      // API also unreachable — nothing to do, banner already shown
+    }
+  }, 30000);
+}
+
+function stopPollFallback() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+}
+
 // ── SSE ──────────────────────────────────────────────────────────────────
 let evtSource;
 function connectSSE() {
   evtSource = new EventSource('/stream');
   evtSource.onmessage = (e) => {
+    // SSE working — reset failure state
+    sseFailCount = 0;
+    sseConnected = true;
+    hideOfflineBanner();
+    stopPollFallback();
+    setSourceIndicator('live');
+
     $('conn-status').textContent = 'Live';
     $('pulse').style.background = '#34d399';
     try { updateUI(JSON.parse(e.data)); } catch (err) { console.error('SSE parse error:', err); }
   };
   evtSource.onerror = () => {
+    sseConnected = false;
+    sseFailCount++;
+
     $('conn-status').textContent = 'Reconnecting...';
     $('pulse').style.background = '#f87171';
     evtSource.close();
+
+    // After 3 consecutive failures, show offline banner and start polling
+    if (sseFailCount >= 3) {
+      showOfflineBanner();
+      setSourceIndicator('cached');
+      startPollFallback();
+    }
+
     setTimeout(connectSSE, 5000);
   };
 }
@@ -1987,9 +1428,16 @@ document.addEventListener('keydown', function(e) {
 async function init() {
   try {
     const res = await fetch('/api/status');
-    updateUI(await res.json());
+    if (res.ok) {
+      updateUI(await res.json());
+      setSourceIndicator('live');
+    }
   } catch (e) {
     console.error('Initial status load failed:', e);
+    // Initial load failed — start in offline mode
+    showOfflineBanner();
+    setSourceIndicator('cached');
+    startPollFallback();
   }
   await loadCharts();
   connectSSE();
@@ -2009,30 +1457,3 @@ init();
 </div>
 </body>
 </html>
-"""
-
-# ── Main ──────────────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="ML Training Dashboard")
-    parser.add_argument("--port", type=int, default=5000)
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--spot-token",
-                        default=os.environ.get("SPOT_TOKEN", ""),
-                        help="Bearer token required for POST /api/spot-price")
-    args = parser.parse_args()
-
-    if args.spot_token:
-        app.config["SPOT_TOKEN"] = args.spot_token
-        print("  Spot-price POST auth: enabled")
-    else:
-        print("  Spot-price POST auth: disabled (no --spot-token)")
-
-    print(f"Starting dashboard on http://{args.host}:{args.port}")
-    print(f"  Project dir: {PROJECT_DIR}")
-    print(f"  Data dir:    {DATA_DIR}")
-    print()
-
-    app.run(host=args.host, port=args.port, debug=args.debug,
-            threaded=True)

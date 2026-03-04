@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitbanshee's AI Playground</title>
+<meta name="description" content="AI experiments — building, training, monitoring, and theorizing about AI.">
+<meta property="og:title" content="Bitbanshee's AI Playground">
+<meta property="og:description" content="Building, training, monitoring, and theorizing about AI">
+<meta property="og:image" content="https://bitbanshee.com/hero.png">
+<meta property="og:url" content="https://bitbanshee.com">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2a2d3a;
+  --text: #e0e0e0;
+  --dim: #888;
+  --accent: #60a5fa;
+  --green: #34d399;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --orange: #fb923c;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { overflow-x: hidden; }
+body {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  background: var(--bg) url('/hero.png') center top / cover no-repeat fixed;
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.5;
+  overflow-x: hidden;
+  min-width: 0;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 23, 0.88);
+  z-index: 1;
+  pointer-events: none;
+}
+.hero-video {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+  transition: opacity 1s ease-out;
+}
+.container {
+  position: relative;
+  z-index: 2;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 12px;
+  overflow: hidden;
+}
+
+/* Header */
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 60px 14px 12px;
+  background: url('/hero.png') center -75px / cover no-repeat;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  gap: 4px;
+  position: relative;
+}
+.header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 17, 23, 0.65);
+  border-radius: inherit;
+}
+.header > * {
+  position: relative;
+  z-index: 1;
+}
+.header h1 { font-size: 22px; font-weight: 600; white-space: nowrap; }
+.header .subtitle {
+  font-size: 14px;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.header-sub {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  width: 100%;
+  justify-content: space-between;
+  position: relative;
+}
+.header-links { display: flex; gap: 8px; font-size: 13px; }
+.header-links a {
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  transition: border-color 0.2s, background 0.2s;
+}
+.header-links a:hover {
+  border-color: var(--accent);
+  background: rgba(232, 121, 84, 0.1);
+}
+.pulse {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 6px;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Grid */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* Experiment cards */
+.experiment-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+  background: rgba(52, 211, 153, 0.1);
+  padding: 2px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.status-badge.archive {
+  color: var(--dim);
+  background: rgba(136, 136, 136, 0.1);
+}
+.status-badge.archive .status-dot {
+  background: var(--dim);
+}
+.status-badge.complete { color: var(--accent); background: rgba(96, 165, 250, 0.1); }
+.status-badge.complete .status-dot { background: var(--accent); }
+.experiment-desc {
+  font-size: 14px;
+  color: var(--dim);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.experiment-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.experiment-links a {
+  color: var(--text);
+  text-decoration: none;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  font-size: 13px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.experiment-links a:hover {
+  border-color: var(--accent);
+  background: rgba(232, 121, 84, 0.1);
+}
+.arxiv-refs { display: flex; gap: 6px; flex-wrap: wrap; }
+.arxiv-pill {
+  font-size: 11px;
+  color: var(--dim);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s;
+}
+.arxiv-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Card inner 2-column layout */
+.card-inner {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 16px;
+  align-items: start;
+}
+.card-thumb {
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: block;
+}
+
+/* Coming soon card */
+.card-muted {
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+.card-muted p {
+  font-size: 15px;
+  color: var(--dim);
+  font-style: italic;
+}
+
+/* Stats row (inline summary) */
+.stats-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--dim);
+  margin: 10px 0 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.stats-row span { color: var(--text); font-weight: 600; }
+
+/* Metric boxes */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+.metric-box {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px 8px;
+  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 3px solid transparent;
+}
+.metric-box.rag-green { border-left-color: var(--green); }
+.metric-box.rag-green .value { color: var(--green); }
+.metric-box.rag-amber { border-left-color: var(--yellow); }
+.metric-box.rag-amber .value { color: var(--yellow); }
+.metric-box .label {
+  font-size: 13px;
+  color: var(--dim);
+  margin-bottom: 3px;
+}
+.metric-box .value {
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.metric-box .sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+
+/* Footer */
+.footer {
+  margin-top: 16px;
+  padding: 20px 14px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 14px;
+  color: var(--dim);
+}
+
+/* Hamburger menu */
+.header-hamburger {
+  display: none;
+  background: none;
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+}
+.header-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.header-menu.open { display: flex; }
+.header-menu a {
+  color: var(--text);
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.header-menu a:hover { background: var(--bg); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .metrics-row { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+}
+@media (max-width: 700px) {
+  .card-inner { grid-template-columns: 1fr; }
+  .hero-video { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-video { display: none; }
+}
+@media (max-width: 540px) {
+  .header-links { display: none; }
+  .header-hamburger { display: block; }
+  .header h1 { font-size: 17px; }
+  .metrics-row { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+}
+</style>
+</head>
+<body>
+<video class="hero-video" autoplay muted playsinline poster="/hero.png">
+  <source src="/banshee-bg.mp4" type="video/mp4">
+</video>
+<div class="container">
+
+  <!-- Header (with subtitle merged from intro) -->
+  <div class="header">
+    <h1><span class="pulse"></span>Bitbanshee's AI Playground</h1>
+    <div class="subtitle">Building, training, monitoring, and theorizing about AI</div>
+    <div class="header-sub">
+      <div class="header-links">
+        <a href="https://github.com/BITBANSHEE-C137" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://linkedin.com/in/gwrowe" target="_blank" rel="noopener">LinkedIn</a>
+        <a href="https://siliconstrategy.ai" target="_blank" rel="noopener">siliconstrategy.ai</a>
+      </div>
+      <button class="header-hamburger" onclick="document.getElementById('header-menu').classList.toggle('open')">&#9776;</button>
+      <div class="header-menu" id="header-menu">
+        <a href="https://github.com/BITBANSHEE-C137" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://linkedin.com/in/gwrowe" target="_blank" rel="noopener">LinkedIn</a>
+        <a href="https://siliconstrategy.ai" target="_blank" rel="noopener">siliconstrategy.ai</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid (no section header) -->
+  <div class="grid">
+
+    <!-- Dual-Process Model (with v1 results folded in) -->
+    <div class="card">
+      <div class="card-inner">
+      <img class="card-thumb" src="/dashboard.png" alt="ML Training Dashboard">
+      <div>
+      <div class="experiment-title">
+        Dual-Process Language Model
+        <span class="status-badge complete"><span class="status-dot"></span>v1 Complete</span>
+      </div>
+      <div class="experiment-desc">
+        Single Transformer operating in two cognitive modes &mdash; fast parallel generation via masked diffusion (System 1) and slow sequential reasoning via autoregressive decoding (System 2). A trained confidence head decides when to escalate.
+      </div>
+      <div class="experiment-links">
+        <a href="https://train.bitbanshee.com" target="_blank" rel="noopener">Dashboard &rarr;</a>
+        <a href="https://train.bitbanshee.com/reports/" target="_blank" rel="noopener">Reports &rarr;</a>
+        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank" rel="noopener">GitHub &rarr;</a>
+      </div>
+      <div class="arxiv-refs">
+        <a class="arxiv-pill" href="https://arxiv.org/abs/2512.14549" target="_blank" rel="noopener">arXiv:2512.14549</a>
+        <a class="arxiv-pill" href="https://arxiv.org/abs/2502.09992" target="_blank" rel="noopener">arXiv:2502.09992</a>
+      </div>
+      <div class="stats-row">
+        <span>50,000</span> steps &middot;
+        <span>$27.62</span> total cost &middot;
+        <span>4</span> spot instances &middot;
+        <span>63%</span> savings
+      </div>
+      <div class="metrics-row">
+        <div class="metric-box rag-green">
+          <div class="label">AR PPL</div>
+          <div class="value">26.9</div>
+          <div class="sub">target &lt;40</div>
+        </div>
+        <div class="metric-box rag-green">
+          <div class="label">AUROC</div>
+          <div class="value">0.854</div>
+          <div class="sub">target &gt;0.75</div>
+        </div>
+        <div class="metric-box rag-green">
+          <div class="label">ECE</div>
+          <div class="value">0.010</div>
+          <div class="sub">target &lt;0.05</div>
+        </div>
+        <div class="metric-box rag-amber">
+          <div class="label">Diff Loss</div>
+          <div class="value">4.13</div>
+          <div class="sub">target 4.0</div>
+        </div>
+        <div class="metric-box rag-amber">
+          <div class="label">S1 Accuracy</div>
+          <div class="value">28.7%</div>
+          <div class="sub">target 40%</div>
+        </div>
+      </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- The Observer -->
+    <div class="card">
+      <div class="card-inner">
+      <img class="card-thumb" src="/observer.png" alt="The Observer Dashboard">
+      <div>
+      <div class="experiment-title">
+        The Observer
+        <span class="status-badge"><span class="status-dot"></span>Collecting Data</span>
+      </div>
+      <div class="experiment-desc">
+        Read-only intelligence dashboard monitoring Moltbook, a social network of autonomous AI agents. Quad-model analysis engine (GPT-5-mini, Claude, Gemini, Grok) scores every post across four dimensions &mdash; OPSEC failures, deception patterns, sycophancy loops, and operator influence &mdash; with composite threat profiling, correlation detection, and human ground-truth calibration. Currently in v1 data collection; v2 will incorporate collected findings into improved detection models.
+      </div>
+      <div class="experiment-links">
+        <a href="https://the-observer.replit.app" target="_blank" rel="noopener">App &rarr;</a>
+        <a href="https://github.com/BITBANSHEE-C137/theobserver" target="_blank" rel="noopener">GitHub &rarr;</a>
+      </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- Structured Memory Engine -->
+    <div class="card">
+      <div class="card-inner">
+      <img class="card-thumb" src="/sme.png" alt="Structured Memory Engine">
+      <div>
+      <div class="experiment-title">
+        Structured Memory Engine
+        <span class="status-badge archive"><span class="status-dot"></span>Archive</span>
+      </div>
+      <div class="experiment-desc">
+        Proof-of-concept for persistent, cross-session AI memory. Goes beyond standard RAG by treating conversation history as structured semantic memory &mdash; adaptive retrieval thresholds, dual-database sync (PGVector local + Pinecone cloud), and real-time memory visualization. Built with TypeScript, React, OpenAI GPT-4o, and text-embedding-3-small.
+      </div>
+      <div class="experiment-links">
+        <a href="https://github.com/BITBANSHEE-C137/StructuredMemoryEngine_replit" target="_blank" rel="noopener">GitHub &rarr;</a>
+      </div>
+      <div class="arxiv-refs">
+        <span class="arxiv-pill">ai</span>
+        <span class="arxiv-pill">context-engineering</span>
+        <span class="arxiv-pill">memory</span>
+      </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- Coming Soon -->
+    <div class="card card-muted">
+      <p>More experiments coming soon</p>
+    </div>
+
+  </div>
+
+  <!-- Footer (simple, no pill links) -->
+  <div class="footer">
+    Bitbanshee &middot; 2026
+  </div>
+
+</div>
+<script>
+document.querySelector('.hero-video').addEventListener('ended', function() {
+  this.style.opacity = '0';
+});
+</script>
+</body>
+</html>

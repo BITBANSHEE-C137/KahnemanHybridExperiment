@@ -1,0 +1,360 @@
+"""
+Lambda handler for ML Lab dashboard API (always-on control plane).
+
+Serves dashboard data from S3 when the GPU EC2 instance is offline.
+Returns the same JSON shapes as the Flask dashboard (web_dashboard.py)
+so the frontend works identically against either backend.
+
+Runtime: Python 3.12, 128MB, 10s timeout
+Trigger: API Gateway HTTP API
+"""
+
+import json
+import time
+import re
+from datetime import datetime, timezone
+from typing import Any
+
+import boto3
+from botocore.exceptions import ClientError
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+BUCKET = "ml-lab-004507070771"
+PREFIX = "dual-system-research-data/"
+CORS_ORIGIN = "https://train.bitbanshee.com"
+
+# Cache TTLs (seconds) — Lambda containers are reused across invocations
+_CACHE_TTL_EVAL = 60   # eval metrics change rarely
+_CACHE_TTL_FAST = 30   # cost/sitrep may be updated more often
+
+# Static config summary (matches tiny.yaml)
+CONFIG_SUMMARY = {
+    "model": "gpt2",
+    "batch_size": 4,
+    "grad_accum": 8,
+    "lr": 3e-4,
+    "warmup_steps": 2000,
+    "max_steps": 50000,
+    "checkpoint_every": 1000,
+    "eval_every": 1000,
+}
+
+# ---------------------------------------------------------------------------
+# S3 client & cache
+# ---------------------------------------------------------------------------
+
+_s3 = boto3.client("s3")
+
+# Module-level cache: key -> (data, timestamp)
+_cache: dict[str, tuple[Any, float]] = {}
+
+
+def _cache_get(key: str, ttl: float) -> Any | None:
+    """Return cached value if still fresh, else None."""
+    entry = _cache.get(key)
+    if entry is None:
+        return None
+    data, ts = entry
+    if time.time() - ts > ttl:
+        return None
+    return data
+
+
+def _cache_set(key: str, data: Any) -> None:
+    _cache[key] = (data, time.time())
+
+
+# ---------------------------------------------------------------------------
+# S3 helpers
+# ---------------------------------------------------------------------------
+
+def _read_s3_json(key: str, ttl: float = _CACHE_TTL_FAST) -> Any | None:
+    """Read and parse a JSON file from S3 with caching. Returns None on miss."""
+    cached = _cache_get(key, ttl)
+    if cached is not None:
+        return cached
+
+    try:
+        resp = _s3.get_object(Bucket=BUCKET, Key=key)
+        data = json.loads(resp["Body"].read())
+        _cache_set(key, data)
+        return data
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            return None
+        raise
+
+
+def _read_s3_text(key: str, ttl: float = _CACHE_TTL_FAST) -> tuple[str | None, str | None]:
+    """Read a text file from S3. Returns (content, last_modified_iso) or (None, None)."""
+    cache_key = f"text:{key}"
+    cached = _cache_get(cache_key, ttl)
+    if cached is not None:
+        return cached
+
+    try:
+        resp = _s3.get_object(Bucket=BUCKET, Key=key)
+        content = resp["Body"].read().decode("utf-8")
+        modified = resp["LastModified"].isoformat()
+        result = (content, modified)
+        _cache_set(cache_key, result)
+        return result
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            return None, None
+        raise
+
+
+def _list_eval_keys() -> list[str]:
+    """List all eval_step_*.json keys under the eval_metrics/ prefix."""
+    cache_key = "_eval_keys"
+    cached = _cache_get(cache_key, _CACHE_TTL_EVAL)
+    if cached is not None:
+        return cached
+
+    prefix = PREFIX + "eval_metrics/"
+    keys: list[str] = []
+    paginator = _s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".json"):
+                keys.append(obj["Key"])
+
+    _cache_set(cache_key, keys)
+    return keys
+
+
+# ---------------------------------------------------------------------------
+# Response builders
+# ---------------------------------------------------------------------------
+
+def _response(status_code: int, body: Any) -> dict:
+    """Build an API Gateway-compatible response with CORS headers."""
+    return {
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": CORS_ORIGIN,
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        },
+        "body": json.dumps(body, default=str),
+    }
+
+
+def _extract_step_number(key: str) -> int:
+    """Extract step number from an eval key like 'eval_step_5000.json'."""
+    m = re.search(r"eval_step_(\d+)\.json", key)
+    return int(m.group(1)) if m else 0
+
+
+# ---------------------------------------------------------------------------
+# Route handlers
+# ---------------------------------------------------------------------------
+
+def _handle_status() -> dict:
+    """GET /api/status — composite status matching Flask build_status() shape."""
+    # Load cost ledger
+    ledger = _read_s3_json(PREFIX + "cost/cost_ledger.json")
+
+    # Load all eval files and find the latest by step number
+    eval_keys = _list_eval_keys()
+    latest_eval = None
+    current_step = 0
+
+    if eval_keys:
+        # Find the key with highest step number
+        best_key = max(eval_keys, key=_extract_step_number)
+        latest_eval = _read_s3_json(best_key, ttl=_CACHE_TTL_EVAL)
+        if latest_eval:
+            current_step = latest_eval.get("step", 0)
+
+    # Extract cost/session data from ledger
+    total_cost = 0.0
+    sessions = []
+    total_training_time_s = 0.0
+    total_sessions = 0
+
+    if ledger:
+        total_cost = ledger.get("total_cost", 0.0)
+        sessions_raw = ledger.get("sessions", [])
+        total_sessions = len(sessions_raw)
+        now = datetime.now(timezone.utc)
+
+        for sess in sessions_raw:
+            boot = sess.get("boot_time")
+            end = sess.get("end_time")
+            duration_s = None
+            if boot:
+                try:
+                    boot_dt = datetime.fromisoformat(boot)
+                    end_dt = datetime.fromisoformat(end) if end else now
+                    duration_s = max(0, (end_dt - boot_dt).total_seconds())
+                    total_training_time_s += duration_s
+                except (ValueError, TypeError):
+                    pass
+            sessions.append({
+                "instance_id": sess.get("instance_id", "?"),
+                "instance_type": sess.get("instance_type", "?"),
+                "az": sess.get("az", "?"),
+                "boot_time": boot,
+                "duration_s": duration_s,
+                "steps_start": sess.get("steps_start"),
+                "steps_end": sess.get("steps_end"),
+                "spot_cost": sess.get("spot_cost", 0),
+                "finalized": sess.get("finalized", False),
+            })
+
+    max_steps = CONFIG_SUMMARY["max_steps"]
+    progress_pct = round((current_step / max_steps) * 100, 1) if max_steps else 0.0
+
+    status = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "current_step": current_step,
+        "max_steps": max_steps,
+        "progress_pct": progress_pct,
+        "phase": "offline",
+        "eta_seconds": None,
+        "elapsed_seconds": None,
+        "latest_train": None,
+        "latest_eval": latest_eval,
+        "next_eval_step": None,
+        "gpu": None,
+        "infra": None,
+        "milestones": [],
+        "total_training_time_s": round(total_training_time_s) if total_training_time_s > 0 else None,
+        "sessions_breakdown": sessions,
+        "instance": {
+            "instance_type": None,
+            "lifecycle": None,
+            "az": None,
+            "boot_time_utc": None,
+            "uptime_seconds": None,
+            "ondemand_price_per_hour": None,
+            "ondemand_cost": None,
+            "ondemand_projected": None,
+            "spot_rate": None,
+            "spot_cost": None,
+            "spot_projected": None,
+            "spot_updated": None,
+            "total_run_cost": total_cost,
+            "total_sessions": total_sessions,
+        },
+        "bootstrap": None,
+        "log_tail": [],
+        "config_summary": CONFIG_SUMMARY,
+    }
+
+    return _response(200, status)
+
+
+def _handle_eval_history() -> dict:
+    """GET /api/eval/history — all eval checkpoints sorted by step."""
+    eval_keys = _list_eval_keys()
+    results: list[dict] = []
+
+    for key in eval_keys:
+        data = _read_s3_json(key, ttl=_CACHE_TTL_EVAL)
+        if data:
+            results.append(data)
+
+    results.sort(key=lambda d: d.get("step", 0))
+    return _response(200, results)
+
+
+def _handle_history() -> dict:
+    """GET /api/history — training step history (may not exist)."""
+    data = _read_s3_json(PREFIX + "training_history.json")
+    return _response(200, data if data is not None else [])
+
+
+def _handle_sitrep() -> dict:
+    """GET /api/sitrep — situation report markdown."""
+    content, modified = _read_s3_text(PREFIX + "sitrep.md")
+    if content is None:
+        return _response(200, {"content": "", "modified": None})
+    return _response(200, {"content": content, "modified": modified})
+
+
+def _handle_cost_total() -> dict:
+    """GET /api/cost/total — full cost ledger."""
+    data = _read_s3_json(PREFIX + "cost/cost_ledger.json")
+    if data is None:
+        return _response(200, {})
+    return _response(200, data)
+
+
+def _handle_stream() -> dict:
+    """GET /stream — SSE not available offline, return 204."""
+    return {
+        "statusCode": 204,
+        "headers": {
+            "Access-Control-Allow-Origin": CORS_ORIGIN,
+        },
+        "body": "",
+    }
+
+
+def _handle_spot_price() -> dict:
+    """POST /api/spot-price — read-only mode, reject writes."""
+    return _response(405, {"error": "read-only mode (offline)"})
+
+
+# ---------------------------------------------------------------------------
+# Route table
+# ---------------------------------------------------------------------------
+
+# (method, path) -> handler
+_ROUTES: dict[tuple[str, str], callable] = {
+    ("GET", "/api/status"):       _handle_status,
+    ("GET", "/api/eval/history"): _handle_eval_history,
+    ("GET", "/api/history"):      _handle_history,
+    ("GET", "/api/sitrep"):       _handle_sitrep,
+    ("GET", "/api/cost/total"):   _handle_cost_total,
+    ("GET", "/stream"):           _handle_stream,
+    ("POST", "/api/spot-price"):  _handle_spot_price,
+}
+
+
+# ---------------------------------------------------------------------------
+# Lambda entry point
+# ---------------------------------------------------------------------------
+
+def handler(event: dict, context: Any) -> dict:
+    """
+    Main Lambda handler for API Gateway HTTP API.
+
+    Event shape (HTTP API v2):
+        {"requestContext": {"http": {"method": "GET", "path": "/api/status"}}, ...}
+    """
+    http = event.get("requestContext", {}).get("http", {})
+    method = http.get("method", "GET").upper()
+    path = http.get("path", "/")
+
+    # Handle CORS preflight
+    if method == "OPTIONS":
+        return {
+            "statusCode": 204,
+            "headers": {
+                "Access-Control-Allow-Origin": CORS_ORIGIN,
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Max-Age": "86400",
+            },
+            "body": "",
+        }
+
+    # Match exact route
+    route_handler = _ROUTES.get((method, path))
+    if route_handler:
+        return route_handler()
+
+    # Fallback: any unmatched GET /api/* returns 404
+    if method == "GET" and path.startswith("/api/"):
+        return _response(404, {"error": "not found"})
+
+    # Anything else
+    return _response(404, {"error": "not found"})
