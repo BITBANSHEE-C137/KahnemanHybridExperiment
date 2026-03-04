@@ -1,35 +1,41 @@
 # Project Status — Dual-Process Language Model
 
-**Last updated:** 2026-03-01
+**Last updated:** 2026-03-03
 
 > See also: [README.md](README.md) for research narrative and results | [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for ops and deployment details
 
 ## Live Dashboard
 
-**[train.bitbanshee.com](https://train.bitbanshee.com)** — real-time training metrics, GPU stats, loss curves, and cost tracking.
+**[train.bitbanshee.com](https://train.bitbanshee.com)** — training metrics, loss curves, and cost tracking. Served via CloudFront with S3 fallback when instances are down.
 
-## Training Progress
+## v1 Training: COMPLETE
+
+GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. Trained March 1–3, 2026 across 4 spot instances with 3 reclamation recoveries. Fleet capacity set to 0, all instances terminated.
+
+### Final Metrics (Step 50,000)
+
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| AR Perplexity | 26.9 | < 40 | **Met** |
+| Confidence AUROC | 0.854 | > 0.75 | **Met** |
+| Confidence ECE | 0.010 | < 0.05 | **Met** |
+| Diffusion Loss | 4.13 | < 4.0 | 97% — narrowly missed |
+| S1 Token Accuracy | 28.7% | > 40% | 72% — not met |
+
+**3 of 5 targets met.** Diffusion loss and S1 accuracy within striking distance — planned λ rebalancing for v2.
+
+### Cost Summary
 
 | Metric | Value |
-|---|---|
-| Current step | ~2,300 / 50,000 (4.6%) |
-| Phase | Cosine decay (warmup completed at step 2,000) |
-| Instance | g5.2xlarge (NVIDIA A10G, spot) |
+|--------|-------|
+| Total cost | $27.62 |
+| Spot instances used | 4 |
+| Reclamation recoveries | 3 |
+| Savings vs on-demand | 63% |
 
-**Note:** Steps 100–4,000+ from the initial run were lost across spot terminations before checkpoint frequency was increased. Checkpoint interval is now every 1,000 steps (was 5,000). The eval history below is from the prior run and represents validated training dynamics.
+### Checkpoints
 
-### Eval History
-
-| Step | AR PPL | Diff Loss | S1 Token Acc | Conf Acc | Conf ECE | Conf AUROC | Run |
-|------|--------|-----------|-------------|----------|----------|------------|-----|
-| 50 | 19,060 | 7.8397 | 3.4% | 96.6% | 0.0499 | 0.467 | 1 |
-| 100 | 23,331 | 7.5697 | 3.2% | 96.8% | 0.0037 | 0.502 | 1 |
-| 1,000 | 20,575 | 6.7854 | 4.9% | 95.1% | 0.0028 | 0.550 | 2 |
-| 2,000 | 21,752 | 6.5495 | 6.5% | 93.5% | 0.0014 | 0.607 | 2 |
-| 3,000 | 21,412 | 6.5179 | 7.1% | 92.9% | 0.0057 | 0.628 | 1 |
-| 4,000 | 22,406 | 6.2339 | 8.6% | 91.5% | 0.0052 | 0.669 | 1 |
-
-**Trends:** Diffusion loss steadily declining (7.84 → 6.23 over 4k steps). S1 token accuracy 2.5× above random baseline. Confidence AUROC improving linearly (0.47 → 0.67). Step 2,000 eval from current run confirms prior trends reproducing.
+All 50 checkpoints saved to S3 (`step_1000.pt` through `step_50000.pt`, ~1.4 GiB each). Available on request.
 
 ## Infrastructure
 
@@ -38,14 +44,13 @@
 | Component | Status | Details |
 |---|---|---|
 | S3 bucket | Active | `s3://ml-lab-004507070771/dual-system-research-data/` |
-| Instance type | Active | g5.2xlarge / g6.xlarge (spot fleet) |
+| Instance | Terminated | g5.2xlarge (spot), fleet capacity = 0 |
 | EBS root volume | 100GB | OS + Python 3.12 + ML stack |
 | Ephemeral NVMe | 419GB | `/opt/dlami/nvme` — runtime data |
-| Bootstrap | Autonomous | Fully autonomous spot recovery with TLS cert backup/restore |
-| Web dashboard | Live | [train.bitbanshee.com](https://train.bitbanshee.com) — CloudFront + nginx + Flask |
-| DNS | Automated | `train.bitbanshee.com` → CloudFront ALIAS; `origin.train.bitbanshee.com` → EC2 A record (bootstrap-managed) |
-| Spot price | Automated | Cron job updates dashboard every 5 minutes |
-| Sync daemon | Active | S3 artifact sync every 60 seconds |
+| Bootstrap | Ready | Fully autonomous spot recovery (CloudFront-aware) |
+| Web dashboard | Fallback | [train.bitbanshee.com](https://train.bitbanshee.com) — CloudFront + S3 fallback (EC2 offline) |
+| DNS | Configured | `train.bitbanshee.com` → CloudFront ALIAS; `origin.train.bitbanshee.com` → EC2 A record |
+| Sync daemon | Idle | S3 artifact sync (runs when instance active) |
 
 ## Environment (baked into AMI)
 
@@ -76,24 +81,25 @@
 - [x] OpenWebText preprocessing (memmap shards)
 - [x] Full training launched on tiny config (GPT-2 Small, 50k steps)
 - [x] Web dashboard — live at [train.bitbanshee.com](https://train.bitbanshee.com)
-- [x] HTTPS + nginx reverse proxy with Let's Encrypt TLS
+- [x] HTTPS + CloudFront + ACM TLS (auto-renewing)
 - [x] Dashboard hardened — token auth on write endpoints, SSE limits, security headers
 - [x] Route53 DNS auto-update on instance boot
 - [x] Fully autonomous bootstrap — all services start without manual intervention
 - [x] Checkpoint frequency increased to every 1,000 steps
 - [x] Local checkpoint cleanup (keep last 3, S3 has all)
 - [x] Spot price monitoring via cron + IMDSv2 auto-detection
-- [x] TLS cert backup/restore via S3 (handles Let's Encrypt rate limits)
 - [x] Bootstrap battle-tested across 4 spot recovery cycles
-- [x] CloudFront + ACM TLS (no more certbot/Let’s Encrypt)
+- [x] CloudFront + ACM TLS (no more certbot/Let's Encrypt)
 - [x] S3 fallback page when instance is down
 - [x] Dashboard UX refresh — larger fonts, narrower layout, footer, S1 Acc tile
+- [x] Complete training run (50,000 steps) — v1 DONE
 
 ## Next Steps
 
 > See [README.md — Planned Work](README.md#planned-work) for the full research roadmap.
 
-- [ ] Complete training run (50,000 steps)
-- [ ] Run LAMBADA + WikiText-103 benchmarks at final checkpoint
+- [x] Complete training run (50,000 steps) — DONE
+- [ ] Run LAMBADA + WikiText-103 benchmarks on final checkpoint
 - [ ] Run system comparison analysis (System 1 vs 2)
+- [ ] v2 training with rebalanced loss weights
 - [ ] Scale to GPT-2 Medium (355M) tier
