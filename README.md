@@ -272,7 +272,7 @@ Steps 50–7,000 from corrected re-evaluation (2026-03-01). Steps 8,000+ evaluat
 
 1. Run LAMBADA and WikiText-103 benchmarks on final checkpoint (vs pretrained GPT-2 Small: LAMBADA ~36%, WikiText PPL ~31.5)
 2. Confidence head analysis — escalation rates, System 1 vs System 2 quality per difficulty tier
-3. v2 training — &lambda; rebalancing to address objective interference (diffusion loss ~1.6&times; AR loss at equal &lambda;=1.0)
+3. **v2 training (in progress)** — &lambda;_diff increased from 1.0 to 2.0 to rebalance gradient contribution. Eval metrics stored in `eval_metrics/v2/` (S3) with v1 archived in `eval_metrics_v1/` (git). Automated cost controls active: budget cap $50, spot price ceiling $0.75/hr.
 4. Ablation experiments (loss weight sweep, confidence head depth, mask schedule) if compute budget permits
 5. Scale to GPT-2 Medium (355M) tier
 
@@ -294,7 +294,7 @@ S1 token accuracy grew rapidly in early training (3.7% &rarr; 20% over 15k steps
 
 ### Spot Instance Recovery
 
-Training across 4 spot instances with 3 reclamation recoveries required a fully autonomous bootstrap system (16 steps). Total cost: $27.62 (63% savings vs on-demand). Key failure modes encountered and fixed: `crontab -l` returning exit code 1 under `set -o pipefail`, `pip install flask` breaking due to blinker version conflicts, and empty spot price API results crashing the price updater. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for full details.
+Training across 4 spot instances with 3 reclamation recoveries required a fully autonomous bootstrap system (16 steps). Total cost: $27.62 (63% savings vs on-demand). Key failure modes encountered and fixed: `crontab -l` returning exit code 1 under `set -o pipefail`, `pip install flask` breaking due to blinker version conflicts, and empty spot price API results crashing the price updater. v2 added automated cost controls: a $50 budget circuit breaker (`cost-tracker.sh`) and a $0.75/hr spot price ceiling (`update-spot-price.sh`), both checked every 5 minutes via cron. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for full details.
 
 ## Reproducibility
 
@@ -375,7 +375,7 @@ KahnemanHybridExperiment/
 
 ## Infrastructure
 
-Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 checkpoint sync, and a live web dashboard. See **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** for spot recovery architecture, monitoring dashboards, deployment details, and cost analysis.
+Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 checkpoint sync, and a live web dashboard. Automated cost controls cap total spend at $50 (budget circuit breaker) and shut down the fleet if spot prices exceed $0.75/hr (price ceiling). See **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** for spot recovery architecture, cost controls, monitoring dashboards, deployment details, and cost analysis.
 
 ## References
 
