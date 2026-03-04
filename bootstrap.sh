@@ -277,8 +277,8 @@ step_done 12
 # ── Step 13: Spot price updater — run now + cron every 5 minutes ──
 step_start 13
 echo "Setting up spot price updater..."
-sudo -u ubuntu bash -c "cd $PROJECT && FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_SPOT_PRICE=0.75 bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1" || true &
-CRON_LINE="*/5 * * * * cd $PROJECT && FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_SPOT_PRICE=0.75 bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1"
+sudo -u ubuntu bash -c "cd $PROJECT && FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_SPOT_PRICE=0.75 bash update-spot-price.sh localhost:5000 '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1" || true
+CRON_LINE="*/5 * * * * cd $PROJECT && FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_SPOT_PRICE=0.75 bash update-spot-price.sh localhost:5000 '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1"
 EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
 echo "$EXISTING" | grep -v update-spot-price | { cat; echo "$CRON_LINE"; } | sudo -u ubuntu crontab -
 echo "  spot price: cron installed (every 5 min)"
