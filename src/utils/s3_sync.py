@@ -83,7 +83,7 @@ def upload_metrics(metrics: dict, step: int) -> None:
         step: Training step number.
     """
     try:
-        metrics_dir = DATA_DIR / EVAL_S3_PREFIX
+        metrics_dir = DATA_DIR / "eval_metrics"
         metrics_dir.mkdir(parents=True, exist_ok=True)
         local_path = metrics_dir / f"eval_step_{step}.json"
 
@@ -189,7 +189,7 @@ class SpotTerminationHandler:
 
         # Priority 2: Sync smaller artifact directories
         sync_dirs = [
-            (self.data_dir / "eval_metrics", "eval_metrics"),
+            (self.data_dir / "eval_metrics", EVAL_S3_PREFIX),
             (self.data_dir / "logs", "logs"),
             (self.data_dir / "benchmarks", "benchmarks"),
         ]
