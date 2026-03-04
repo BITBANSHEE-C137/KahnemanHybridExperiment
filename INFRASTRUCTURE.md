@@ -16,13 +16,14 @@
 
 | Component | Details |
 |-----------|---------|
-| **Compute** | EC2 Spot Fleet (g5.2xlarge / g6.xlarge) — NVIDIA A10G or L4 GPUs |
+| **Compute** | EC2 Fleet (g5.2xlarge / g6.xlarge) — NVIDIA A10G or L4 GPUs, `maintain` type |
 | **Storage** | Instance NVMe for fast I/O, S3 for persistence (`s3://ml-lab-004507070771/dual-system-research-data/`) |
 | **Secrets** | AWS Secrets Manager for W&B and HuggingFace tokens |
 | **Tracking** | [Weights & Biases](https://wandb.ai) for real-time experiment logging |
 | **CDN/TLS** | CloudFront (`EGWW28IMM7U2T`) → ACM certificate → `train.bitbanshee.com` |
 | **DNS** | `train.bitbanshee.com` → CloudFront ALIAS; `origin.train.bitbanshee.com` → EC2 A record (bootstrap-managed) |
-| **Failover** | Origin group: EC2 primary → S3 static fallback page on 500/502/503/504 |
+| **Origin Policy** | `/api/*` and `/stream` behaviors use `AllViewerExceptHostHeader` origin request policy (API Gateway rejects forwarded Host header) |
+| **Failover** | Origin groups: `ec2-with-s3-fallback` (default), `api-with-lambda-fallback` (/api/\*, /stream) — automatic failover on 500/502/503/504 |
 | **Dashboard** | [train.bitbanshee.com](https://train.bitbanshee.com) — live web UI with training progress, GPU stats, loss curves, and cost tracking |
 
 ## Spot Instance Resilience
@@ -164,10 +165,10 @@ The training environment is baked into an AMI to avoid lengthy setup on each spo
 
 ```bash
 # Start the fleet (launches a spot instance)
-aws ec2 modify-spot-fleet-request --spot-fleet-request-id fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a --target-capacity 1
+aws ec2 modify-fleet --fleet-id fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a --target-capacity-specification TotalTargetCapacity=1,SpotTargetCapacity=1,DefaultTargetCapacityType=spot
 
 # Stop the fleet
-aws ec2 modify-spot-fleet-request --spot-fleet-request-id fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a --target-capacity 0
+aws ec2 modify-fleet --fleet-id fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a --target-capacity-specification TotalTargetCapacity=0,SpotTargetCapacity=0,DefaultTargetCapacityType=spot
 
 # SSH to instance
 ssh -i gpu-key.pem ubuntu@origin.train.bitbanshee.com
@@ -190,6 +191,6 @@ Spot pricing varies by instance type and availability zone. The `update-spot-pri
 - 50,000 steps at ~0.50 steps/sec = ~28 hours of GPU time (including eval every 1,000 steps)
 - g5.2xlarge spot: ~$12 per complete run (~$24 with spot overhead across multiple allocations)
 
-**Actual wall time** is significantly longer due to spot interruptions, bootstrap recovery (~5 min per cycle), and instance availability gaps. The current training run has spanned 4 spot allocations over several days, with the dashboard projecting ~$24 total cost — spot overhead roughly doubles pure compute cost.
+**Actual v1 cost**: $27.62 across 4 spot instances, 3 reclamation recoveries. Spot overhead approximately doubled pure compute cost (consistent with projection). Training completed at step 50,000 on 2026-03-03.
 
 S3 storage: negligible (~$0.02/month for checkpoints and logs)
