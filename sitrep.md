@@ -1,17 +1,17 @@
-# Sitrep — 2026-03-04 10:00 AM ET / 15:00 UTC
+# Sitrep — 2026-03-04 10:30 AM ET / 15:30 UTC
 
-## v2 Training — running, healthy, 15% complete
+## v2 Training — running, healthy, 16% complete
 
-- **Step ~7,700 / 50,000** (15.4%)
-- GPU: 100% utilization, 15.8 / 22 GB VRAM, 52°C
-- Rate: ~831 steps/hr (4.3s/step)
-- ETA to 50k: ~51.2 hours at current rate
+- **Step ~8,100 / 50,000** (16.2%)
+- GPU: 100% utilization, 15.8 / 22 GB VRAM, 54°C
+- Rate: ~795 steps/hr (4.5s/step)
+- ETA to 50k: ~50.7 hours at current rate
 - Spot price: $0.4494/hr (g5.2xlarge)
-- Spot cost (this instance): $4.25 — projected: $27.58
-- Total cost across 1 instance(s): $4.25
-- Instance up 9h27m since bootstrap (2026-03-04 05:32 UTC)
+- Spot cost (this instance): $4.47 — projected: $27.60
+- Total cost across 1 instance(s): $4.47
+- Instance up 9h57m since bootstrap (2026-03-04 05:32 UTC)
 
-## Eval trajectory (step 1k → 7k)
+## Eval trajectory (step 1k → 8k)
 
 | Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE    |
 |-------|--------|-----------|--------|-------|--------|
@@ -22,23 +22,24 @@
 | 5000 | 25.6   | 4.97      | 18.0%  | 0.824 | 0.0031 |
 | 6000 | 26.4   | 5.12      | 17.5%  | 0.830 | 0.0052 |
 | 7000 | 27.1   | 5.13      | 17.9%  | 0.833 | 0.0081 |
+| 8000 | 27.6   | 4.65      | 21.1%  | 0.845 | 0.0071 |
 
-Live at step ~7,700: ar_loss 3.38, diff_loss 5.02, conf_acc 0.870
+Live at step ~8,100: ar_loss 3.51, diff_loss 4.78, conf_acc 0.858
 
 ## Target status (5 of 5)
 
-- **AR PPL < 40:** 27.1 — met since step 50, drifting up slowly but solid margin
-- **AUROC > 0.75:** 0.833 — met since step 8k, steady climb
-- **ECE < 0.05:** 0.008 — met since step 1k, excellent calibration
-- **Diff loss → 4.0:** 5.13 at eval step 7k — 72% of the way
-- **S1 accuracy → 40%:** 17.9% at eval — 45% of target
+- **AR PPL < 40:** 27.6 — met since step 50, drifting up slowly but solid margin
+- **AUROC > 0.75:** 0.845 — met since step 8k, steady climb
+- **ECE < 0.05:** 0.007 — met since step 1k, excellent calibration
+- **Diff loss → 4.0:** 4.65 at eval step 8k — 84% of the way, closing in
+- **S1 accuracy → 40%:** 21.1% at eval — 53% of target
 
 ## Trends since last auto-sitrep
 
-- +400 steps (~7,300 → ~7,700)
-- Diff loss: 5.13 → 5.13
-- S1 accuracy: 17.9% → 17.9%
-- AUROC: 0.833 → 0.833
+- +400 steps (~7,700 → ~8,100)
+- Diff loss: 5.13 → 4.65
+- S1 accuracy: 17.9% → 21.1%
+- AUROC: 0.833 → 0.845
 
 ## Code & infra
 
