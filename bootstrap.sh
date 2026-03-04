@@ -103,7 +103,7 @@ step_done 1
 step_start 2
 echo "Configuring ubuntu user environment..."
 # Clean old env vars
-sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /CHECKPOINT_S3_PREFIX/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d' /home/ubuntu/.bashrc
+sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /CHECKPOINT_S3_PREFIX/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d; /FLEET_ID/d; /MAX_BUDGET/d; /MAX_SPOT_PRICE/d' /home/ubuntu/.bashrc
 
 # Inject env vars
 cat >> /home/ubuntu/.bashrc << BASHRC
@@ -121,6 +121,9 @@ export AWS_DEFAULT_REGION="$REGION"
 export PREPROCESSED_DATA_DIR="$DATA_DIR/preprocessed"
 export SPOT_TOKEN="$SPOT_TOKEN"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export FLEET_ID="fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a"
+export MAX_BUDGET=50
+export MAX_SPOT_PRICE=0.75
 BASHRC
 
 # Git credentials
@@ -274,8 +277,8 @@ step_done 12
 # ── Step 13: Spot price updater — run now + cron every 5 minutes ──
 step_start 13
 echo "Setting up spot price updater..."
-sudo -u ubuntu bash -c "cd $PROJECT && bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1" || true &
-CRON_LINE="*/5 * * * * cd $PROJECT && bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1"
+sudo -u ubuntu bash -c "cd $PROJECT && FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_SPOT_PRICE=0.75 bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1" || true &
+CRON_LINE="*/5 * * * * cd $PROJECT && FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_SPOT_PRICE=0.75 bash update-spot-price.sh train.bitbanshee.com '$SPOT_TOKEN' >> /tmp/spot-updater.log 2>&1"
 EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
 echo "$EXISTING" | grep -v update-spot-price | { cat; echo "$CRON_LINE"; } | sudo -u ubuntu crontab -
 echo "  spot price: cron installed (every 5 min)"
@@ -285,7 +288,7 @@ step_done 13
 step_start 14
 echo "Setting up cost tracker..."
 sudo -u ubuntu bash -c "cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' bash cost-tracker.sh init >> /tmp/cost-tracker.log 2>&1" || true
-COST_CRON="*/5 * * * * cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' bash cost-tracker.sh update >> /tmp/cost-tracker.log 2>&1"
+COST_CRON="*/5 * * * * cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_BUDGET=50 bash cost-tracker.sh update >> /tmp/cost-tracker.log 2>&1"
 EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
 echo "$EXISTING" | grep -v cost-tracker | { cat; echo "$COST_CRON"; } | sudo -u ubuntu crontab -
 echo "  cost tracker: initialized + cron installed (every 5 min)"
