@@ -1171,14 +1171,14 @@ body::before {
       <div class="header-links">
         <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
-        <a href="/reports/" target="_blank">Reports</a>
+        <a href="/reports/v1/" target="_blank">Reports</a>
         <a href="#" class="sitrep-badge" onclick="openSitrep();return false">SITREP</a>
       </div>
       <button class="header-hamburger" onclick="document.getElementById('header-menu').classList.toggle('open')">&#9776;</button>
       <div class="header-menu" id="header-menu">
         <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
-        <a href="/reports/" target="_blank">Reports</a>
+        <a href="/reports/v1/" target="_blank">Reports</a>
         <a href="#" class="sitrep-badge" onclick="document.getElementById('header-menu').classList.remove('open');openSitrep();return false">SITREP</a>
       </div>
       <div class="meta">
@@ -1380,7 +1380,7 @@ body::before {
     <span>Dual-Process Language Model</span>
     <div class="footer-links">
       <a href="https://bitbanshee.com" target="_blank">bitbanshee.com</a>
-      <a href="/reports/" target="_blank">Reports</a>
+      <a href="/reports/v1/" target="_blank">Reports</a>
     </div>
   </div>
 </div>
