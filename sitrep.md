@@ -1,31 +1,35 @@
-# Sitrep — 2026-03-04 1:30 AM ET / 06:30 UTC
+# Sitrep — 2026-03-04 2:00 AM ET / 07:00 UTC
 
-## v2 Training — running, healthy, 1% complete
+## v2 Training — running, healthy, 2% complete
 
-- **Step ~700 / 50,000** (1.4%)
+- **Step ~1,100 / 50,000** (2.2%)
 - GPU: 98% utilization, 15.8 / 22 GB VRAM, 53°C
-- Rate: ~831 steps/hr (4.3s/step)
-- ETA to 50k: ~59.3 hours at current rate
-- Spot price: $0.4486/hr (g5.2xlarge)
-- Spot cost (this instance): $0.43 — projected: $30.56
-- Total cost across 1 instance(s): $0.43
-- Instance up 0h57m since bootstrap (2026-03-04 05:32 UTC)
+- Rate: ~789 steps/hr (4.6s/step)
+- ETA to 50k: ~59.1 hours at current rate
+- Spot price: $0.4493/hr (g5.2xlarge)
+- Spot cost (this instance): $0.65 — projected: $29.65
+- Total cost across 1 instance(s): $0.65
+- Instance up 1h27m since bootstrap (2026-03-04 05:32 UTC)
 
-*(no eval data yet)*
+## Eval trajectory (step 1k → 1k)
 
-Live at step ~700: ar_loss 3.14, diff_loss 6.95, conf_acc 0.000
+| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE    |
+|-------|--------|-----------|--------|-------|--------|
+| 1000 | 21.4   | 6.74      | 5.1%  | 0.556 | 0.0019 |
+
+Live at step ~1,100: ar_loss 3.13, diff_loss 6.67, conf_acc 0.950
 
 ## Target status (5 of 5)
 
-- **AR PPL < 40:** 0.0 — met since step 50, drifting up slowly but solid margin
-- **AUROC > 0.75:** 0.000 — met since step 8k, steady climb
-- **ECE < 0.05:** 0.000 — met since step 1k, excellent calibration
-- **Diff loss → 4.0:** 0.00 at eval step 0k — 100% of the way, closing in
-- **S1 accuracy → 40%:** 0.0% at eval — 0% of target
+- **AR PPL < 40:** 21.4 — met since step 50, drifting up slowly but solid margin
+- **AUROC > 0.75:** 0.556 — met since step 8k, steady climb
+- **ECE < 0.05:** 0.002 — met since step 1k, excellent calibration
+- **Diff loss → 4.0:** 6.74 at eval step 1k — 32% of the way
+- **S1 accuracy → 40%:** 5.1% at eval — 13% of target
 
 ## Trends since last auto-sitrep
 
-- +500 steps (~200 → ~700)
+- +400 steps (~700 → ~1,100)
 
 ## Code & infra
 
