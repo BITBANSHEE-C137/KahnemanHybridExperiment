@@ -1,15 +1,15 @@
-# Sitrep — 2026-03-04 12:30 PM ET / 17:30 UTC
+# Sitrep — 2026-03-04 1:00 PM ET / 18:00 UTC
 
-## v2 Training — running, healthy, 21% complete
+## v2 Training — running, healthy, 19% complete
 
-- **Step ~10,600 / 50,000** (21.2%)
-- GPU: 0% utilization, 0.0 / 22 GB VRAM, 22°C
+- **Step ~9,300 / 50,000** (18.6%)
+- GPU: 100% utilization, 16.3 / 22 GB VRAM, 52°C
 - Rate: ~830 steps/hr (4.3s/step)
-- ETA to 50k: ~47.7 hours at current rate
-- Spot price: $0.4494/hr (g5.2xlarge)
-- Spot cost (this instance): $0.06 — projected: $0.31
-- Total cost across 1 instance(s): $0.06
-- Instance up 0h08m since bootstrap (2026-03-04 17:21 UTC)
+- ETA to 50k: ~49.0 hours at current rate
+- Spot price: $0.4496/hr (g5.2xlarge)
+- Spot cost (this instance): $0.29 — projected: $1.56
+- Total cost across 3 instance(s): $5.55
+- Instance up 0h38m since bootstrap (2026-03-04 17:21 UTC) — spot recovery from prior instance (checkpoint restored from S3)
 
 ## Eval trajectory (step 3k → 10k)
 
@@ -24,19 +24,19 @@
 | 9000 | 28.1   | 5.02      | 18.9%  | 0.843 | 0.0057 |
 | 10000 | 26.5   | 5.41      | 14.7%  | 0.791 | 0.0110 |
 
-Live at step ~10,600: ar_loss 3.47, diff_loss 5.85, conf_acc 0.877
+Live at step ~9,300: ar_loss 3.31, diff_loss 4.49, conf_acc 0.000
 
 ## Target status (5 of 5)
 
-- **AR PPL < 40:** 26.5 — met since step 50, drifting up slowly but solid margin
-- **AUROC > 0.75:** 0.791 — met since step 8k, steady climb
-- **ECE < 0.05:** 0.011 — met since step 1k, excellent calibration
-- **Diff loss → 4.0:** 5.41 at eval step 10k — 65% of the way
-- **S1 accuracy → 40%:** 14.7% at eval — 37% of target
+- **AR PPL < 40:** 0.0 — met since step 50, drifting up slowly but solid margin
+- **AUROC > 0.75:** 0.000 — met since step 8k, steady climb
+- **ECE < 0.05:** 0.000 — met since step 1k, excellent calibration
+- **Diff loss → 4.0:** 0.00 at eval step 9k — 100% of the way, closing in
+- **S1 accuracy → 40%:** 0.0% at eval — 0% of target
 
-## Trends
+## Trends since last auto-sitrep
 
-*(first auto-sitrep run after boot — no prior data)*
+- +-1,300 steps (~10,600 → ~9,300)
 
 ## Spot instance history (3 instances)
 
@@ -46,9 +46,9 @@ Training has survived 2 spot reclaims via checkpoint recovery. Each new instance
 |---|-----|-------|------------|------|
 | 1 | us-east-1b | 1→9,300 | 2026-03-04 05:32 | $5.11 |
 | 2 | us-east-1b | 10,600→9,100 | 2026-03-04 16:59 | $0.16 |
-| 3 | us-east-1b | 10,600→10,600 | 2026-03-04 17:21 | $0.06 |
+| 3 | us-east-1b | 10,600→9,300 | 2026-03-04 17:21 | $0.25 |
 
-**Total spot cost across all instances: $5.33**
+**Total spot cost across all instances: $5.52**
 
 ## Code & infra
 
