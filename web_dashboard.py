@@ -648,7 +648,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ML Training Dashboard</title>
+<title>Dual-Process Language Model — Dashboard</title>
 <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
@@ -1111,20 +1111,18 @@ body::before {
 
   <!-- Header -->
   <div class="header">
-    <h1><span class="pulse" id="pulse"></span>ML Training Dashboard</h1>
+    <h1><span class="pulse" id="pulse"></span>Dual-Process Language Model</h1>
     <div class="header-sub">
       <div class="header-links">
+        <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
-        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
-        <a href="https://siliconstrategy.ai" target="_blank">siliconstrategy.ai</a>
         <a href="/reports/" target="_blank">Reports</a>
         <a href="#" onclick="openSitrep();return false">Sitrep</a>
       </div>
       <button class="header-hamburger" onclick="document.getElementById('header-menu').classList.toggle('open')">&#9776;</button>
       <div class="header-menu" id="header-menu">
+        <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
-        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
-        <a href="https://siliconstrategy.ai" target="_blank">siliconstrategy.ai</a>
         <a href="/reports/" target="_blank">Reports</a>
         <a href="#" onclick="document.getElementById('header-menu').classList.remove('open');openSitrep();return false">Sitrep</a>
       </div>
@@ -1324,11 +1322,10 @@ body::before {
 
   <!-- Footer -->
   <div class="footer">
-    <span>KahnemanHybridExperiment</span>
+    <span>Dual-Process Language Model</span>
     <div class="footer-links">
+      <a href="https://bitbanshee.com" target="_blank">bitbanshee.com</a>
       <a href="/reports/" target="_blank">Reports</a>
-      <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment#readme" target="_blank">README</a>
-      <a href="https://www.linkedin.com/in/gwrowe/" target="_blank">LinkedIn</a>
     </div>
   </div>
 </div>
