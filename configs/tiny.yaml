@@ -28,7 +28,7 @@ training:
 
   # Loss weighting
   ar_loss_weight: 1.0
-  diff_loss_weight: 1.0
+  diff_loss_weight: 2.0           # v2: increased from 1.0 to compensate for gradient imbalance
   conf_loss_weight: 0.1
 
   # Diffusion
