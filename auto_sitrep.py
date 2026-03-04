@@ -9,6 +9,7 @@ import glob
 import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from urllib.request import urlopen
 from urllib.error import URLError
 
@@ -18,7 +19,7 @@ COST_LEDGER = "/opt/dlami/nvme/ml-lab/cost/cost_ledger.json"
 HISTORY_FILE = "/tmp/auto-sitrep-eval-history.json"
 SITREP_PATH = os.path.join(PROJECT, "sitrep.md")
 
-ET = timezone(timedelta(hours=-4))
+ET = ZoneInfo("America/New_York")  # handles EST/EDT automatically
 
 
 def fetch_status():

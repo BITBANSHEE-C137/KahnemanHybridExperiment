@@ -18,6 +18,7 @@ S3_BUCKET = os.environ.get("S3_BUCKET", "ml-lab-004507070771/dual-system-researc
 AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/opt/dlami/nvme/ml-lab"))
 CHECKPOINT_S3_PREFIX = os.environ.get("CHECKPOINT_S3_PREFIX", "checkpoints")
+EVAL_S3_PREFIX = os.environ.get("EVAL_S3_PREFIX", "eval_metrics")
 
 
 def upload_file(local_path: str | Path, s3_key: str) -> bool:
@@ -82,14 +83,14 @@ def upload_metrics(metrics: dict, step: int) -> None:
         step: Training step number.
     """
     try:
-        metrics_dir = DATA_DIR / "eval_metrics"
+        metrics_dir = DATA_DIR / EVAL_S3_PREFIX
         metrics_dir.mkdir(parents=True, exist_ok=True)
         local_path = metrics_dir / f"eval_step_{step}.json"
 
         payload = {"step": step, "timestamp": time.time(), **metrics}
         local_path.write_text(json.dumps(payload, indent=2))
 
-        s3_key = f"eval_metrics/eval_step_{step}.json"
+        s3_key = f"{EVAL_S3_PREFIX}/eval_step_{step}.json"
         upload_file_async(local_path, s3_key)
     except Exception as e:
         print(f"[s3_sync] Failed to upload metrics for step {step}: {e}")
