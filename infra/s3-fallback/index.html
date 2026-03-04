@@ -3,1457 +3,513 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dual-Process Language Model — Dashboard</title>
+<title>Dual-Process Language Model — Offline Dashboard</title>
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --border: #2a2d3a;
-  --text: #e0e0e0;
-  --dim: #888;
-  --accent: #60a5fa;
-  --green: #34d399;
-  --yellow: #fbbf24;
-  --red: #f87171;
-  --orange: #fb923c;
+  --bg:#0f1117; --surface:#1a1d27; --border:#2a2d3a; --text:#e0e0e0;
+  --dim:#888; --accent:#60a5fa; --green:#34d399; --yellow:#fbbf24;
+  --red:#f87171; --orange:#fb923c;
 }
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html { overflow-x: hidden; }
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+html { overflow-x:hidden; }
 body {
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  background: var(--bg);
-  background-image: url('/hero.png');
-  background-size: cover;
-  background-position: center top;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  color: var(--text);
-  font-size: 17px;
-  line-height: 1.5;
-  overflow-x: hidden;
-  min-width: 0;
+  font-family:'SF Mono','Fira Code','Consolas',monospace;
+  background:var(--bg) url('/hero.png') center top/cover no-repeat fixed;
+  color:var(--text); font-size:17px; line-height:1.5;
+  overflow-x:hidden; min-width:0;
 }
 body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 17, 23, 0.88);
-  z-index: 0;
-  pointer-events: none;
+  content:''; position:fixed; inset:0;
+  background:rgba(15,17,23,.88); z-index:1; pointer-events:none;
 }
-.container { position: relative; z-index: 1; }
 .container {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 12px;
-  overflow: hidden;
+  position:relative; z-index:2; max-width:1080px;
+  margin:0 auto; padding:12px; overflow:hidden;
 }
-
-/* Header */
 .header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 60px 14px 12px;
-  background: url('/hero.png') center -75px / cover no-repeat;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 12px;
-  gap: 6px;
-  position: relative;
+  display:flex; flex-direction:column; align-items:flex-start;
+  padding:60px 14px 12px; background:url('/hero.png') center -75px/cover no-repeat;
+  border:1px solid var(--border); border-radius:8px;
+  margin-bottom:12px; gap:4px; position:relative;
 }
 .header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(15, 17, 23, 0.65);
-  border-radius: inherit;
+  content:''; position:absolute; inset:0;
+  background:rgba(15,17,23,.65); border-radius:inherit;
 }
-.header > * {
-  position: relative;
-  z-index: 1;
+.header>* { position:relative; z-index:1; }
+.header h1 { font-size:22px; font-weight:600; white-space:nowrap; }
+.header .subtitle { font-size:14px; color:var(--dim); margin-bottom:4px; }
+.header-sub {
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  width:100%; justify-content:space-between; position:relative;
 }
-.header h1 { font-size: 22px; font-weight: 600; white-space: nowrap; }
-.header-sub { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; width: 100%; justify-content: space-between; }
-.header .meta { color: var(--dim); font-size: 14px; }
-.header-links { display: flex; gap: 8px; font-size: 13px; }
+.header-links { display:flex; gap:8px; font-size:13px; }
 .header-links a {
-  color: var(--text);
-  text-decoration: none;
-  white-space: nowrap;
-  padding: 3px 10px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg);
-  transition: border-color 0.2s, background 0.2s;
+  color:var(--text); text-decoration:none; white-space:nowrap;
+  padding:3px 10px; border:1px solid var(--border); border-radius:14px;
+  background:var(--bg); transition:border-color .2s,background .2s;
 }
-.header-links a:hover {
-  border-color: var(--accent);
-  background: rgba(232, 121, 84, 0.1);
+.header-links a:hover { border-color:var(--accent); background:rgba(232,121,84,.1); }
+.status-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:12px; font-weight:600; padding:2px 10px;
+  border-radius:10px; white-space:nowrap;
 }
-.pulse {
-  display: inline-block;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--green);
-  margin-right: 6px;
-  animation: pulse 2s infinite;
+.status-badge.offline {
+  color:var(--orange); background:rgba(251,146,60,.12);
+  border:1px solid rgba(251,146,60,.25);
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+.status-badge.offline .status-dot {
+  width:6px; height:6px; border-radius:50%; background:var(--orange);
 }
-
-/* Grid */
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+.status-badge.booting {
+  color:var(--yellow); background:rgba(251,191,36,.12);
+  border:1px solid rgba(251,191,36,.25);
 }
-
-/* Cards */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px;
-  min-width: 0;
-  overflow: hidden;
+.status-badge.booting .status-dot {
+  width:6px; height:6px; border-radius:50%; background:var(--yellow);
+  animation: pulse 1.5s ease-in-out infinite;
 }
-.card-full { margin-bottom: 12px; }
-.card h2 {
-  font-size: 15px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--dim);
-  margin-bottom: 10px;
+.status-badge.online {
+  color:var(--green); background:rgba(52,211,153,.12);
+  border:1px solid rgba(52,211,153,.25);
 }
-
-/* Progress bar */
-.progress-outer {
-  width: 100%;
-  height: 22px;
-  background: var(--bg);
-  border-radius: 4px;
-  overflow: hidden;
-  margin: 6px 0;
+.status-badge.online .status-dot {
+  width:6px; height:6px; border-radius:50%; background:var(--green);
 }
-.progress-inner {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--green));
-  border-radius: 4px;
-  transition: width 0.5s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  font-weight: 600;
-  color: #000;
-  min-width: 36px;
-}
-
-/* Metric boxes */
-.metrics-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 8px;
-}
-.metric-box {
-  background: var(--bg);
-  border-radius: 6px;
-  padding: 10px 8px;
-  text-align: center;
-  min-width: 0;
-  overflow: hidden;
-  border-left: 3px solid transparent;
-  transition: border-color 0.4s, color 0.4s;
-}
-.metric-box.rag-green { border-left-color: var(--green); }
-.metric-box.rag-green .value { color: var(--green); }
-.metric-box.rag-amber { border-left-color: var(--yellow); }
-.metric-box.rag-amber .value { color: var(--yellow); }
-.metric-box.rag-red { border-left-color: var(--red); }
-.metric-box.rag-red .value { color: var(--red); }
-.metric-box .label {
-  font-size: 13px;
-  color: var(--dim);
-  margin-bottom: 3px;
-}
-.metric-box .value {
-  font-size: 20px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.metric-box .sub { font-size: 13px; color: var(--dim); margin-top: 2px; }
-.metric-box canvas { margin-top: 4px; }
-
-/* Cost comparison layout */
-/* Cost table */
-.cost-tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 16px;
-}
-.cost-tbl th {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--dim);
-  font-weight: 400;
-  padding: 0 8px 4px 0;
-  text-align: right;
-  white-space: nowrap;
-}
-.cost-tbl th:first-child { text-align: left; }
-.cost-tbl td {
-  padding: 2px 8px 2px 0;
-  text-align: right;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.cost-tbl td:first-child {
-  text-align: left;
-  color: var(--dim);
-  font-size: 15px;
-}
-.cost-tbl .cost-accent { font-weight: 700; font-size: 19px; }
-.cost-tbl .row-savings td { border-top: 1px solid var(--border); padding-top: 4px; }
-.spot-stale { font-size: 13px; color: var(--orange); margin-top: 4px; }
-
-/* Instance info row */
-.inst-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 15px;
-}
-.inst-row .inst-item { color: var(--dim); white-space: nowrap; }
-.inst-row .inst-val { color: var(--text); font-weight: 600; }
-
-/* GPU metrics */
-.gpu-metric { margin: 10px 0; }
-.gpu-metric-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-.gpu-metric-label { font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
-.gpu-metric-value { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; }
-.gpu-bar-track {
-  height: 6px; width: 100%;
-  background: var(--bg); border-radius: 3px; overflow: hidden;
-}
-.gpu-bar-fill {
-  height: 100%; border-radius: 3px;
-  transition: width 0.5s ease, background 0.5s ease;
-  width: 0%;
-}
-
-/* Badges */
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  margin-right: 4px;
-  margin-bottom: 4px;
-}
-.badge-green { background: var(--green); color: #000; }
-.badge-red { background: var(--red); color: #000; }
-
-/* Log */
-.log-box {
-  background: var(--bg);
-  border-radius: 6px;
-  padding: 8px;
-  max-height: 280px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-.log-box .eval-line { color: var(--yellow); }
-.log-box .step-line { color: var(--text); }
-
-/* Charts */
-.chart-container { position: relative; height: 240px; }
-
-/* Checkpoint list */
-.ckpt-list { font-size: 15px; color: var(--dim); }
-.ckpt-list span {
-  display: inline-block;
-  margin: 2px 3px;
-  padding: 1px 5px;
-  background: var(--bg);
-  border-radius: 3px;
-}
-
-/* Bootstrap panel */
-.bootstrap-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px;
-  margin-bottom: 12px;
-  transition: opacity 0.8s ease, max-height 0.8s ease;
-}
-.bootstrap-panel.hidden { display: none; }
-.bootstrap-panel h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 8px; }
-.bs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.bs-header .bs-elapsed { font-size: 15px; color: var(--dim); }
-.bs-progress-outer {
-  width: 100%;
-  height: 6px;
-  background: var(--bg);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 10px;
-}
-.bs-progress-inner {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.5s ease, background 0.3s ease;
-  background: var(--accent);
-}
-.bs-progress-inner.done { background: var(--green); }
-.bs-progress-inner.failed { background: var(--red); }
-.bs-steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 4px 12px;
-}
-.bs-step {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  padding: 2px 0;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.bs-step .bs-icon { width: 14px; text-align: center; flex-shrink: 0; }
-.bs-step .bs-label { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
-.bs-step .bs-time { color: var(--dim); font-size: 13px; margin-left: auto; flex-shrink: 0; }
-.bs-step.done .bs-icon { color: var(--green); }
-.bs-step.done .bs-label { color: var(--text); }
-.bs-step.running .bs-icon { color: var(--accent); }
-.bs-step.running .bs-label { color: var(--text); }
-.bs-step.failed .bs-icon { color: var(--red); }
-.bs-step.failed .bs-label { color: var(--red); }
-.bs-step.pending .bs-icon { color: var(--dim); }
-@keyframes spin { to { transform: rotate(360deg); } }
-.bs-spinner { display: inline-block; animation: spin 1s linear infinite; }
-
-/* Responsive */
-@media (max-width: 900px) {
-  .grid { grid-template-columns: 1fr; }
-  .bs-steps { grid-template-columns: 1fr; }
-}
-
-/* Mobile header — hamburger menu */
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.3; } }
 .header-hamburger {
-  display: none;
-  background: none;
-  border: 1px solid var(--border);
-  padding: 4px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  font-size: 18px;
-  line-height: 1;
+  display:none; background:none; border:1px solid var(--border);
+  padding:4px 10px; border-radius:6px; cursor:pointer;
+  color:var(--text); font-size:18px; line-height:1;
 }
 .header-menu {
-  display: none;
-  position: absolute;
-  top: 100%;
-  right: 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px;
-  z-index: 100;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  display:none; position:absolute; top:100%; right:14px;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; flex-direction:column; gap:2px; padding:8px;
+  z-index:100; box-shadow:0 8px 24px rgba(0,0,0,.4);
 }
-.header-menu.open { display: flex; }
+.header-menu.open { display:flex; }
 .header-menu a {
-  color: var(--text);
-  text-decoration: none;
-  padding: 8px 14px;
-  border-radius: 6px;
-  font-size: 14px;
-  white-space: nowrap;
-  transition: background 0.2s;
+  color:var(--text); text-decoration:none; padding:8px 14px;
+  border-radius:6px; font-size:14px; white-space:nowrap; transition:background .2s;
 }
-.header-menu a:hover { background: var(--bg); }
-
-@media (max-width: 540px) {
-  .header-links { display: none; }
-  .header-hamburger { display: block; }
-  .header h1 { font-size: 17px; }
-  .header-sub { position: relative; }
-  .modal-content { padding: 18px 16px; width: 95%; }
-  .sitrep-body { font-size: 13px; }
+.header-menu a:hover { background:var(--bg); }
+.banner {
+  border-radius:8px; padding:14px 18px; margin-bottom:12px;
+  text-align:center; line-height:1.7;
 }
-
-/* Session breakdown table */
-.session-tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  margin-top: 8px;
+.banner.offline {
+  background:rgba(251,146,60,.08); border:1px solid rgba(251,146,60,.25);
 }
-.session-tbl th {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--dim);
-  font-weight: 400;
-  padding: 4px 6px 4px 0;
-  text-align: left;
-  white-space: nowrap;
+.banner.booting {
+  background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.25);
 }
-.session-tbl td {
-  padding: 3px 6px 3px 0;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
+.banner .banner-title { font-weight:600; font-size:15px; }
+.banner.offline .banner-title { color:var(--orange); }
+.banner.booting .banner-title { color:var(--yellow); }
+.banner .banner-sub { color:var(--dim); font-size:13px; }
+.banner .countdown { font-size:28px; font-weight:700; color:var(--accent); margin:8px 0 4px; }
+.card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:14px; margin-bottom:12px;
+  min-width:0; overflow:hidden;
 }
-.session-tbl td.dim { color: var(--dim); }
-
-/* Footer */
+.card h2 {
+  font-size:15px; font-weight:600; color:var(--dim);
+  text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px;
+}
+.bs-step {
+  display:flex; align-items:center; gap:10px;
+  padding:5px 8px; font-size:13px; border-radius:4px;
+}
+.bs-step .bs-icon { width:18px; text-align:center; flex-shrink:0; }
+.bs-step .bs-label { flex:1; }
+.bs-step .bs-time { color:var(--dim); font-size:12px; min-width:40px; text-align:right; }
+.bs-step.done { color:var(--green); }
+.bs-step.done .bs-icon { color:var(--green); }
+.bs-step.running { color:var(--yellow); background:rgba(251,191,36,.06); }
+.bs-step.running .bs-icon { color:var(--yellow); }
+.bs-step.pending { color:var(--dim); }
+.bs-spinner { display:inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.progress-wrap { margin-bottom:14px; }
+.progress-label {
+  display:flex; justify-content:space-between;
+  font-size:14px; margin-bottom:6px;
+}
+.progress-label .step { color:var(--text); font-weight:600; }
+.progress-label .pct { color:var(--accent); font-weight:600; }
+.progress-bar { height:8px; background:var(--bg); border-radius:4px; overflow:hidden; }
+.progress-fill { height:100%; border-radius:4px; transition:width .5s ease; }
+.progress-fill.blue { background:var(--accent); }
+.progress-fill.yellow { background:var(--yellow); }
+.metrics-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+.metric-box {
+  background:var(--bg); border-radius:6px; padding:10px 8px;
+  text-align:center; min-width:0; overflow:hidden;
+  border-left:3px solid var(--border);
+}
+.metric-box .label { font-size:13px; color:var(--dim); margin-bottom:3px; }
+.metric-box .value { font-size:20px; font-weight:700; white-space:nowrap; }
+.metric-box .sub { font-size:12px; color:var(--dim); margin-top:2px; }
+.cost-row {
+  display:flex; gap:24px; flex-wrap:wrap; font-size:14px;
+  color:var(--dim); margin-top:14px; padding-top:12px;
+  border-top:1px solid var(--border);
+}
+.cost-row span { color:var(--text); font-weight:600; }
+.sessions-table { width:100%; border-collapse:collapse; font-size:13px; }
+.sessions-table th {
+  text-align:left; color:var(--dim); font-weight:600;
+  padding:8px 6px; border-bottom:1px solid var(--border); white-space:nowrap;
+}
+.sessions-table td {
+  padding:7px 6px; border-bottom:1px solid rgba(42,45,58,.5); white-space:nowrap;
+}
+.sessions-table tr:last-child td { border-bottom:none; }
+.finalized-yes { color:var(--green); }
+.finalized-no { color:var(--yellow); }
+.loading { color:var(--dim); font-size:14px; font-style:italic; }
 .footer {
-  margin-top: 16px;
-  padding: 24px 14px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 17px;
-  color: var(--dim);
+  margin-top:16px; padding:20px 14px; border-top:1px solid var(--border);
+  text-align:center; font-size:14px; color:var(--dim);
 }
-.footer-links { display: flex; gap: 8px; font-size: 15px; }
-.footer-links a {
-  color: var(--text);
-  text-decoration: none;
-  padding: 5px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg);
-  transition: border-color 0.2s, background 0.2s;
+@media(max-width:900px) {
+  .metrics-row { grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); }
 }
-.footer-links a:hover {
-  border-color: var(--accent);
-  background: rgba(232, 121, 84, 0.1);
+@media(max-width:700px) { .sessions-table { font-size:12px; } }
+@media(max-width:540px) {
+  .header-links { display:none; }
+  .header-hamburger { display:block; }
+  .header h1 { font-size:17px; }
+  .metrics-row { grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); }
+  .cost-row { gap:12px; }
 }
-/* ── Sitrep modal ── */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex;
-  align-items: center; justify-content: center; z-index: 1000; }
-.modal.hidden { display: none; }
-.modal-content { background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; max-width: 700px; width: 90%; max-height: 80vh;
-  overflow-y: auto; padding: 28px 32px; position: relative; }
-.modal-close { position: absolute; top: 12px; right: 16px; background: none;
-  border: none; color: var(--dim); font-size: 24px; cursor: pointer; line-height: 1; }
-.modal-close:hover { color: var(--text); }
-.modal-content h2 { margin: 0 0 4px 0; font-size: 20px; color: var(--accent); }
-.sitrep-time { color: var(--dim); font-size: 12px; margin-bottom: 16px; }
-.sitrep-body { font-size: 14px; line-height: 1.7; color: var(--text); }
-.sitrep-body h1, .sitrep-body h2, .sitrep-body h3 {
-  color: var(--accent); margin: 18px 0 8px 0; font-size: 16px; }
-.sitrep-body h1 { font-size: 18px; }
-.sitrep-body ul { margin: 4px 0 12px 0; padding-left: 20px; }
-.sitrep-body li { margin-bottom: 3px; }
-.sitrep-body ol { margin: 4px 0 12px 0; padding-left: 20px; }
-.sitrep-body code { background: var(--bg); padding: 1px 5px; border-radius: 4px;
-  font-size: 13px; border: 1px solid var(--border); }
-.sitrep-body p { margin: 0 0 10px 0; }
-.sitrep-body strong { color: var(--text); }
 </style>
 </head>
 <body>
-
-<!-- Offline banner (hidden by default, shown when SSE fails 3+ times) -->
-<div id="offline-banner" style="display:none; background:#92400e; color:#fbbf24; text-align:center; padding:8px; font-size:13px; position:sticky; top:0; z-index:100;">
-  &#9889; Offline &mdash; showing last synced data
-</div>
-
 <div class="container">
 
-  <!-- Header -->
   <div class="header">
-    <h1><span class="pulse" id="pulse"></span>Dual-Process Language Model</h1>
+    <h1>Dual-Process Language Model</h1>
     <div class="header-sub">
+      <span class="status-badge offline" id="status-badge"><span class="status-dot"></span><span id="status-text">Instance Offline</span></span>
       <div class="header-links">
-        <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
-        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
-        <a href="/reports/" target="_blank">Reports</a>
-        <a href="#" onclick="openSitrep();return false">Sitrep</a>
+        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://train.bitbanshee.com/reports/" target="_blank" rel="noopener">Reports</a>
+        <a href="https://siliconstrategy.ai" target="_blank" rel="noopener">siliconstrategy.ai</a>
       </div>
-      <button class="header-hamburger" onclick="document.getElementById('header-menu').classList.toggle('open')">&#9776;</button>
-      <div class="header-menu" id="header-menu">
-        <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
-        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
-        <a href="/reports/" target="_blank">Reports</a>
-        <a href="#" onclick="document.getElementById('header-menu').classList.remove('open');openSitrep();return false">Sitrep</a>
-      </div>
-      <div class="meta">
-        <span id="conn-status">Connecting...</span> &middot;
-        <span id="timestamp"></span>
+      <button class="header-hamburger" onclick="document.getElementById('hmenu').classList.toggle('open')">&#9776;</button>
+      <div class="header-menu" id="hmenu">
+        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://train.bitbanshee.com/reports/" target="_blank" rel="noopener">Reports</a>
+        <a href="https://siliconstrategy.ai" target="_blank" rel="noopener">siliconstrategy.ai</a>
       </div>
     </div>
+    <div class="subtitle" id="last-updated">Last updated: loading...</div>
   </div>
 
-  <!-- Bootstrap progress -->
-  <div id="bootstrap-panel" class="bootstrap-panel hidden">
-    <div class="bs-header">
-      <h2>Bootstrap Progress</h2>
-      <span class="bs-elapsed" id="bs-elapsed"></span>
-    </div>
-    <div class="bs-progress-outer">
-      <div class="bs-progress-inner" id="bs-progress" style="width:0%"></div>
-    </div>
-    <div class="bs-steps" id="bs-steps"></div>
+  <!-- Offline banner (default) -->
+  <div class="banner offline" id="banner-offline">
+    <div class="banner-title">GPU instance is offline &mdash; showing last synced data from S3</div>
+    <div class="banner-sub">Training resumes automatically on next spot instance launch</div>
   </div>
 
-  <!-- Progress -->
-  <div class="card card-full">
+  <!-- Booting banner (shown when bootstrap beacon detected) -->
+  <div class="banner booting" id="banner-booting" style="display:none">
+    <div class="banner-title">Instance is bootstrapping &mdash; preparing to resume training</div>
+    <div class="countdown" id="countdown">--:--</div>
+    <div class="banner-sub" id="boot-sub">Estimated time remaining</div>
+  </div>
+
+  <!-- Bootstrap progress card -->
+  <div class="card" id="bootstrap-card" style="display:none">
+    <h2>Bootstrap Progress</h2>
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span class="step" id="bs-step-label">-- / 18 steps</span>
+        <span class="pct" id="bs-pct-label">--%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill yellow" id="bs-progress-fill" style="width:0%"></div></div>
+    </div>
+    <div id="bs-steps"></div>
+  </div>
+
+  <div class="card">
     <h2>Training Progress</h2>
-    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size: 16px">
-      <span>Step <strong id="cur-step">--</strong> / <span id="max-step">--</span></span>
-      <span>Phase: <strong id="phase">--</strong></span>
-      <span>Total Time: <strong id="total-time">--</strong></span>
-      <span>Instance: <strong id="elapsed">--</strong></span>
-      <span>Remaining: <strong id="eta">--</strong></span>
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span class="step" id="step-label">-- / 50,000</span>
+        <span class="pct" id="pct-label">--%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill blue" id="progress-fill" style="width:0%"></div></div>
     </div>
-    <div class="progress-outer">
-      <div class="progress-inner" id="progress-bar" style="width:0%">0%</div>
+    <div class="metrics-row">
+      <div class="metric-box" id="m-ar-ppl"><div class="label">AR PPL</div><div class="value">--</div><div class="sub">target &lt;40</div></div>
+      <div class="metric-box" id="m-auroc"><div class="label">AUROC</div><div class="value">--</div><div class="sub">target &gt;0.75</div></div>
+      <div class="metric-box" id="m-ece"><div class="label">ECE</div><div class="value">--</div><div class="sub">target &lt;0.05</div></div>
+      <div class="metric-box" id="m-diff"><div class="label">Diff Loss</div><div class="value">--</div><div class="sub">target 4.0</div></div>
+      <div class="metric-box" id="m-s1acc"><div class="label">S1 Accuracy</div><div class="value">--</div><div class="sub">target 40%</div></div>
+    </div>
+    <div class="cost-row">
+      <div>Total cost: <span id="total-cost">--</span></div>
+      <div>Sessions: <span id="total-sessions">--</span></div>
     </div>
   </div>
 
-  <div class="grid">
-
-    <!-- Live Metrics -->
-    <div class="card">
-      <h2>Live Metrics</h2>
-      <div class="metrics-row">
-        <div class="metric-box">
-          <div class="label">AR Loss</div>
-          <div class="value" id="m-ar-loss">--</div>
-          <canvas id="spark-ar" width="100" height="28"></canvas>
-        </div>
-        <div class="metric-box">
-          <div class="label">Diff Loss</div>
-          <div class="value" id="m-diff-loss">--</div>
-          <canvas id="spark-diff" width="100" height="28"></canvas>
-        </div>
-        <div class="metric-box">
-          <div class="label">Conf Acc</div>
-          <div class="value" id="m-conf-acc">--</div>
-          <canvas id="spark-conf" width="100" height="28"></canvas>
-        </div>
-        <div class="metric-box">
-          <div class="label">AUROC</div>
-          <div class="value" id="m-auroc">--</div>
-          <canvas id="spark-auroc" width="100" height="28"></canvas>
-        </div>
-        <div class="metric-box">
-          <div class="label">S1 Acc</div>
-          <div class="value" id="m-s1-acc">--</div>
-          <canvas id="spark-s1" width="100" height="28"></canvas>
-        </div>
-        <div class="metric-box">
-          <div class="label">LR</div>
-          <div class="value" id="m-lr">--</div>
-          <canvas id="spark-lr" width="100" height="28"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <!-- GPU -->
-    <div class="card" id="card-gpu">
-      <h2>GPU</h2>
-      <div id="gpu-name" style="color:var(--dim);font-size:15px;margin-bottom:8px">--</div>
-      <div class="gpu-metric">
-        <div class="gpu-metric-header">
-          <span class="gpu-metric-label">Utilization</span>
-          <span class="gpu-metric-value" id="gpu-util-val">--</span>
-        </div>
-        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-util-bar"></div></div>
-      </div>
-      <div class="gpu-metric">
-        <div class="gpu-metric-header">
-          <span class="gpu-metric-label">VRAM</span>
-          <span class="gpu-metric-value" id="gpu-vram-val">--</span>
-        </div>
-        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-vram-bar"></div></div>
-      </div>
-      <div class="gpu-metric">
-        <div class="gpu-metric-header">
-          <span class="gpu-metric-label">Temp</span>
-          <span class="gpu-metric-value" id="gpu-temp-val">--</span>
-        </div>
-        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-temp-bar"></div></div>
-      </div>
-      <div class="gpu-metric">
-        <div class="gpu-metric-header">
-          <span class="gpu-metric-label">Power</span>
-          <span class="gpu-metric-value" id="gpu-power-val">--</span>
-        </div>
-        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-power-bar"></div></div>
-      </div>
-    </div>
-
-    <!-- Loss chart -->
-    <div class="card">
-      <h2>Loss Curves</h2>
-      <div class="chart-container"><canvas id="chart-loss"></canvas></div>
-    </div>
-
-    <!-- Eval chart -->
-    <div class="card">
-      <h2>Eval Metrics <span id="eval-chart-note" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim)"></span></h2>
-      <div class="chart-container"><canvas id="chart-eval"></canvas></div>
-    </div>
-
-    <!-- Instance & Cost -->
-    <div class="card">
-      <div style="margin-bottom:8px">
-        <h2 style="margin-bottom:0">Instance & Cost</h2>
-        <div class="inst-row">
-          <span class="inst-item"><span class="inst-val" id="inst-type">--</span></span>
-          <span class="inst-item"><span class="inst-val" id="inst-lifecycle">--</span></span>
-          <span class="inst-item"><span class="inst-val" id="inst-az">--</span></span>
-          <span class="inst-item">up <span class="inst-val" id="inst-uptime">--</span></span>
-        </div>
-      </div>
-      <table class="cost-tbl">
-        <tr><th></th><th>Rate</th><th>Cost</th><th>Projected</th></tr>
-        <tr style="color:var(--red)">
-          <td>On-Demand</td>
-          <td id="od-rate">--</td>
-          <td class="cost-accent" id="od-cost">--</td>
-          <td id="od-proj">--</td>
-        </tr>
-        <tr style="color:var(--green)">
-          <td>Spot</td>
-          <td id="spot-rate">--</td>
-          <td class="cost-accent" id="spot-cost">--</td>
-          <td id="spot-proj">--</td>
-        </tr>
-        <tr class="row-savings">
-          <td>Savings</td>
-          <td id="delta-pct">--</td>
-          <td class="cost-accent" id="delta-cost">--</td>
-          <td id="delta-proj">--</td>
-        </tr>
+  <div class="card">
+    <h2>Session History</h2>
+    <div style="overflow-x:auto">
+      <table class="sessions-table">
+        <thead><tr><th>Instance</th><th>Type</th><th>AZ</th><th>Duration</th><th>Steps</th><th>Cost</th><th>Finalized</th></tr></thead>
+        <tbody id="sessions-body"><tr><td colspan="7" class="loading">Loading sessions...</td></tr></tbody>
       </table>
-      <div class="spot-stale" id="spot-stale" style="display:none"></div>
-      <div id="run-total-row" style="margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border);display:none">
-        <span style="color:var(--dim);font-size:13px">Run Total</span>
-        <span id="run-total-sessions" style="color:var(--dim);font-size:12px;margin-left:4px"></span>
-        <span style="float:right;font-weight:600;font-size:15px;color:var(--accent)" id="run-total-cost">--</span>
-      </div>
-      <div id="sessions-breakdown" style="display:none;margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border)">
-        <span style="color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:0.06em">Instance History</span>
-        <table class="session-tbl" id="sessions-table">
-          <tr><th>#</th><th>AZ</th><th>Steps</th><th>Duration</th><th>Cost</th></tr>
-        </table>
-      </div>
-    </div>
-
-    <!-- Infra -->
-    <div class="card" id="card-infra">
-      <h2>Infrastructure</h2>
-      <div style="margin-bottom:6px">
-        <span class="badge" id="badge-trainer">Trainer: ?</span>
-        <span class="badge" id="badge-sync">Sync: ?</span>
-      </div>
-      <div style="margin-bottom:6px">
-        <span style="font-size: 15px;color:var(--dim)">Next milestones:</span>
-        <div id="milestones" style="font-size: 14px;margin-top:2px;line-height:1.6">--</div>
-      </div>
-      <div style="margin-bottom:6px">
-        <span style="font-size: 15px;color:var(--dim)">Checkpoints:</span>
-        <div class="ckpt-list" id="ckpt-list">--</div>
-      </div>
-      <div>
-        <span style="font-size: 15px;color:var(--dim)">Config:</span>
-        <div id="config-info" style="font-size: 15px;color:var(--dim);margin-top:2px">--</div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Log tail (full width, outside grid) -->
-  <div class="card" id="card-log" style="margin-top:12px">
-    <h2>Log Tail</h2>
-    <div class="log-box" id="log-tail">--</div>
-  </div>
-
-  <!-- Footer -->
-  <div class="footer">
-    <span>Dual-Process Language Model <span id="source-indicator" style="font-size:11px; color:var(--dim);"></span></span>
-    <div class="footer-links">
-      <a href="https://bitbanshee.com" target="_blank">bitbanshee.com</a>
-      <a href="/reports/" target="_blank">Reports</a>
     </div>
   </div>
+
+  <div class="footer">Bitbanshee &middot; 2026</div>
+
 </div>
-
 <script>
-// ── Chart setup ──────────────────────────────────────────────────────────
-const chartOpts = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: { duration: 300 },
-  plugins: { legend: { labels: { color: '#888', font: { size: 10, family: 'monospace' } } } },
-  scales: {
-    x: { ticks: { color: '#555', font: { size: 9 } }, grid: { color: '#1f2233' } },
-    y: { ticks: { color: '#555', font: { size: 9 } }, grid: { color: '#1f2233' } },
-  },
-};
+// Bootstrap steps with estimated durations (seconds)
+var BS_STEPS = [
+  {label:'NVMe ephemeral storage', est:2},
+  {label:'Fetch secrets', est:2},
+  {label:'Configure environment', est:1},
+  {label:'Pull latest code', est:5},
+  {label:'Restore artifacts from S3', est:45},
+  {label:'Sync preprocessed data', est:420},
+  {label:'Fix file ownership', est:3},
+  {label:'Update CloudFront DNS', est:3},
+  {label:'Start sync daemon', est:2},
+  {label:'Install nginx', est:5},
+  {label:'Configure nginx', est:1},
+  {label:'Install Flask', est:3},
+  {label:'Start web dashboard', est:5},
+  {label:'Seed spot price data', est:8},
+  {label:'Initialize cost tracker', est:3},
+  {label:'Setup auto-sitrep', est:1},
+  {label:'Run v1 benchmarks (skipped)', est:1},
+  {label:'Launch training', est:3}
+];
+var TOTAL_EST = BS_STEPS.reduce(function(a,b){return a+b.est},0); // ~513s (~8.5 min)
 
-const lossChart = new Chart(document.getElementById('chart-loss'), {
-  type: 'line',
-  data: {
-    labels: [],
-    datasets: [
-      { label: 'AR Loss', data: [], borderColor: '#60a5fa', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
-      { label: 'Diff Loss', data: [], borderColor: '#fb923c', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
-    ],
-  },
-  options: { ...chartOpts },
-});
-
-const evalChart = new Chart(document.getElementById('chart-eval'), {
-  type: 'line',
-  data: {
-    labels: [],
-    datasets: [
-      { label: 'S1 Tok Acc', data: [], borderColor: '#34d399', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y' },
-      { label: 'AUROC', data: [], borderColor: '#a78bfa', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y' },
-      { label: 'AR PPL', data: [], borderColor: '#f87171', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1' },
-    ],
-  },
-  options: {
-    ...chartOpts,
-    scales: {
-      ...chartOpts.scales,
-      y: { ...chartOpts.scales.y, position: 'left', title: { display: true, text: 'Acc / AUROC', color: '#555' } },
-      y1: { ...chartOpts.scales.y, position: 'right', title: { display: true, text: 'PPL', color: '#555' }, grid: { drawOnChartArea: false } },
-    },
-  },
-});
-
-// ── Sparklines ───────────────────────────────────────────────────────────
-const sparkBuffers = { ar: [], diff: [], conf: [], auroc: [], s1: [], lr: [] };
-const SPARK_MAX = 30;
-
-function drawSparkline(canvasId, data, color) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas || data.length < 2) return;
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-  const min = Math.min(...data), max = Math.max(...data);
-  const range = max - min || 1;
-  ctx.beginPath();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  data.forEach((v, i) => {
-    const x = (i / (data.length - 1)) * w;
-    const y = h - ((v - min) / range) * (h - 4) - 2;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-}
-
-// ── Chart refresh ────────────────────────────────────────────────────────
-let currentTrainStep = 0;
-let lastEvalStep = null;
-let lastTrainStep = null;
-let lastChartRefresh = Date.now();
-
-function checkChartRefresh(data) {
-  let needsRefresh = false;
-
-  // Refresh when new training steps appear
-  const trainStep = data.current_step || 0;
-  if (trainStep > 0 && trainStep !== lastTrainStep) {
-    lastTrainStep = trainStep;
-    needsRefresh = true;
-  }
-
-  // Refresh when new eval data appears
-  const evalStep = data.latest_eval ? data.latest_eval.step : null;
-  if (evalStep !== null && evalStep !== lastEvalStep) {
-    lastEvalStep = evalStep;
-    needsRefresh = true;
-  }
-
-  if (needsRefresh) {
-    lastChartRefresh = Date.now();
-    loadCharts();
-  }
-}
-
-// ── Bootstrap panel ──────────────────────────────────────────────────────
-function updateBootstrap(bs) {
-  const panel = $('bootstrap-panel');
-
-  // Hide if no data, or if all steps are done
-  if (!bs || bs.status === 'done') {
-    panel.classList.add('hidden');
-    return;
-  }
-
-  // Has incomplete/failed steps — show the panel
-  panel.classList.remove('hidden');
-
-  const steps = bs.steps || [];
-  const doneCount = steps.filter(s => s.status === 'done').length;
-  const total = steps.length || 1;
-  const pct = (doneCount / total * 100).toFixed(0);
-
-  // Progress bar
-  const bar = $('bs-progress');
-  bar.style.width = pct + '%';
-  bar.className = 'bs-progress-inner' + (bs.status === 'failed' ? ' failed' : '');
-
-  // Elapsed
-  const elapsedEl = $('bs-elapsed');
-  if (bs.total_elapsed_s != null) {
-    elapsedEl.textContent = fmtTimeLong(bs.total_elapsed_s);
-  } else {
-    elapsedEl.textContent = '';
-  }
-
-  // Steps
-  const container = $('bs-steps');
-  container.innerHTML = steps.map(s => {
-    let icon;
-    if (s.status === 'done') icon = '\u2713';
-    else if (s.status === 'running') icon = '<span class="bs-spinner">\u25E0</span>';
-    else if (s.status === 'failed') icon = '\u2717';
-    else icon = '\u2022';
-    const elapsed = s.elapsed != null ? s.elapsed.toFixed(1) + 's' : '';
-    return '<div class="bs-step ' + s.status + '">' +
-      '<span class="bs-icon">' + icon + '</span>' +
-      '<span class="bs-label">' + esc(s.label) + '</span>' +
-      '<span class="bs-time">' + elapsed + '</span>' +
-      '</div>';
-  }).join('');
-}
-
-// ── Cost ticker ──────────────────────────────────────────────────────────
-let costState = { bootTime: null, odRate: null, spotRate: null, spotCostBase: null, spotCostBaseTime: null };
-
-function tickCost() {
-  if (!costState.bootTime) return;
-  const now = Date.now() / 1000;
-  const uptime = now - costState.bootTime;
-  document.getElementById('inst-uptime').textContent = fmtTimeLong(uptime);
-  // On-demand ticker
-  if (costState.odRate) {
-    const odCost = costState.odRate * uptime / 3600;
-    document.getElementById('od-cost').textContent = '$' + odCost.toFixed(2);
-  }
-  // Spot ticker: extrapolate from last known base using current rate
-  if (costState.spotRate && costState.spotCostBase != null && costState.spotCostBaseTime) {
-    const dt = now - costState.spotCostBaseTime;
-    const spotCost = costState.spotCostBase + costState.spotRate * dt / 3600;
-    document.getElementById('spot-cost').textContent = '$' + spotCost.toFixed(2);
-    // Update savings in real time
-    if (costState.odRate) {
-      const odCost = costState.odRate * uptime / 3600;
-      const saved = odCost - spotCost;
-      document.getElementById('delta-cost').textContent = '$' + saved.toFixed(2);
-      const pct = odCost > 0 ? ((1 - spotCost / odCost) * 100).toFixed(1) : 0;
-      document.getElementById('delta-pct').textContent = pct + '% less';
-    }
-  }
-}
-setInterval(tickCost, 1000);
-
-// ── Format helpers ───────────────────────────────────────────────────────
-function fmtTimeLong(s) {
-  if (s == null) return '--';
-  s = Math.round(s);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (h > 0) return h + 'h ' + m + 'm ' + sec + 's';
-  if (m > 0) return m + 'm ' + sec + 's';
-  return sec + 's';
-}
-
-function fmtTime(s) {
-  if (s == null) return '--';
-  s = Math.round(s);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (h > 0) return h + 'h ' + m + 'm';
-  return m + 'm';
-}
-
-
+var bootStarted = null;
+var instanceLive = false;
+var countdownInterval = null;
 
 function $(id) { return document.getElementById(id); }
 
-// ── RAG (red/amber/green) metric coloring ────────────────────────────────
-// Thresholds tuned to GPT-2 small training trajectory.
-// "lower" = lower is better; "higher" = higher is better.
-function setRAG(elementId, value, thresholds) {
-  const el = $(elementId);
-  if (!el) return;
-  const box = el.closest('.metric-box');
+function fmtCountdown(seconds) {
+  if (seconds <= 0) return '0:00';
+  var m = Math.floor(seconds / 60);
+  var s = Math.floor(seconds % 60);
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+function setBootState(state) {
+  var badge = $('status-badge');
+  var bannerOff = $('banner-offline');
+  var bannerBoot = $('banner-booting');
+  var bsCard = $('bootstrap-card');
+
+  if (state === 'booting') {
+    badge.className = 'status-badge booting';
+    $('status-text').textContent = 'Bootstrapping';
+    bannerOff.style.display = 'none';
+    bannerBoot.style.display = '';
+    bsCard.style.display = '';
+  } else if (state === 'online') {
+    badge.className = 'status-badge online';
+    $('status-text').textContent = 'Instance Online';
+    bannerOff.style.display = 'none';
+    bannerBoot.style.display = 'none';
+    bsCard.style.display = 'none';
+  } else {
+    badge.className = 'status-badge offline';
+    $('status-text').textContent = 'Instance Offline';
+    bannerOff.style.display = '';
+    bannerBoot.style.display = 'none';
+    bsCard.style.display = 'none';
+  }
+}
+
+function updateCountdown() {
+  if (!bootStarted || instanceLive) return;
+  var elapsed = (Date.now() - bootStarted) / 1000;
+  var remaining = Math.max(0, TOTAL_EST - elapsed);
+  $('countdown').textContent = fmtCountdown(remaining);
+  if (remaining <= 0) {
+    $('countdown').textContent = 'Any moment now...';
+    $('boot-sub').textContent = 'Bootstrap may still be finishing';
+  } else {
+    $('boot-sub').textContent = 'Estimated time remaining';
+  }
+  updateBootstrapSteps(elapsed);
+}
+
+function updateBootstrapSteps(elapsed) {
+  var container = $('bs-steps');
+  var cumulative = 0;
+  var doneCount = 0;
+  var html = '';
+  for (var i = 0; i < BS_STEPS.length; i++) {
+    var s = BS_STEPS[i];
+    var stepEnd = cumulative + s.est;
+    var status, icon;
+    if (elapsed >= stepEnd) {
+      status = 'done'; icon = '\u2713'; doneCount++;
+    } else if (elapsed >= cumulative) {
+      status = 'running'; icon = '<span class="bs-spinner">\u25E0</span>'; doneCount += 0.5;
+    } else {
+      status = 'pending'; icon = '\u2022';
+    }
+    var timeStr = status === 'done' ? s.est + 's' : status === 'running' ? Math.floor(elapsed - cumulative) + 's' : '';
+    html += '<div class="bs-step ' + status + '">' +
+      '<span class="bs-icon">' + icon + '</span>' +
+      '<span class="bs-label">' + s.label + '</span>' +
+      '<span class="bs-time">' + timeStr + '</span></div>';
+    cumulative = stepEnd;
+  }
+  container.innerHTML = html;
+  var pct = Math.min(100, (doneCount / BS_STEPS.length * 100));
+  $('bs-step-label').textContent = Math.floor(doneCount) + ' / ' + BS_STEPS.length + ' steps';
+  $('bs-pct-label').textContent = pct.toFixed(0) + '%';
+  $('bs-progress-fill').style.width = pct + '%';
+}
+
+// Check bootstrap beacon from S3
+async function checkBeacon() {
+  try {
+    var res = await fetch('/bootstrap_beacon.json?t=' + Date.now());
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data.status === 'bootstrapping' && data.started) {
+      bootStarted = new Date(data.started).getTime();
+      setBootState('booting');
+      if (!countdownInterval) {
+        countdownInterval = setInterval(updateCountdown, 1000);
+        updateCountdown();
+      }
+    } else if (data.status === 'ready') {
+      // Bootstrap done, instance should be live soon
+      setBootState('booting');
+      $('countdown').textContent = 'Starting training...';
+      $('boot-sub').textContent = 'Dashboard coming online';
+    }
+  } catch(e) { /* no beacon = truly offline */ }
+}
+
+// RAG colors
+function ragColor(metric, value) {
+  if (value == null) return 'var(--dim)';
+  switch (metric) {
+    case 'ar_ppl':     return value < 40 ? 'var(--green)' : value < 50 ? 'var(--yellow)' : 'var(--red)';
+    case 'conf_auroc': return value > .75 ? 'var(--green)' : value > .6 ? 'var(--yellow)' : 'var(--red)';
+    case 'conf_ece':   return value < .05 ? 'var(--green)' : value < .1 ? 'var(--yellow)' : 'var(--red)';
+    case 'diff_loss':  return value < 4.5 ? 'var(--green)' : value < 6  ? 'var(--yellow)' : 'var(--red)';
+    case 's1_tok_acc': return value > .3  ? 'var(--green)' : value > .15 ? 'var(--yellow)' : 'var(--red)';
+    default: return 'var(--text)';
+  }
+}
+
+function setMetric(id, metric, value, fmt) {
+  var box = $(id);
   if (!box) return;
-  box.classList.remove('rag-green', 'rag-amber', 'rag-red');
-  if (value == null) return;
-  let cls;
-  if (thresholds.dir === 'lower') {
-    cls = value < thresholds.green ? 'rag-green' : value < thresholds.red ? 'rag-amber' : 'rag-red';
-  } else {
-    cls = value > thresholds.green ? 'rag-green' : value > thresholds.red ? 'rag-amber' : 'rag-red';
-  }
-  box.classList.add(cls);
+  var valEl = box.querySelector('.value');
+  var color = ragColor(metric, value);
+  valEl.textContent = value != null ? fmt(value) : '--';
+  valEl.style.color = color;
+  box.style.borderLeftColor = color;
 }
-const RAG = {
-  ar_loss:   { dir: 'lower',  green: 3.0, red: 5.0 },
-  diff_loss: { dir: 'lower',  green: 5.0, red: 7.0 },
-  conf_acc:  { dir: 'higher', green: 0.90, red: 0.75 },
-  auroc:     { dir: 'higher', green: 0.75, red: 0.58 },
-  s1_acc:   { dir: 'higher', green: 0.10, red: 0.05 },
-};
 
-// ── UI updater ───────────────────────────────────────────────────────────
+function fmtDur(s) {
+  if (s == null) return '--';
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
+}
+
+function trunc(id) {
+  return (!id || id === '?') ? '?' : id.length > 12 ? id.slice(0, 12) + '...' : id;
+}
+
 function updateUI(data) {
-  const _ts = new Date(data.timestamp);
-  const _et = _ts.toLocaleTimeString('en-US', {timeZone:'America/New_York', hour:'numeric', minute:'2-digit'});
-  const _utc = _ts.toLocaleTimeString('en-US', {timeZone:'UTC', hour:'2-digit', minute:'2-digit', hour12:false});
-  $('timestamp').textContent = _et + ' ET / ' + _utc + ' UTC';
-
-  // Track current training step for chart filtering
-  currentTrainStep = data.current_step || 0;
-
-  // Bootstrap
-  if (data.bootstrap) updateBootstrap(data.bootstrap);
-
-  // Refresh charts when new eval data appears or every 5 min
-  checkChartRefresh(data);
-
-  // Progress
-  $('cur-step').textContent = data.current_step.toLocaleString();
-  $('max-step').textContent = data.max_steps.toLocaleString();
-  $('phase').textContent = data.phase;
-  $('total-time').textContent = data.total_training_time_s ? fmtTime(data.total_training_time_s) : fmtTime(data.elapsed_seconds);
-  $('elapsed').textContent = fmtTime(data.elapsed_seconds);
-  $('eta').textContent = fmtTime(data.eta_seconds);
-  const pct = data.progress_pct;
-  const bar = $('progress-bar');
-  bar.style.width = pct + '%';
-  bar.textContent = pct.toFixed(1) + '%';
-
-  // Instance & cost
-  const inst = data.instance;
-  if (inst) {
-    $('inst-type').textContent = inst.instance_type || '--';
-    $('inst-lifecycle').textContent = inst.lifecycle || '--';
-    $('inst-az').textContent = inst.az || '--';
-    if (inst.uptime_seconds != null) $('inst-uptime').textContent = fmtTimeLong(inst.uptime_seconds);
-
-    if (inst.boot_time_utc) costState.bootTime = new Date(inst.boot_time_utc).getTime() / 1000;
-
-    // On-demand
-    const odRate = inst.ondemand_price_per_hour;
-    if (odRate) {
-      costState.odRate = odRate;
-      $('od-rate').textContent = '$' + odRate.toFixed(4) + '/hr';
-    }
-    if (inst.ondemand_cost != null) $('od-cost').textContent = '$' + inst.ondemand_cost.toFixed(2);
-    $('od-proj').textContent = inst.ondemand_projected != null ? '$' + inst.ondemand_projected.toFixed(2) : '--';
-
-    // Spot
-    if (inst.spot_rate != null) {
-      costState.spotRate = inst.spot_rate;
-      $('spot-rate').textContent = '$' + inst.spot_rate.toFixed(4) + '/hr';
-    } else {
-      $('spot-rate').textContent = '--';
-    }
-    if (inst.spot_cost != null) {
-      $('spot-cost').textContent = '$' + inst.spot_cost.toFixed(2);
-      costState.spotCostBase = inst.spot_cost;
-      costState.spotCostBaseTime = Date.now() / 1000;
-    } else {
-      $('spot-cost').textContent = '--';
-    }
-    $('spot-proj').textContent = inst.spot_projected != null ? '$' + inst.spot_projected.toFixed(2) : '--';
-
-    // Staleness
-    const staleEl = $('spot-stale');
-    if (inst.spot_updated) {
-      const age = (Date.now() - new Date(inst.spot_updated).getTime()) / 60000;
-      if (age > 30) {
-        staleEl.style.display = 'block';
-        staleEl.textContent = 'Spot price data ' + Math.round(age) + 'min old';
-      } else {
-        staleEl.style.display = 'none';
-      }
-    } else if (inst.spot_rate == null) {
-      staleEl.style.display = 'block';
-      staleEl.textContent = 'Run update-spot-price.sh to seed spot data';
-    }
-
-    // Savings row
-    if (inst.savings != null) {
-      $('delta-cost').textContent = '$' + inst.savings.toFixed(2);
-      $('delta-pct').textContent = inst.savings_pct.toFixed(1) + '%';
-    }
-    if (inst.ondemand_projected != null && inst.spot_projected != null) {
-      $('delta-proj').textContent = '$' + (inst.ondemand_projected - inst.spot_projected).toFixed(2);
-    }
-
-    // Run total cost (across all spot sessions)
-    if (inst.total_run_cost != null) {
-      $('run-total-row').style.display = 'block';
-      $('run-total-cost').textContent = '$' + inst.total_run_cost.toFixed(2);
-      if (inst.total_sessions > 1) {
-        $('run-total-sessions').textContent = '(' + inst.total_sessions + ' sessions)';
-      } else {
-        $('run-total-sessions').textContent = '';
-      }
-    }
+  if (data.timestamp) {
+    $('last-updated').textContent = 'Last updated: ' + new Date(data.timestamp).toLocaleString();
   }
-
-  // Session breakdown (instance history)
-  const sessions = data.sessions_breakdown;
-  if (sessions && sessions.length > 1) {
-    $('sessions-breakdown').style.display = 'block';
-    const tbl = $('sessions-table');
-    tbl.innerHTML = '<tr><th>#</th><th>AZ</th><th>Steps</th><th>Duration</th><th>Cost</th></tr>';
-    sessions.forEach((s, i) => {
-      const az = s.az ? s.az.replace('us-east-1', '1') : '?';
-      const steps = (s.steps_start != null && s.steps_end != null)
-        ? (s.steps_start/1000).toFixed(1) + 'k\u2192' + (s.steps_end/1000).toFixed(1) + 'k'
-        : '--';
-      const dur = s.duration_s != null ? fmtTime(s.duration_s) : '--';
-      const cost = s.spot_cost != null ? '$' + s.spot_cost.toFixed(2) : '--';
-      const cls = s.finalized ? '' : ' style="color:var(--accent)"';
-      tbl.innerHTML += '<tr' + cls + '><td class="dim">' + (i+1) + '</td><td>' + esc(az) + '</td><td>' + steps + '</td><td>' + dur + '</td><td>' + cost + '</td></tr>';
-    });
+  var step = data.current_step || 0, max = data.max_steps || 50000, pct = data.progress_pct || 0;
+  $('step-label').textContent = step.toLocaleString() + ' / ' + max.toLocaleString();
+  $('pct-label').textContent = pct.toFixed(1) + '%';
+  $('progress-fill').style.width = pct + '%';
+  var ev = data.latest_eval || {};
+  setMetric('m-ar-ppl', 'ar_ppl', ev.ar_ppl, function(v){return v.toFixed(1)});
+  setMetric('m-auroc', 'conf_auroc', ev.conf_auroc, function(v){return v.toFixed(3)});
+  setMetric('m-ece', 'conf_ece', ev.conf_ece, function(v){return v.toFixed(3)});
+  setMetric('m-diff', 'diff_loss', ev.diff_loss, function(v){return v.toFixed(2)});
+  setMetric('m-s1acc', 's1_tok_acc', ev.s1_tok_acc, function(v){return (v*100).toFixed(1)+'%'});
+  var inst = data.instance || {};
+  $('total-cost').textContent = inst.total_run_cost != null ? '$' + inst.total_run_cost.toFixed(2) : '--';
+  $('total-sessions').textContent = inst.total_sessions != null ? inst.total_sessions : '--';
+  var sessions = data.sessions_breakdown || [];
+  var tbody = $('sessions-body');
+  if (!sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">No session data available</td></tr>';
+    return;
   }
-
-  // Live metrics
-  const t = data.latest_train;
-  if (t) {
-    $('m-ar-loss').textContent = t.ar_loss.toFixed(4);
-    $('m-diff-loss').textContent = t.diff_loss.toFixed(4);
-    $('m-lr').textContent = t.lr.toExponential(2);
-
-    setRAG('m-ar-loss', t.ar_loss, RAG.ar_loss);
-    setRAG('m-diff-loss', t.diff_loss, RAG.diff_loss);
-    setRAG('m-conf-acc', t.conf_acc, RAG.conf_acc);
-
-    sparkBuffers.ar.push(t.ar_loss);
-    sparkBuffers.diff.push(t.diff_loss);
-    sparkBuffers.lr.push(t.lr);
-    for (const k of ['ar', 'diff', 'lr']) {
-      if (sparkBuffers[k].length > SPARK_MAX) sparkBuffers[k].shift();
-    }
-    drawSparkline('spark-ar', sparkBuffers.ar, '#60a5fa');
-    drawSparkline('spark-diff', sparkBuffers.diff, '#fb923c');
-    drawSparkline('spark-lr', sparkBuffers.lr, '#a78bfa');
+  var rows = '';
+  for (var i = 0; i < sessions.length; i++) {
+    var s = sessions[i];
+    var steps = s.steps_start != null && s.steps_end != null
+      ? s.steps_start.toLocaleString() + ' - ' + s.steps_end.toLocaleString()
+      : s.steps_start != null ? s.steps_start.toLocaleString() + ' - ...' : '--';
+    rows += '<tr><td>' + trunc(s.instance_id) + '</td><td>' + (s.instance_type||'?') +
+      '</td><td>' + (s.az||'?') + '</td><td>' + fmtDur(s.duration_s) +
+      '</td><td>' + steps + '</td><td>$' + (s.spot_cost!=null ? s.spot_cost.toFixed(2) : '--') +
+      '</td><td class="' + (s.finalized?'finalized-yes':'finalized-no') + '">' +
+      (s.finalized?'Yes':'No') + '</td></tr>';
   }
-
-  // Eval-sourced metrics (only from current run)
-  const ev = data.latest_eval;
-  const awaitMsg = data.next_eval_step ? 'eval @ ' + data.next_eval_step.toLocaleString() : '--';
-  if (ev) {
-    $('m-conf-acc').style.fontSize = '';
-    $('m-conf-acc').textContent = ((ev.conf_accuracy ?? ev.conf_acc ?? 0) * 100).toFixed(1) + '%';
-    setRAG('m-conf-acc', ev.conf_accuracy ?? ev.conf_acc ?? 0, RAG.conf_acc);
-
-    if (ev.conf_auroc != null) {
-      $('m-auroc').style.fontSize = '';
-      $('m-auroc').textContent = ev.conf_auroc.toFixed(4);
-      setRAG('m-auroc', ev.conf_auroc, RAG.auroc);
-    }
-
-    const s1val = ev.s1_tok_acc ?? ev.s1_token_accuracy ?? null;
-    if (s1val != null) {
-      $('m-s1-acc').style.fontSize = '';
-      $('m-s1-acc').textContent = (s1val * 100).toFixed(1) + '%';
-      setRAG('m-s1-acc', s1val, RAG.s1_acc);
-    }
-
-    // Only push to eval sparklines when a new eval step arrives
-    const evalStep = ev.step ?? null;
-    if (evalStep && evalStep !== lastEvalStep) {
-      lastEvalStep = evalStep;
-      sparkBuffers.conf.push(ev.conf_accuracy ?? ev.conf_acc ?? 0);
-      if (sparkBuffers.conf.length > SPARK_MAX) sparkBuffers.conf.shift();
-      if (ev.conf_auroc != null) {
-        sparkBuffers.auroc.push(ev.conf_auroc);
-        if (sparkBuffers.auroc.length > SPARK_MAX) sparkBuffers.auroc.shift();
-      }
-      if (s1val != null) {
-        sparkBuffers.s1.push(s1val);
-        if (sparkBuffers.s1.length > SPARK_MAX) sparkBuffers.s1.shift();
-      }
-      drawSparkline('spark-conf', sparkBuffers.conf, '#34d399');
-      drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
-      drawSparkline('spark-s1', sparkBuffers.s1, '#34d399');
-    }
-  } else {
-    $('m-conf-acc').textContent = awaitMsg;
-    $('m-conf-acc').style.fontSize = '11px';
-    $('m-auroc').textContent = awaitMsg;
-    $('m-auroc').style.fontSize = '11px';
-    $('m-s1-acc').textContent = awaitMsg;
-    $('m-s1-acc').style.fontSize = '11px';
-  }
-
-  // Clear eval chart note
-  const evalNote = $('eval-chart-note');
-  if (evalNote) evalNote.textContent = '';
-
-  // GPU — hide card when data is null
-  const g = data.gpu;
-  const gpuCard = $('card-gpu');
-  if (g) {
-    gpuCard.style.display = '';
-    $('gpu-name').textContent = g.name;
-    setGpuMetric('gpu-util', g.gpu_util,
-      g.gpu_util.toFixed(0) + '%');
-    setGpuMetric('gpu-vram', g.vram_used_mb / g.vram_total_mb * 100,
-      (g.vram_used_mb/1024).toFixed(1) + ' / ' + (g.vram_total_mb/1024).toFixed(1) + ' GB');
-    setGpuMetric('gpu-temp', g.temp_c,
-      g.temp_c.toFixed(0) + '\u00b0C', tempColor);
-    setGpuMetric('gpu-power', g.power_w / g.power_limit_w * 100,
-      g.power_w.toFixed(0) + ' / ' + g.power_limit_w.toFixed(0) + ' W');
-  } else {
-    gpuCard.style.display = 'none';
-  }
-
-  // Infra — hide card when data is null
-  const inf = data.infra;
-  const infraCard = $('card-infra');
-  if (inf) {
-    infraCard.style.display = '';
-    setBadge('badge-trainer', 'Trainer', inf.trainer_running);
-    setBadge('badge-sync', 'Sync', inf.sync_running);
-    const ckptEl = $('ckpt-list');
-    if (inf.checkpoints && inf.checkpoints.length > 0) {
-      ckptEl.innerHTML = inf.checkpoints.map(c => '<span>' + esc(c) + '</span>').join(' ');
-    } else {
-      ckptEl.textContent = 'None yet';
-    }
-  } else {
-    infraCard.style.display = 'none';
-  }
-
-  // Milestones
-  const msEl = $('milestones');
-  if (data.milestones && data.milestones.length > 0) {
-    msEl.innerHTML = data.milestones.map(m => {
-      const delta = m.step - data.current_step;
-      return '<span style="margin-right:12px"><span style="color:var(--accent)">' +
-        esc(m.label) + '</span> step ' + m.step.toLocaleString() +
-        ' <span style="color:var(--dim)">(in ' + delta.toLocaleString() + ')</span></span>';
-    }).join('');
-  } else {
-    msEl.textContent = '--';
-  }
-
-  // Config
-  const cfg = data.config_summary;
-  if (cfg) {
-    $('config-info').textContent =
-      cfg.model + ' | bs=' + cfg.batch_size + '\u00d7' + cfg.grad_accum +
-      ' | lr=' + cfg.lr + ' | warmup=' + cfg.warmup_steps +
-      ' | eval@' + cfg.eval_every + ' | ckpt@' + cfg.checkpoint_every;
-  }
-
-  // Log tail — hide card when empty
-  const logCard = $('card-log');
-  const logEl = $('log-tail');
-  if (data.log_tail && data.log_tail.length > 0) {
-    logCard.style.display = '';
-    logEl.innerHTML = data.log_tail.map(line => {
-      if (line.startsWith('[eval]')) return '<span class="eval-line">' + esc(line) + '</span>';
-      return '<span class="step-line">' + esc(line) + '</span>';
-    }).join('\n');
-    logEl.scrollTop = logEl.scrollHeight;
-  } else {
-    logCard.style.display = 'none';
-  }
+  tbody.innerHTML = rows;
 }
 
-function setGpuMetric(prefix, pct, label, colorFn) {
-  pct = Math.min(100, Math.max(0, pct));
-  const bar = $(prefix + '-bar');
-  const val = $(prefix + '-val');
-  bar.style.width = pct + '%';
-  bar.style.background = colorFn ? colorFn(pct) : gpuColor(pct);
-  val.textContent = label;
-}
-
-// Util/VRAM: green=normal, yellow=high, red=critical
-function gpuColor(pct) {
-  if (pct > 95) return '#f87171';
-  if (pct > 80) return '#fbbf24';
-  return '#34d399';
-}
-
-// Temp: green<60, yellow 60-80, red>80 (mapped to 0-100 scale for the bar)
-function tempColor(pct) {
-  if (pct > 80) return '#f87171';
-  if (pct > 60) return '#fbbf24';
-  return '#34d399';
-}
-
-function setBadge(id, name, running) {
-  const el = $(id);
-  el.textContent = name + ': ' + (running ? 'Running' : 'Stopped');
-  el.className = 'badge ' + (running ? 'badge-green' : 'badge-red');
-}
-
-function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-// ── Fetch charts on load ─────────────────────────────────────────────────
-async function loadCharts() {
+// Try to reach the live dashboard API
+async function checkLive() {
   try {
-    const [histRes, evalRes] = await Promise.all([
-      fetch('/api/history'),
-      fetch('/api/eval/history'),
-    ]);
-    const hist = await histRes.json();
-    const evals = await evalRes.json();
-
-    lossChart.data.labels = hist.map(h => h.step);
-    lossChart.data.datasets[0].data = hist.map(h => h.ar_loss);
-    lossChart.data.datasets[1].data = hist.map(h => h.diff_loss);
-    lossChart.update();
-
-    const tail = hist.slice(-SPARK_MAX);
-    sparkBuffers.ar = tail.map(h => h.ar_loss);
-    sparkBuffers.diff = tail.map(h => h.diff_loss);
-    sparkBuffers.lr = tail.map(h => h.lr);
-
-    // Filter to current run: only show evals up to current training step
-    const maxStep = currentTrainStep || Infinity;
-    const filtered = evals.filter(e => e.step <= maxStep);
-    if (filtered.length > 0) {
-      evalChart.data.labels = filtered.map(e => e.step);
-      evalChart.data.datasets[0].data = filtered.map(e => e.s1_tok_acc ?? e.s1_token_accuracy ?? null);
-      evalChart.data.datasets[1].data = filtered.map(e => e.conf_auroc ?? null);
-      evalChart.data.datasets[2].data = filtered.map(e => e.ar_ppl ?? e.ar_perplexity ?? null);
-      evalChart.update();
-
-      // Seed eval sparklines from history
-      const evalTail = filtered.slice(-SPARK_MAX);
-      sparkBuffers.conf = evalTail.map(e => e.conf_accuracy ?? e.conf_acc ?? 0);
-      sparkBuffers.auroc = evalTail.map(e => e.conf_auroc ?? 0);
-      sparkBuffers.s1 = evalTail.map(e => e.s1_tok_acc ?? e.s1_token_accuracy ?? 0);
-      drawSparkline('spark-conf', sparkBuffers.conf, '#34d399');
-      drawSparkline('spark-auroc', sparkBuffers.auroc, '#a78bfa');
-      drawSparkline('spark-s1', sparkBuffers.s1, '#34d399');
-      if (filtered.length > 0) lastEvalStep = filtered[filtered.length - 1].step;
-    }
-  } catch (e) {
-    console.error('Failed to load charts:', e);
-  }
-}
-
-// ── Offline / connectivity state ─────────────────────────────────────────
-let sseFailCount = 0;
-let sseConnected = false;
-let pollInterval = null;
-
-function setSourceIndicator(mode) {
-  const el = $('source-indicator');
-  if (!el) return;
-  if (mode === 'live') {
-    el.innerHTML = '<span style="color:#34d399;">&#9679;</span> Live';
-  } else if (mode === 'cached') {
-    el.innerHTML = '<span style="color:#fbbf24;">&#9679;</span> Cached';
-  } else {
-    el.textContent = '';
-  }
-}
-
-function showOfflineBanner() {
-  const banner = $('offline-banner');
-  if (banner) banner.style.display = 'block';
-}
-
-function hideOfflineBanner() {
-  const banner = $('offline-banner');
-  if (banner) banner.style.display = 'none';
-}
-
-function startPollFallback() {
-  if (pollInterval) return; // already polling
-  pollInterval = setInterval(async () => {
-    try {
-      const res = await fetch('/api/status');
-      if (res.ok) {
-        const data = await res.json();
-        updateUI(data);
-        setSourceIndicator('cached');
-      }
-    } catch (e) {
-      // API also unreachable — nothing to do, banner already shown
-    }
-  }, 30000);
-}
-
-function stopPollFallback() {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
-  }
-}
-
-// ── SSE ──────────────────────────────────────────────────────────────────
-let evtSource;
-function connectSSE() {
-  evtSource = new EventSource('/stream');
-  evtSource.onmessage = (e) => {
-    // SSE working — reset failure state
-    sseFailCount = 0;
-    sseConnected = true;
-    hideOfflineBanner();
-    stopPollFallback();
-    setSourceIndicator('live');
-
-    $('conn-status').textContent = 'Live';
-    $('pulse').style.background = '#34d399';
-    try { updateUI(JSON.parse(e.data)); } catch (err) { console.error('SSE parse error:', err); }
-  };
-  evtSource.onerror = () => {
-    sseConnected = false;
-    sseFailCount++;
-
-    $('conn-status').textContent = 'Reconnecting...';
-    $('pulse').style.background = '#f87171';
-    evtSource.close();
-
-    // After 3 consecutive failures, show offline banner and start polling
-    if (sseFailCount >= 3) {
-      showOfflineBanner();
-      setSourceIndicator('cached');
-      startPollFallback();
-    }
-
-    setTimeout(connectSSE, 5000);
-  };
-}
-
-// ── Sitrep modal ─────────────────────────────────────────────────────────
-function renderMarkdown(md) {
-  let html = '';
-  const lines = md.split('\n');
-  let inUl = false, inOl = false;
-  for (let line of lines) {
-    if (inUl && !/^\s*[-*]\s/.test(line)) { html += '</ul>'; inUl = false; }
-    if (inOl && !/^\s*\d+\.\s/.test(line)) { html += '</ol>'; inOl = false; }
-
-    if (/^###\s+(.*)/.test(line)) {
-      html += '<h3>' + RegExp.$1 + '</h3>';
-    } else if (/^##\s+(.*)/.test(line)) {
-      html += '<h2>' + RegExp.$1 + '</h2>';
-    } else if (/^#\s+(.*)/.test(line)) {
-      html += '<h1>' + RegExp.$1 + '</h1>';
-    } else if (/^\s*[-*]\s+(.*)/.test(line)) {
-      if (!inUl) { html += '<ul>'; inUl = true; }
-      html += '<li>' + inlineFormat(RegExp.$1) + '</li>';
-    } else if (/^\s*(\d+)\.\s+(.*)/.test(line)) {
-      if (!inOl) { html += '<ol>'; inOl = true; }
-      html += '<li>' + inlineFormat(RegExp.$2) + '</li>';
-    } else if (line.trim() === '') {
-      html += '<br>';
-    } else {
-      html += '<p>' + inlineFormat(line) + '</p>';
-    }
-  }
-  if (inUl) html += '</ul>';
-  if (inOl) html += '</ol>';
-  return html;
-}
-
-function inlineFormat(s) {
-  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-  return s;
-}
-
-async function openSitrep() {
-  const modal = document.getElementById('sitrep-modal');
-  const body = document.getElementById('sitrep-body');
-  const timeEl = document.getElementById('sitrep-time');
-  body.innerHTML = '<p style="color:var(--dim)">Loading...</p>';
-  timeEl.textContent = '';
-  modal.classList.remove('hidden');
-  try {
-    const res = await fetch('/api/sitrep');
-    const data = await res.json();
-    body.innerHTML = renderMarkdown(data.content);
-    if (data.modified) {
-      const d = new Date(data.modified);
-      timeEl.textContent = 'Last updated: ' + d.toLocaleString();
-    }
-  } catch (e) {
-    body.innerHTML = '<p style="color:#e74c3c">Failed to load sitrep.</p>';
-  }
-}
-
-function closeSitrep() {
-  document.getElementById('sitrep-modal').classList.add('hidden');
-}
-
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeSitrep();
-});
-
-// ── Init ─────────────────────────────────────────────────────────────────
-async function init() {
-  try {
-    const res = await fetch('/api/status');
+    var res = await fetch('/api/status');
     if (res.ok) {
-      updateUI(await res.json());
-      setSourceIndicator('live');
+      var data = await res.json();
+      // Verify it's actually the live instance, not Lambda fallback
+      if (data.gpu || data.infra || (data.bootstrap && data.bootstrap.status)) {
+        instanceLive = true;
+        setBootState('online');
+        if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+        updateUI(data);
+        // Redirect to live dashboard after a moment
+        setTimeout(function() { location.reload(); }, 3000);
+        return true;
+      }
+      // Lambda fallback response — still use the data
+      updateUI(data);
     }
-  } catch (e) {
-    console.error('Initial status load failed:', e);
-    // Initial load failed — start in offline mode
-    showOfflineBanner();
-    setSourceIndicator('cached');
-    startPollFallback();
+  } catch(e) { /* not live yet */ }
+  return false;
+}
+
+// Initial load
+async function init() {
+  // Check beacon first
+  await checkBeacon();
+  // Try live API (also loads Lambda fallback data)
+  var live = await checkLive();
+  if (!live) {
+    // Poll: beacon every 10s, live API every 15s
+    setInterval(checkBeacon, 10000);
+    setInterval(checkLive, 15000);
   }
-  await loadCharts();
-  connectSSE();
 }
 
 init();
 </script>
-
-<!-- Sitrep modal -->
-<div id="sitrep-modal" class="modal hidden" onclick="if(event.target===this)closeSitrep()">
-  <div class="modal-content">
-    <button class="modal-close" onclick="closeSitrep()">&times;</button>
-    <h2>Sitrep</h2>
-    <div id="sitrep-time" class="sitrep-time"></div>
-    <div id="sitrep-body" class="sitrep-body"></div>
-  </div>
-</div>
 </body>
 </html>
