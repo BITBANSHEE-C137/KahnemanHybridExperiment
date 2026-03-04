@@ -333,7 +333,21 @@ def build_status():
 
     # ETA — use steps per second from recent steps for accuracy
     eta_s = None
-    phase = "Idle"
+
+    # Phase — reflects bootstrap, recovery, and training states
+    bootstrap = cached("bootstrap", 2, read_bootstrap_status)
+    if bootstrap and bootstrap.get("status") == "running":
+        running_step = next(
+            (s for s in bootstrap.get("steps", []) if s.get("status") == "running"),
+            None,
+        )
+        phase = running_step["label"] if running_step else "Bootstrapping"
+    elif not latest or current_step == 0:
+        # Bootstrap done but no training steps yet
+        phase = "Starting Training"
+    else:
+        phase = "Idle"
+
     if latest and len(steps) >= 2:
         elapsed = latest["elapsed_s"]
         # Use recent window (last 50 steps) for more accurate rate estimate
@@ -1692,7 +1706,7 @@ function updateUI(data) {
       }
     } else if (inst.spot_rate == null) {
       staleEl.style.display = 'block';
-      staleEl.textContent = 'Run update-spot-price.sh to seed spot data';
+      staleEl.textContent = 'Spot price data loading\u2026';
     }
 
     // Savings row
