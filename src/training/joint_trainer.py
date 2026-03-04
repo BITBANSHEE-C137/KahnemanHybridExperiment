@@ -104,6 +104,7 @@ def train(
     smoke_test: bool = False,
     max_steps_override: int | None = None,
     pretrained: bool = True,
+    fresh_start: bool = False,
 ) -> None:
     """Main training loop.
 
@@ -112,6 +113,7 @@ def train(
         smoke_test: If True, use smoke_test overrides from config.
         max_steps_override: Override max_steps from CLI.
         pretrained: If True, load pretrained GPT-2 weights. If False, random init.
+        fresh_start: If True, ignore existing checkpoints, start from pretrained weights.
     """
     train_cfg = config["training"]
 
@@ -148,7 +150,7 @@ def train(
 
     # Resume from checkpoint if available
     start_step = 0
-    if not smoke_test:
+    if not smoke_test and not fresh_start:
         latest_ckpt = find_latest_checkpoint(checkpoint_dir)
         if latest_ckpt is not None:
             print(f"[resume] Loading checkpoint: {latest_ckpt}")
@@ -159,6 +161,8 @@ def train(
             print(f"[resume] Resuming from step {start_step}")
         else:
             print("[resume] No checkpoint found, starting from scratch")
+    elif fresh_start:
+        print("[fresh_start] Starting from pretrained weights (ignoring checkpoints)")
 
     # Data
     dataloader = create_dataloader(config, smoke_test=smoke_test)
@@ -353,12 +357,13 @@ def main() -> None:
     parser.add_argument("--config", type=str, required=True, help="Path to YAML config")
     parser.add_argument("--max_steps", type=int, default=None, help="Override max training steps")
     parser.add_argument("--smoke_test", action="store_true", help="Run quick smoke test")
+    parser.add_argument("--fresh_start", action="store_true", help="Ignore existing checkpoints, start from scratch")
     args = parser.parse_args()
 
     with open(args.config) as f:
         config = yaml.safe_load(f)
 
-    train(config, smoke_test=args.smoke_test, max_steps_override=args.max_steps)
+    train(config, smoke_test=args.smoke_test, max_steps_override=args.max_steps, fresh_start=args.fresh_start)
 
 
 if __name__ == "__main__":
