@@ -68,7 +68,7 @@ print(json.dumps({
 }))
 ")
 
-CURL_ARGS=(-s -X POST "https://${HOST}/api/spot-price" -H "Content-Type: application/json")
+SCHEME="https"; [[ "$HOST" == localhost* ]] && SCHEME="http"; CURL_ARGS=(-s -X POST "${SCHEME}://${HOST}/api/spot-price" -H "Content-Type: application/json")
 if [ -n "$TOKEN" ]; then
   CURL_ARGS+=(-H "Authorization: Bearer ${TOKEN}")
 fi

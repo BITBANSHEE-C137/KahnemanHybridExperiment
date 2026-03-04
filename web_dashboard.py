@@ -333,7 +333,7 @@ def build_status():
 
     # ETA — use steps per second from recent steps for accuracy
     eta_s = None
-    phase = "idle"
+    phase = "Idle"
     if latest and len(steps) >= 2:
         elapsed = latest["elapsed_s"]
         # Use recent window (last 50 steps) for more accurate rate estimate
@@ -346,7 +346,7 @@ def build_status():
             sps = current_step / elapsed if elapsed > 0 else 0
         remaining = max_steps - current_step
         eta_s = remaining / sps if sps > 0 else None
-        phase = "warmup" if current_step <= warmup_steps else "cosine_decay"
+        phase = "Warmup" if current_step <= warmup_steps else "Cosine Decay"
 
     latest_eval = eval_lines[-1] if eval_lines else None
 
@@ -404,8 +404,18 @@ def build_status():
     sessions_breakdown = []
     total_training_time_s = None
     if ledger:
-        inst["total_run_cost"] = ledger.get("total_cost")
+        # Use live spot_cost for current session instead of stale ledger value
+        ledger_total = ledger.get("total_cost", 0)
         sessions = ledger.get("sessions", [])
+        if spot_cost is not None:
+            current_sess_ledger_cost = 0
+            for s in sessions:
+                if not s.get("finalized", False):
+                    current_sess_ledger_cost = s.get("spot_cost", 0)
+                    break
+            inst["total_run_cost"] = round(ledger_total - current_sess_ledger_cost + spot_cost, 4)
+        else:
+            inst["total_run_cost"] = ledger_total
         inst["total_sessions"] = len(sessions)
         # Compute per-session durations and total training time
         total_time = 0.0
@@ -491,6 +501,10 @@ def build_status():
 
 app = Flask(__name__)
 
+
+@app.route("/favicon.ico")
+def favicon():
+    return app.send_static_file("favicon.ico")
 
 @app.route("/api/status")
 def api_status():
@@ -730,13 +744,36 @@ body::before {
   white-space: nowrap;
   padding: 3px 10px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 6px;
   background: var(--bg);
   transition: border-color 0.2s, background 0.2s;
 }
 .header-links a:hover {
   border-color: var(--accent);
   background: rgba(232, 121, 84, 0.1);
+}
+.sitrep-badge {
+  background: rgba(167, 139, 250, 0.08);
+  border-color: rgba(167, 139, 250, 0.3);
+  color: #a78bfa;
+  animation: breathe 3s ease-in-out infinite;
+}
+.sitrep-badge:hover {
+  background: rgba(167, 139, 250, 0.18);
+  border-color: #a78bfa;
+}
+.sitrep-badge::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #a78bfa;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+@keyframes breathe {
+  0%, 100% { border-color: rgba(167, 139, 250, 0.3); box-shadow: 0 0 0 0 rgba(167, 139, 250, 0); }
+  50% { border-color: #a78bfa; box-shadow: 0 0 8px rgba(167, 139, 250, 0.15); }
 }
 .pulse {
   display: inline-block;
@@ -1103,19 +1140,25 @@ body::before {
 .modal-close { position: absolute; top: 12px; right: 16px; background: none;
   border: none; color: var(--dim); font-size: 24px; cursor: pointer; line-height: 1; }
 .modal-close:hover { color: var(--text); }
-.modal-content h2 { margin: 0 0 4px 0; font-size: 20px; color: var(--accent); }
+.modal-content { border-color: rgba(167, 139, 250, 0.2); }
+.modal-content h2 { margin: 0 0 4px 0; font-size: 20px; color: #a78bfa; }
 .sitrep-time { color: var(--dim); font-size: 12px; margin-bottom: 16px; }
 .sitrep-body { font-size: 14px; line-height: 1.7; color: var(--text); }
 .sitrep-body h1, .sitrep-body h2, .sitrep-body h3 {
-  color: var(--accent); margin: 18px 0 8px 0; font-size: 16px; }
+  color: #a78bfa; margin: 18px 0 8px 0; font-size: 16px;
+  border-bottom: 1px solid rgba(167, 139, 250, 0.15); padding-bottom: 6px; }
 .sitrep-body h1 { font-size: 18px; }
 .sitrep-body ul { margin: 4px 0 12px 0; padding-left: 20px; }
 .sitrep-body li { margin-bottom: 3px; }
+.sitrep-body li::marker { color: rgba(167, 139, 250, 0.5); }
 .sitrep-body ol { margin: 4px 0 12px 0; padding-left: 20px; }
-.sitrep-body code { background: var(--bg); padding: 1px 5px; border-radius: 4px;
-  font-size: 13px; border: 1px solid var(--border); }
+.sitrep-body code { background: rgba(167, 139, 250, 0.06); padding: 1px 5px; border-radius: 4px;
+  font-size: 13px; border: 1px solid rgba(167, 139, 250, 0.15); color: #a78bfa; }
 .sitrep-body p { margin: 0 0 10px 0; }
-.sitrep-body strong { color: var(--text); }
+.sitrep-body strong { color: #a78bfa; }
+.sitrep-body table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 13px; }
+.sitrep-body th { text-align: left; color: #a78bfa; border-bottom: 1px solid rgba(167, 139, 250, 0.2); padding: 4px 8px; }
+.sitrep-body td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -1129,14 +1172,14 @@ body::before {
         <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
         <a href="/reports/" target="_blank">Reports</a>
-        <a href="#" onclick="openSitrep();return false">Sitrep</a>
+        <a href="#" class="sitrep-badge" onclick="openSitrep();return false">SITREP</a>
       </div>
       <button class="header-hamburger" onclick="document.getElementById('header-menu').classList.toggle('open')">&#9776;</button>
       <div class="header-menu" id="header-menu">
         <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
         <a href="/reports/" target="_blank">Reports</a>
-        <a href="#" onclick="document.getElementById('header-menu').classList.remove('open');openSitrep();return false">Sitrep</a>
+        <a href="#" class="sitrep-badge" onclick="document.getElementById('header-menu').classList.remove('open');openSitrep();return false">SITREP</a>
       </div>
       <div class="meta">
         <span id="conn-status">Connecting...</span> &middot;
@@ -1164,7 +1207,7 @@ body::before {
       <span>Step <strong id="cur-step">--</strong> / <span id="max-step">--</span></span>
       <span>Phase: <strong id="phase">--</strong></span>
       <span>Total Time: <strong id="total-time">--</strong></span>
-      <span>Instance: <strong id="elapsed">--</strong></span>
+      <span>Training: <strong id="elapsed">--</strong></span>
       <span>Remaining: <strong id="eta">--</strong></span>
     </div>
     <div class="progress-outer">
@@ -1291,7 +1334,7 @@ body::before {
       </table>
       <div class="spot-stale" id="spot-stale" style="display:none"></div>
       <div id="run-total-row" style="margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border);display:none">
-        <span style="color:var(--dim);font-size:13px">Run Total</span>
+        <span style="color:var(--dim);font-size:13px">Run Total:</span>
         <span id="run-total-sessions" style="color:var(--dim);font-size:12px;margin-left:4px"></span>
         <span style="float:right;font-weight:600;font-size:15px;color:var(--accent)" id="run-total-cost">--</span>
       </div>
@@ -1662,7 +1705,7 @@ function updateUI(data) {
       if (inst.total_sessions > 1) {
         $('run-total-sessions').textContent = '(' + inst.total_sessions + ' sessions)';
       } else {
-        $('run-total-sessions').textContent = '';
+        $('run-total-sessions').textContent = '(1 session)';
       }
     }
   }
@@ -2002,7 +2045,7 @@ init();
 <div id="sitrep-modal" class="modal hidden" onclick="if(event.target===this)closeSitrep()">
   <div class="modal-content">
     <button class="modal-close" onclick="closeSitrep()">&times;</button>
-    <h2>Sitrep</h2>
+    <h2>SITREP</h2>
     <div id="sitrep-time" class="sitrep-time"></div>
     <div id="sitrep-body" class="sitrep-body"></div>
   </div>
