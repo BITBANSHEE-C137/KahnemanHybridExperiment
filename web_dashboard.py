@@ -41,6 +41,47 @@ SPOT_PRICE_FILE = "/tmp/spot_price.json"
 BOOTSTRAP_STATUS_FILE = "/tmp/bootstrap_status.json"
 COST_LEDGER_FILE = os.path.join(DATA_DIR, "cost", "cost_ledger.json")
 
+# Spot termination detection
+_spot_termination_time = None
+_spot_termination_lock = threading.Lock()
+
+IMDS_TERMINATION_URL = "http://169.254.169.254/latest/meta-data/spot/instance-action"
+
+
+def _poll_spot_termination():
+    """Background thread: poll IMDS for spot termination notice every 5s."""
+    global _spot_termination_time
+    # Get IMDSv2 token
+    try:
+        req = urllib.request.Request(
+            "http://169.254.169.254/latest/api/token",
+            method="PUT",
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "300"},
+        )
+        tok = urllib.request.urlopen(req, timeout=2).read().decode()
+    except Exception:
+        tok = ""
+    while True:
+        try:
+            req = urllib.request.Request(IMDS_TERMINATION_URL)
+            if tok:
+                req.add_header("X-aws-ec2-metadata-token", tok)
+            resp = urllib.request.urlopen(req, timeout=2)
+            if resp.status == 200:
+                data = json.loads(resp.read().decode())
+                with _spot_termination_lock:
+                    if _spot_termination_time is None:
+                        _spot_termination_time = data.get("time", datetime.now(timezone.utc).isoformat())
+                        print(f"[dashboard] SPOT TERMINATION NOTICE: {data}")
+        except Exception:
+            pass
+        time.sleep(5)
+
+
+# Start termination poller on import
+_term_thread = threading.Thread(target=_poll_spot_termination, daemon=True)
+_term_thread.start()
+
 # Regex for training step lines
 STEP_RE = re.compile(
     r"^step:\s*(?P<step>\d+)\s*\|"
@@ -502,6 +543,7 @@ def build_status():
             "fleet_id": os.environ.get("FLEET_ID", ""),
         },
         "bootstrap": cached("bootstrap", 2, read_bootstrap_status),
+        "spot_termination": _spot_termination_time,
         "log_tail": log_tail,
         "config_summary": {
             "model": config.get("model", {}).get("name", "?"),
@@ -1990,7 +2032,7 @@ function connectSSE() {
   evtSource.onmessage = (e) => {
     $('conn-status').textContent = 'Live';
     $('pulse').style.background = '#34d399';
-    try { updateUI(JSON.parse(e.data)); } catch (err) { console.error('SSE parse error:', err); }
+    try { const d = JSON.parse(e.data); updateUI(d); checkTermination(d); } catch (err) { console.error('SSE parse error:', err); }
   };
   evtSource.onerror = () => {
     $('conn-status').textContent = 'Reconnecting...';
@@ -2064,8 +2106,34 @@ function closeSitrep() {
 }
 
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeSitrep();
+  if (e.key === 'Escape') { closeSitrep(); closeTermNotice(); }
 });
+
+// ── Spot termination notice ──────────────────────────────────────────────
+let _termDismissed = false;
+function checkTermination(data) {
+  if (!data.spot_termination || _termDismissed) return;
+  const modal = $('term-modal');
+  if (modal.classList.contains('hidden')) {
+    // Compute countdown to termination
+    const termTime = new Date(data.spot_termination);
+    const now = new Date(data.timestamp);
+    const secsLeft = Math.max(0, Math.round((termTime - now) / 1000));
+    const m = Math.floor(secsLeft / 60);
+    const s = secsLeft % 60;
+    $('term-countdown').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    $('term-time').textContent = termTime.toLocaleTimeString();
+    // Update status badge
+    $('conn-status').textContent = 'Terminating';
+    $('pulse').style.background = '#f87171';
+    modal.classList.remove('hidden');
+  }
+}
+
+function closeTermNotice() {
+  $('term-modal').classList.add('hidden');
+  _termDismissed = true;
+}
 
 // ── Init ─────────────────────────────────────────────────────────────────
 async function init() {
@@ -2089,6 +2157,25 @@ init();
     <h2>SITREP</h2>
     <div id="sitrep-time" class="sitrep-time"></div>
     <div id="sitrep-body" class="sitrep-body"></div>
+  </div>
+</div>
+
+<!-- Spot termination modal -->
+<div id="term-modal" class="modal hidden" onclick="if(event.target===this)closeTermNotice()">
+  <div class="modal-content" style="border-color:rgba(248,113,113,.3); max-width:480px; text-align:center;">
+    <button class="modal-close" onclick="closeTermNotice()">&times;</button>
+    <h2 style="color:#f87171; font-size:18px;">Spot Instance Terminating</h2>
+    <p style="font-size:40px; font-weight:700; color:#f87171; margin:16px 0 8px;" id="term-countdown">--:--</p>
+    <p style="color:var(--dim); font-size:14px; margin-bottom:14px;">
+      AWS is reclaiming this spot instance at <strong id="term-time">--</strong>
+    </p>
+    <p style="color:var(--text); font-size:14px; line-height:1.6; margin-bottom:12px;">
+      A final sync of checkpoints, eval metrics, and logs to S3 is in progress.
+      Training will resume automatically on the next spot instance launch.
+    </p>
+    <p style="color:var(--dim); font-size:12px;">
+      This page will switch to the offline fallback when the instance goes down.
+    </p>
   </div>
 </div>
 </body>
