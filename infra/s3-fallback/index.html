@@ -383,7 +383,7 @@ function updateBootstrapSteps(elapsed) {
 // Check bootstrap beacon from S3
 async function checkBeacon() {
   try {
-    var res = await fetch('/bootstrap_beacon.json?t=' + Date.now());
+    var res = await fetch('https://train-bitbanshee-fallback.s3.amazonaws.com/bootstrap_beacon.json?t=' + Date.now());
     if (!res.ok) return;
     var data = await res.json();
     if (data.status === 'bootstrapping' && data.started) {
