@@ -11,6 +11,7 @@
 - [Monitoring & Dashboards](#monitoring--dashboards)
 - [Deployment](#deployment)
 - [Cost Analysis](#cost-analysis)
+- [Cost Controls](#cost-controls)
 
 ## AWS Architecture
 
@@ -194,3 +195,42 @@ Spot pricing varies by instance type and availability zone. The `update-spot-pri
 **Actual v1 cost**: $27.62 across 4 spot instances, 3 reclamation recoveries. Spot overhead approximately doubled pure compute cost (consistent with projection). Training completed at step 50,000 on 2026-03-03.
 
 S3 storage: negligible (~$0.02/month for checkpoints and logs)
+
+## Cost Controls
+
+Three automated circuit breakers protect against runaway spend. All thresholds are configurable via environment variables in `bootstrap.sh`.
+
+### Budget Cap
+
+| Parameter | Default | Script | Frequency |
+|-----------|---------|--------|-----------|
+| `MAX_BUDGET` | $50 | `cost-tracker.sh` | Every 5 min (cron) |
+
+The cost tracker maintains a persistent ledger across spot instance sessions (`cost/cost_ledger.json` in S3). On each `update` cycle, it compares accumulated `total_cost` against `MAX_BUDGET`. If the budget is exceeded, the fleet is automatically shut down via `aws ec2 modify-fleet --target-capacity-specification TotalTargetCapacity=0`. Training resumes from the latest checkpoint when the fleet is manually restarted.
+
+### Spot Price Ceiling
+
+| Parameter | Default | Script | Frequency |
+|-----------|---------|--------|-----------|
+| `MAX_SPOT_PRICE` | $0.75/hr | `update-spot-price.sh` | Every 5 min (cron) |
+
+The spot price updater queries `aws ec2 describe-spot-price-history` for the current instance type and AZ. If the current market price meets or exceeds `MAX_SPOT_PRICE`, the fleet is shut down before the next billing interval at the elevated rate. At the default ceiling of $0.75/hr (67% above typical g5.2xlarge spot of ~$0.45/hr, 38% below on-demand at $1.21/hr), the worst-case full-run cost is ~$41 — still below the $50 budget cap.
+
+### Fleet-Level Controls
+
+| Setting | Value | Effect |
+|---------|-------|--------|
+| Fleet type | `maintain` | Auto-replaces terminated instances |
+| Allocation strategy | `capacity-optimized` | Picks AZ with most spare capacity |
+| Capacity rebalance | `launch-before-terminate` (120s delay) | Overlaps old/new instances during rebalance |
+| Max price | Not set (defaults to on-demand ceiling) | Application-level ceiling preferred |
+| Instance pool | 3 types × 3 AZs = 9 pools | `g5.xlarge`, `g5.2xlarge`, `g6.xlarge` across `us-east-1a/b/c` |
+
+**Note:** The fleet does not set `MaxPrice` at the EC2 level. Cost control is handled at the application layer via the spot price ceiling, which is more flexible (can be changed without recreating the fleet) and provides a single control point with dashboard visibility.
+
+### Dashboard Visibility
+
+The web dashboard displays real-time cost control status:
+- **Budget usage**: Current total cost vs budget cap, color-coded (green/yellow/red at 70%/90% thresholds)
+- **Spot rate vs ceiling**: Current spot price vs max allowed, color-coded (green/yellow/red at 50%/80% thresholds)
+- Both are shown in the instance card alongside existing cost metrics
