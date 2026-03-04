@@ -108,13 +108,16 @@ echo "Fetching secrets from Secrets Manager..."
 WANDB_API_KEY=$(aws secretsmanager get-secret-value --secret-id "ml-lab/wandb-api-key" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
 HF_TOKEN=$(aws secretsmanager get-secret-value --secret-id "ml-lab/hf-token" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
 SPOT_TOKEN=$(aws secretsmanager get-secret-value --secret-id "ml-lab/dashboard-spot-token" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
+CLAUDE_API_KEY=$(aws secretsmanager get-secret-value --secret-id "ml-lab/claude-api-key" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
+TELEGRAM_BOT_TOKEN=$(aws secretsmanager get-secret-value --secret-id "ml-lab/telegram-bot-token" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
+TELEGRAM_CHAT_ID=$(aws secretsmanager get-secret-value --secret-id "ml-lab/telegram-chat-id" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
 step_done 1
 
 # ── Step 2: Ubuntu user environment ──
 step_start 2
 echo "Configuring ubuntu user environment..."
 # Clean old env vars
-sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /CHECKPOINT_S3_PREFIX/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d; /FLEET_ID/d; /MAX_BUDGET/d; /MAX_SPOT_PRICE/d' /home/ubuntu/.bashrc
+sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /CHECKPOINT_S3_PREFIX/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d; /FLEET_ID/d; /MAX_BUDGET/d; /MAX_SPOT_PRICE/d; /CLAUDE_API_KEY/d; /TELEGRAM_BOT_TOKEN/d; /TELEGRAM_CHAT_ID/d' /home/ubuntu/.bashrc
 
 # Inject env vars
 cat >> /home/ubuntu/.bashrc << BASHRC
@@ -135,6 +138,9 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export FLEET_ID="fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a"
 export MAX_BUDGET=50
 export MAX_SPOT_PRICE=0.75
+export CLAUDE_API_KEY="$CLAUDE_API_KEY"
+export TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
+export TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID"
 BASHRC
 
 # Git credentials
@@ -275,6 +281,7 @@ step_done 10
 # ── Step 11: Install Flask if missing ──
 step_start 11
 sudo -u ubuntu python3 -c "import flask" 2>/dev/null || sudo -u ubuntu pip install --user flask > /dev/null 2>&1
+sudo -u ubuntu pip install --user anthropic > /dev/null 2>&1
 step_done 11
 
 # ── Step 12: Start web dashboard ──
@@ -339,8 +346,20 @@ print(json.dumps(obj))
 aws s3 cp /tmp/bootstrap_beacon.json "s3://$FALLBACK_BUCKET/bootstrap_beacon.json" \
     --region "$REGION" --content-type "application/json" --cache-control "no-cache" 2>/dev/null || true
 
+# -- Notify via Telegram --
+if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+    python3 -c "
+import urllib.request, urllib.parse
+token = '$TELEGRAM_BOT_TOKEN'
+chat_id = '$TELEGRAM_CHAT_ID'
+msg = '*Instance bootstrapped*\nIP: $INSTANCE_IP\nType: $(curl -sf http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo unknown)\nAll services started.'
+data = urllib.parse.urlencode({'chat_id': chat_id, 'text': msg, 'parse_mode': 'Markdown'}).encode()
+urllib.request.urlopen(urllib.request.Request(f'https://api.telegram.org/bot{token}/sendMessage', data=data), timeout=10)
+" 2>/dev/null || true
+fi
+
 echo ""
-echo "=== Bootstrap.sh completed at $(date -u) ==="
+echo "=== Bootstrap.sh completed at $(date -u) ===" 
 echo "=== All services started autonomously ==="
 echo "  Dashboard: https://train.bitbanshee.com"
 echo "  tmux: tmux attach -t training"

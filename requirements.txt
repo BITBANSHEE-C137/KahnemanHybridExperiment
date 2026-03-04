@@ -21,3 +21,6 @@ tqdm>=4.66.0
 scipy>=1.14.0
 numpy>=1.26.0
 pytest>=8.0.0
+
+# Claude API for AI-generated SITREPs
+anthropic>=0.40.0

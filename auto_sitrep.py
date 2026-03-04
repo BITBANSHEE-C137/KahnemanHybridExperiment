@@ -10,6 +10,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
+import urllib.request
+import urllib.parse
 from urllib.request import urlopen
 from urllib.error import URLError
 
@@ -20,6 +22,32 @@ HISTORY_FILE = "/tmp/auto-sitrep-eval-history.json"
 SITREP_PATH = os.path.join(PROJECT, "sitrep.md")
 
 ET = ZoneInfo("America/New_York")  # handles EST/EDT automatically
+
+
+def send_telegram(message, parse_mode="Markdown"):
+    """Send a message via Telegram bot API. Silently no-ops if not configured."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not token or not chat_id:
+        return
+
+    # Telegram limit is 4096 chars
+    if len(message) > 4000:
+        message = message[:3990] + "\n...(truncated)"
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = urllib.parse.urlencode({
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": parse_mode,
+    }).encode()
+
+    try:
+        req = urllib.request.Request(url, data=data)
+        resp = urllib.request.urlopen(req, timeout=15)
+        print(f"[auto_sitrep] Telegram sent ({resp.status})", file=sys.stderr)
+    except Exception as e:
+        print(f"[auto_sitrep] Telegram send failed: {e}", file=sys.stderr)
 
 
 def fetch_status():
@@ -274,6 +302,54 @@ Live at step {fmt_step(step)}: ar_loss {lt.get('ar_loss', 0):.2f}, diff_loss {lt
     return md
 
 
+def generate_sitrep_via_claude(status, trajectory_rows, prev_metrics, prev_step, ledger=None):
+    """Generate sitrep via Claude API, falling back to template on failure."""
+    api_key = os.environ.get("CLAUDE_API_KEY", "")
+    if not api_key:
+        return generate_sitrep(status, trajectory_rows, prev_metrics, prev_step, ledger)
+
+    try:
+        import anthropic
+    except ImportError:
+        print("[auto_sitrep] anthropic SDK not installed, using template", file=sys.stderr)
+        return generate_sitrep(status, trajectory_rows, prev_metrics, prev_step, ledger)
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        # Build raw data dict from status, trajectory, etc.
+        raw_data = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "current_step": status.get("current_step", 0),
+            "max_steps": status.get("max_steps", 50000),
+            "progress_pct": status.get("progress_pct", 0),
+            "gpu": status.get("gpu", {}),
+            "instance": status.get("instance", {}),
+            "latest_eval": status.get("latest_eval", {}),
+            "latest_train": status.get("latest_train", {}),
+            "infra": status.get("infra", {}),
+            "trajectory": trajectory_rows,
+            "prev_step": prev_step,
+            "prev_metrics": prev_metrics,
+            "cost_ledger_sessions": ledger.get("sessions", []) if ledger else [],
+            "total_cost": ledger.get("total_cost", 0) if ledger else 0,
+        }
+
+        message = client.messages.create(
+            model="claude-opus-4-6-20250610",
+            max_tokens=2048,
+            system="You are an ML ops analyst. Write a concise markdown SITREP report. Keep it under 3500 characters. Include: training progress, key metrics with trends, infrastructure status, and any concerns. Use ## headers, bullet points, and bold for emphasis. Be direct and technical.",
+            messages=[{"role": "user", "content": f"Generate a SITREP from this raw training data:\n\n```json\n{json.dumps(raw_data, indent=2, default=str)}\n```"}],
+        )
+
+        md = message.content[0].text
+        print(f"[auto_sitrep] Claude API generated sitrep ({len(md)} chars)")
+        return md
+
+    except Exception as e:
+        print(f"[auto_sitrep] Claude API failed: {e}, using template", file=sys.stderr)
+        return generate_sitrep(status, trajectory_rows, prev_metrics, prev_step, ledger)
+
+
 def git_commit_push():
     """Stage sitrep.md, commit, and push."""
     os.chdir(PROJECT)
@@ -337,8 +413,8 @@ def main():
     # 7. Load cost ledger for spot history
     ledger = load_cost_ledger()
 
-    # 8. Generate sitrep
-    md = generate_sitrep(status, trajectory_rows, prev_metrics, prev_step, ledger)
+    # 8. Generate sitrep (try Claude API, fall back to template)
+    md = generate_sitrep_via_claude(status, trajectory_rows, prev_metrics, prev_step, ledger)
 
     # 8. Write sitrep.md
     with open(SITREP_PATH, "w") as f:
@@ -348,7 +424,13 @@ def main():
     # 9. Git commit and push
     git_commit_push()
 
-    # 10. Save history state for next run
+    # 10. Send Telegram notification
+    try:
+        send_telegram(md)
+    except Exception as e:
+        print(f"[auto_sitrep] Telegram notification failed: {e}", file=sys.stderr)
+
+    # 11. Save history state for next run
     history["prev_step"] = current_step
     history["prev_metrics"] = {
         "ar_ppl": latest_eval.get("ar_ppl"),
