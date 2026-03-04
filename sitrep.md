@@ -1,19 +1,19 @@
-# Sitrep — 2026-03-04 1:00 AM ET / 06:00 UTC
+# Sitrep — 2026-03-04 1:30 AM ET / 06:30 UTC
 
-## v2 Training — running, healthy, 0% complete
+## v2 Training — running, healthy, 1% complete
 
-- **Step ~200 / 50,000** (0.4%)
-- GPU: 100% utilization, 15.8 / 22 GB VRAM, 53°C
+- **Step ~700 / 50,000** (1.4%)
+- GPU: 98% utilization, 15.8 / 22 GB VRAM, 53°C
 - Rate: ~831 steps/hr (4.3s/step)
-- ETA to 50k: ~59.9 hours at current rate
+- ETA to 50k: ~59.3 hours at current rate
 - Spot price: $0.4486/hr (g5.2xlarge)
-- Spot cost (this instance): $0.20 — projected: $50.90
-- Total cost across 1 instance(s): $0.17
-- Instance up 0h27m since bootstrap (2026-03-04 05:32 UTC)
+- Spot cost (this instance): $0.43 — projected: $30.56
+- Total cost across 1 instance(s): $0.43
+- Instance up 0h57m since bootstrap (2026-03-04 05:32 UTC)
 
 *(no eval data yet)*
 
-Live at step ~200: ar_loss 3.32, diff_loss 7.16, conf_acc 0.000
+Live at step ~700: ar_loss 3.14, diff_loss 6.95, conf_acc 0.000
 
 ## Target status (5 of 5)
 
@@ -25,7 +25,7 @@ Live at step ~200: ar_loss 3.32, diff_loss 7.16, conf_acc 0.000
 
 ## Trends since last auto-sitrep
 
-- +100 steps (~100 → ~200)
+- +500 steps (~200 → ~700)
 
 ## Code & infra
 
