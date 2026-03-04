@@ -17,6 +17,7 @@ from pathlib import Path
 S3_BUCKET = os.environ.get("S3_BUCKET", "ml-lab-004507070771/dual-system-research-data")
 AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/opt/dlami/nvme/ml-lab"))
+CHECKPOINT_S3_PREFIX = os.environ.get("CHECKPOINT_S3_PREFIX", "checkpoints")
 
 
 def upload_file(local_path: str | Path, s3_key: str) -> bool:
@@ -68,7 +69,7 @@ def upload_checkpoint(checkpoint_path: str | Path, step: int) -> threading.Threa
     Returns:
         The background thread performing the upload.
     """
-    s3_key = f"checkpoints/step_{step}.pt"
+    s3_key = f"{CHECKPOINT_S3_PREFIX}/step_{step}.pt"
     print(f"[s3_sync] Uploading checkpoint step {step} to s3://{S3_BUCKET}/{s3_key}")
     return upload_file_async(checkpoint_path, s3_key)
 
@@ -163,12 +164,33 @@ class SpotTerminationHandler:
             print(f"[s3_sync] Cost tracker finalize failed (non-fatal): {e}")
 
     def _final_sync(self) -> None:
-        """Sync all artifact directories to S3."""
+        """Upload latest checkpoint first (most critical), then sync other dirs."""
+        # Priority 1: Upload the latest checkpoint file directly (most critical)
+        if self.checkpoint_dir.exists():
+            ckpts = sorted(
+                self.checkpoint_dir.glob("step_*.pt"),
+                key=lambda p: int(p.stem.split("_")[1]),
+            )
+            if ckpts:
+                latest = ckpts[-1]
+                s3_key = f"{CHECKPOINT_S3_PREFIX}/{latest.name}"
+                s3_uri = f"s3://{S3_BUCKET}/{s3_key}"
+                try:
+                    subprocess.run(
+                        ["aws", "s3", "cp", str(latest), s3_uri, "--region", AWS_REGION],
+                        check=True,
+                        capture_output=True,
+                        timeout=180,
+                    )
+                    print(f"[s3_sync] Uploaded latest checkpoint {latest.name} -> {s3_uri}")
+                except Exception as e:
+                    print(f"[s3_sync] Latest checkpoint upload failed: {e}")
+
+        # Priority 2: Sync smaller artifact directories
         sync_dirs = [
-            (self.checkpoint_dir, "checkpoints"),
             (self.data_dir / "eval_metrics", "eval_metrics"),
-            (self.data_dir / "benchmarks", "benchmarks"),
             (self.data_dir / "logs", "logs"),
+            (self.data_dir / "benchmarks", "benchmarks"),
         ]
         for local_dir, s3_prefix in sync_dirs:
             if local_dir.exists():
@@ -178,7 +200,7 @@ class SpotTerminationHandler:
                         ["aws", "s3", "sync", str(local_dir), s3_uri, "--region", AWS_REGION],
                         check=True,
                         capture_output=True,
-                        timeout=120,
+                        timeout=60,
                     )
                     print(f"[s3_sync] Synced {local_dir} -> {s3_uri}")
                 except Exception as e:

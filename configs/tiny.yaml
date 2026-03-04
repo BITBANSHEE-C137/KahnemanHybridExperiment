@@ -23,6 +23,9 @@ training:
   max_grad_norm: 1.0
   dtype: "bfloat16"
 
+  # Reproducibility
+  seed: 42
+
   # Loss weighting
   ar_loss_weight: 1.0
   diff_loss_weight: 1.0

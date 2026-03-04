@@ -112,12 +112,18 @@ def eval_lambada(
         context_text = words[0] + " "
         last_word = words[1]
 
-        context_ids = tokenizer.encode(context_text)
-        last_word_ids = tokenizer.encode(last_word)
-        if not last_word_ids or len(context_ids) + len(last_word_ids) > block_size:
+        # Tokenize full text first (preserves BPE boundaries), then split
+        # Encoding context separately gives approximate split point
+        context_len_approx = len(tokenizer.encode(context_text))
+        if context_len_approx >= len(tokens) or context_len_approx < 1:
             continue
 
-        full_ids = context_ids + last_word_ids
+        context_ids = tokens[:context_len_approx]
+        last_word_ids = tokens[context_len_approx:]
+        if not last_word_ids or len(tokens) > block_size:
+            continue
+
+        full_ids = tokens  # already correctly encoded
         input_tensor = torch.tensor([full_ids], dtype=torch.long, device=device)
 
         # --- System 2 (AR): predict last word tokens ---

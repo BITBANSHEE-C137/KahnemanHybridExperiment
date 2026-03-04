@@ -10,7 +10,7 @@ DATA_DIR="$NVME/ml-lab"
 # ── Bootstrap status tracking ──
 BOOTSTRAP_STATUS="/tmp/bootstrap_status.json"
 
-STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Setup cost tracker","Setup auto-sitrep","Run v1 benchmarks","Launch training"]'
+STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Setup cost tracker","Setup auto-sitrep","Run v1 benchmarks (skipped)","Launch training"]'
 
 init_bootstrap_status() {
     python3 -c "
@@ -103,13 +103,14 @@ step_done 1
 step_start 2
 echo "Configuring ubuntu user environment..."
 # Clean old env vars
-sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d' /home/ubuntu/.bashrc
+sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /CHECKPOINT_S3_PREFIX/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d' /home/ubuntu/.bashrc
 
 # Inject env vars
 cat >> /home/ubuntu/.bashrc << BASHRC
 export GH_TOKEN="$GH_TOKEN"
 export HF_HOME=$DATA_DIR/hf_cache
 export CHECKPOINT_DIR=$DATA_DIR/checkpoints/v2
+export CHECKPOINT_S3_PREFIX=checkpoints/v2
 export WANDB_API_KEY="$WANDB_API_KEY"
 export HF_TOKEN="$HF_TOKEN"
 export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
@@ -133,13 +134,13 @@ step_done 3
 # ── Step 4: Restore prior artifacts from S3 ──
 step_start 4
 echo "Restoring prior artifacts from S3..."
-aws s3 sync "s3://$S3_BUCKET/checkpoints/" "$DATA_DIR/checkpoints/" --region "$REGION" || true
+aws s3 sync "s3://$S3_BUCKET/checkpoints/v2/" "$DATA_DIR/checkpoints/v2/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/logs/" "$DATA_DIR/logs/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/eval_metrics/" "$DATA_DIR/eval_metrics/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/benchmarks/" "$DATA_DIR/benchmarks/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/wandb/" "$PROJECT/wandb/" --region "$REGION" || true
 echo "Restored checkpoints:"
-ls -lh "$DATA_DIR/checkpoints/"*.pt 2>/dev/null || echo "  (none)"
+ls -lh "$DATA_DIR/checkpoints/v2/"*.pt 2>/dev/null || echo "  (none)"
 step_done 4
 
 # ── Step 5: Sync pre-processed training data from S3 ──
@@ -300,29 +301,15 @@ step_done 15
 
 # ── Step 16: Run v1 benchmarks ──
 step_start 16
-echo "=== Step 16: Run v1 benchmarks ==="
-# Download v1 final checkpoint
-aws s3 cp s3://$S3_BUCKET/checkpoints/step_50000.pt $DATA_DIR/v1_final_checkpoint.pt
-
-# Run LAMBADA + WikiText-103 on v1 checkpoint
-sudo -u ubuntu bash -c "cd $PROJECT && python3 scripts/benchmark.py --checkpoint $DATA_DIR/v1_final_checkpoint.pt --config configs/tiny.yaml" || true
-
-# Run pretrained GPT-2 baseline
-sudo -u ubuntu bash -c "cd $PROJECT && python3 scripts/benchmark.py --config configs/tiny.yaml" || true
-
-# Run confidence head analysis
-sudo -u ubuntu bash -c "cd $PROJECT && python3 scripts/compare_systems.py --checkpoint $DATA_DIR/v1_final_checkpoint.pt --config configs/tiny.yaml" || true
-
-# Clean up
-rm -f $DATA_DIR/v1_final_checkpoint.pt
+echo "  SKIPPED (v1 benchmarks not needed for v2)"
 step_done 16
 
 # ── Step 17: Launch training in tmux (fresh start for v2) ──
 step_start 17
 echo "Launching training..."
 sudo -u ubuntu setsid tmux new-session -d -s training -c "$PROJECT"
-sudo -u ubuntu tmux send-keys -t training "export WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' CHECKPOINT_DIR='$DATA_DIR/checkpoints/v2' DATA_DIR='$DATA_DIR' PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && python3 -m src.training.joint_trainer --config configs/tiny.yaml --fresh_start" Enter
-echo "  training: LAUNCHED in tmux (v2 fresh start from pretrained weights)"
+sudo -u ubuntu tmux send-keys -t training "export WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' CHECKPOINT_DIR='$DATA_DIR/checkpoints/v2' CHECKPOINT_S3_PREFIX='checkpoints/v2' DATA_DIR='$DATA_DIR' PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && python3 -m src.training.joint_trainer --config configs/tiny.yaml" Enter
+echo "  training: LAUNCHED in tmux (v2, resumes from latest checkpoint if available)"
 step_done 17
 
 bootstrap_done

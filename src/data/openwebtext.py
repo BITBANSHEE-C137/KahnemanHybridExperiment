@@ -8,6 +8,7 @@ The binary format is produced by scripts/prepare_openwebtext.py.
 """
 
 import os
+import random
 from pathlib import Path
 
 import numpy as np
@@ -154,6 +155,7 @@ def create_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
     data_cfg = config["data"]
     train_cfg = config["smoke_test"] if smoke_test else config["training"]
     max_length = data_cfg.get("max_length", 1024)
+    seed = config.get("seed", config.get("training", {}).get("seed", 42))
 
     bin_path = _preprocessed_available("train")
     if bin_path is not None and not smoke_test:
@@ -169,6 +171,14 @@ def create_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
             max_samples=max_samples,
         )
 
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+
+    def worker_init_fn(worker_id: int) -> None:
+        worker_seed = seed + worker_id
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
     return DataLoader(
         dataset,
         batch_size=train_cfg["batch_size"],
@@ -176,6 +186,8 @@ def create_dataloader(config: dict, smoke_test: bool = False) -> DataLoader:
         num_workers=data_cfg.get("num_workers", 4),
         pin_memory=True,
         drop_last=True,
+        generator=generator,
+        worker_init_fn=worker_init_fn,
     )
 
 
@@ -201,6 +213,7 @@ def create_eval_dataloader(config: dict, smoke_test: bool = False) -> DataLoader
     data_cfg = config["data"]
     train_cfg = config["smoke_test"] if smoke_test else config["training"]
     max_length = data_cfg.get("max_length", 1024)
+    seed = config.get("seed", config.get("training", {}).get("seed", 42))
 
     bin_path = _preprocessed_available("eval")
     if bin_path is not None and not smoke_test:
@@ -216,6 +229,14 @@ def create_eval_dataloader(config: dict, smoke_test: bool = False) -> DataLoader
             max_samples=None,
         )
 
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+
+    def worker_init_fn(worker_id: int) -> None:
+        worker_seed = seed + worker_id
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
     return DataLoader(
         dataset,
         batch_size=train_cfg["batch_size"],
@@ -223,4 +244,6 @@ def create_eval_dataloader(config: dict, smoke_test: bool = False) -> DataLoader
         num_workers=data_cfg.get("num_workers", 4),
         pin_memory=True,
         drop_last=True,
+        generator=generator,
+        worker_init_fn=worker_init_fn,
     )

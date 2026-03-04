@@ -142,7 +142,7 @@ All models initialize from HuggingFace pretrained weights (not trained from scra
 
 - ~8M documents, ~9B tokens after GPT-2 BPE tokenization
 - Stored as flat uint16 binary files for zero-copy memmap loading
-- 5,000-document eval split — the final 5,000 documents of the last preprocessing shard, selected deterministically (not random)
+- 5,000-document eval set — the final 5,000 documents of the last preprocessing shard, selected deterministically (not random). **Note:** These documents also appear in the training set. Eval metrics track learning/memorization progress on seen data, not generalization to unseen data. See [Ablations](#ablations) for planned held-out evaluation.
 - Preprocessing via `scripts/lean_preprocess.py` (reads cached parquet shards one at a time to stay under 16GB RAM)
 
 ### Configuration
@@ -174,6 +174,8 @@ Key hyperparameters for the Tiny (GPT-2 Small) config (`configs/tiny.yaml`):
 | **S1 Token Accuracy** | Fraction of masked tokens correctly predicted by System 1 |
 | **Confidence AUROC** | Area Under ROC Curve for confidence as a classifier of correct/incorrect predictions |
 | **Confidence ECE** | Expected Calibration Error — how well confidence matches actual accuracy |
+
+> **Data overlap note:** Internal eval metrics are computed on data the model has seen during training (the eval set is a subset of the training set). This is intentional — the metrics track how well the model learns the training distribution under competing objectives, which is the primary signal for objective interference analysis. Generalization metrics will come from LAMBADA and WikiText-103 benchmarks on unseen data.
 
 **External benchmarks** (at training completion):
 
@@ -258,6 +260,7 @@ Steps 50–7,000 from corrected re-evaluation (2026-03-01). Steps 8,000+ evaluat
 | Loss weight sweep | λ_ar, λ_diff ∈ {0.5, 1.0, 2.0} | Quantify objective interference, find optimal balance |
 | Confidence head depth | 1, 2, 3 layers | Minimum capacity needed for reliable routing |
 | Mask schedule | Uniform vs. cosine vs. linear | Effect on diffusion convergence rate |
+| Held-out eval split | Train on all-but-last-5k docs, eval on last 5k exclusively | Measure generalization vs memorization; compare S1 and S2 generalization gaps |
 
 ## Generated Samples
 
@@ -306,7 +309,7 @@ Training across 4 spot instances with 3 reclamation recoveries required a fully 
 | **Precision** | bfloat16 mixed precision |
 | **Code** | [github.com/BITBANSHEE-C137/KahnemanHybridExperiment](https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment) |
 | **Dependencies** | `requirements.txt` (minimum version floors); `requirements-lock.txt` (exact pinned versions from training environment) |
-| **Eval split** | Final 5,000 documents of the last preprocessing shard (deterministic). After tokenization: 5,678,421 tokens → 5,545 complete chunks at 1,024 tokens (341 trailing tokens discarded). |
+| **Eval split** | Final 5,000 documents of the last preprocessing shard (deterministic, overlaps with training data). After tokenization: 5,678,421 tokens → 5,545 complete chunks at 1,024 tokens (341 trailing tokens discarded). Eval tracks memorization, not generalization. |
 
 To reproduce from scratch:
 
