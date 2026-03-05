@@ -1,47 +1,42 @@
-# SITREP: v2 Training Status Report
+# SITREP: v2 Training Status
+
+*2026-03-05 06:30 UTC*
 
 ## v2 Training Status
-**Step 14,300/50,000 (28.6% complete)**  
-GPU: 100% util, NVIDIA A10G, 72% VRAM (16.6/23GB), 52°C  
-Rate: ~10.8 steps/min based on uptime  
-ETA: ~55 hours at current pace  
-Spot cost: **$0.44/hr** (64% savings vs on-demand $1.21/hr)
+**Step 14,700/50,000 (29.4%)** | GPU: **98.0%** util, 200W/300W, 52°C | Rate: ~4.8 steps/min | **ETA: 5.1 days** | Spot: **$0.44/hr** (63.9% savings vs on-demand)
 
 ## Eval Metrics & Trends
-| Step | AR PPL | Diff Loss | S1 Tok Acc | AUROC | ECE |
-|------|--------|-----------|-------------|--------|-----|
-| 7000 | 27.12 | 5.13 | 17.9% | 0.833 | 0.008 |
-| 8000 | 27.58 | 4.65 | 21.1% | 0.845 | 0.007 |
-| 10000 | 28.39 | 4.37 | 25.1% | 0.850 | 0.004 |
-| 12000 | 29.35 | 4.34 | 25.6% | 0.852 | 0.009 |
-| 14000 | 30.34 | 4.31 | 26.0% | 0.853 | 0.011 |
+| Step | AR PPL | Diff Loss | S1 Acc | Conf AUROC | ECE |
+|------|--------|-----------|--------|------------|-----|
+| 7000 | 27.12 | 5.13 | 17.9% | 0.833 | 0.0081 |
+| 8000 | 27.58 | 4.65 | 21.1% | 0.845 | 0.0071 |
+| 9000 | 28.06 | 5.02 | 18.9% | 0.843 | 0.0057 |
+| 10000 | 28.39 | 4.37 | 25.1% | 0.850 | 0.0044 |
+| 11000 | 28.91 | 4.19 | 26.0% | 0.857 | 0.0046 |
+| 12000 | 29.35 | 4.34 | 25.6% | 0.852 | 0.0093 |
+| 13000 | 30.50 | 4.40 | 25.5% | 0.852 | 0.0124 |
+| 14000 | 30.34 | 4.31 | 26.0% | 0.853 | 0.0111 |
 
-**⚠️ AR perplexity trending upward** - regression from 27.12→30.34  
-**✅ Confidence AUROC steady** at ~0.85  
-**⚠️ ECE degrading** - increased from 0.004→0.011  
-**✅ Diffusion loss converging** toward target  
+**⚠️ AR PPL trending upward** - degraded 12% since step 7k. **🔥 Confidence calibration deteriorating** - ECE doubled since step 11k. S1 accuracy plateaued around 25%.
 
 ## Target Scorecard
-| Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| AR PPL | < 40 | **30.34** | ✅ PASS |
-| AUROC | > 0.75 | **0.853** | ✅ PASS |
-| ECE | < 0.05 | **0.011** | ✅ PASS |
-| Diff Loss | → 4.0 | **4.31** | 🟡 CLOSE |
-| S1 Accuracy | → 40% | **26.0%** | ❌ MISS |
+| Target | Current | Status |
+|--------|---------|--------|
+| AR PPL < 40 | **30.34** | ✅ |
+| AUROC > 0.75 | **0.853** | ✅ |
+| ECE < 0.05 | **0.0111** | ✅ |
+| Diff loss → 4.0 | **4.31** | ⚠️ (close) |
+| S1 accuracy → 40% | **26.0%** | ❌ |
 
-**3/5 targets met**, S1 accuracy lagging significantly behind target pace.
+**3/5 targets met**. Diffusion loss needs 0.31 drop, S1 accuracy needs 14pp gain.
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26% / PPL 1.46, WikiText PPL 43.86, S1 loss 4.12  
-Current v2 AR performance (PPL 30.34) better than v1 WikiText baseline (43.86) but **concerning upward trend**.
+v1 final: LAMBADA 94.26%/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12
+Pretrained GPT-2: LAMBADA 95.08%, WikiText 29.07 PPL
+**Current AR performance worse than v1** (30.34 vs ~27 expected from v1 metrics)
 
 ## Infrastructure
-**10 spot reclaims** in 48 hours - heavy churn in us-east-1b (6 reclaims)  
-Current instance stable 47min in us-east-1f  
-Total infrastructure cost: **$10.27** across all sessions  
-Average session duration: ~3.2 hours before reclaim
+**10 spot reclaims** in 1.3 days - **high churn**. Total cost: **$10.49** vs $53.12 on-demand. Current session: 1.3hrs uptime, stable in us-east-1f. Checkpointing every 1k steps, last at 14k.
 
 ## What's Next
-**Immediate concern**: AR PPL regression needs investigation - possible overfitting to S1 task  
-After completion: Full benchmark suite, analyze confidence calibration degradation, compare S1 task learning efficiency vs v1
+Monitor AR PPL regression - may need LR adjustment. Target completion in **5 days** if stable. Then: v2 benchmarks on LAMBADA/WikiText, confidence head analysis, v1 vs v2 head-to-head comparison.
