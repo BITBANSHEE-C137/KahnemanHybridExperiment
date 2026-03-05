@@ -25,6 +25,7 @@ import subprocess
 import sys
 import time
 import threading
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
@@ -841,6 +842,148 @@ def api_sitrep():
     with open(SITREP_FILE) as f:
         text = f.read()
     return jsonify({"content": text, "modified": modified})
+
+
+# ── Telegram webhook ──────────────────────────────────────────────────────────
+
+_command_cooldowns = {}
+_cooldown_lock = threading.Lock()
+
+
+def _check_cooldown(command: str, seconds: int) -> bool:
+    """Return True if command is still on cooldown."""
+    now = time.time()
+    with _cooldown_lock:
+        last = _command_cooldowns.get(command, 0)
+        if now - last < seconds:
+            return True
+        _command_cooldowns[command] = now
+        return False
+
+
+def _send_telegram_reply(chat_id: str, text: str, parse_mode: str = "Markdown") -> None:
+    """Send a reply to a specific Telegram chat_id."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not token:
+        return
+    if len(text) > 4000:
+        text = text[:3990] + "\n...(truncated)"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = urllib.parse.urlencode({
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode,
+    }).encode()
+    try:
+        req = urllib.request.Request(url, data=data)
+        urllib.request.urlopen(req, timeout=15)
+    except Exception as e:
+        print(f"[dashboard] Telegram reply failed: {e}", file=sys.stderr)
+
+
+def _handle_status_command(chat_id: str) -> None:
+    """Handle /status — quick inline metrics."""
+    if _check_cooldown("status", 15):
+        _send_telegram_reply(chat_id, "Status on cooldown (15s). Try again shortly.")
+        return
+    try:
+        s = build_status()
+        step = s.get("current_step", 0)
+        max_steps = s.get("max_steps", 50000)
+        pct = s.get("progress_pct", 0)
+        gpu = s.get("gpu") or {}
+        inst = s.get("instance") or {}
+        le = s.get("latest_eval") or {}
+        eta_s = s.get("eta_seconds")
+        eta_h = eta_s / 3600 if eta_s else 0
+
+        total_cost = inst.get("total_run_cost") or inst.get("spot_cost") or 0
+
+        lines = [
+            f"Step {step:,}/{max_steps//1000}k ({pct:.0f}%)",
+            f"GPU: {gpu.get('gpu_util', 0):.0f}% | {gpu.get('vram_used_mb', 0)/1024:.1f}/{gpu.get('vram_total_mb', 0)/1024:.0f}GB | {gpu.get('temp_c', 0):.0f}C",
+            f"ETA: ~{eta_h:.0f}h",
+            f"AR PPL: {le.get('ar_ppl', 0):.1f} | Diff: {le.get('diff_loss', 0):.2f} | S1: {le.get('s1_tok_acc', 0)*100:.1f}%",
+            f"AUROC: {le.get('conf_auroc', 0):.3f} | ECE: {le.get('conf_ece', 0):.4f}",
+            f"Cost: ${total_cost:.2f} / $50 budget",
+        ]
+        _send_telegram_reply(chat_id, "\n".join(lines), parse_mode="")
+    except Exception as e:
+        _send_telegram_reply(chat_id, f"Error fetching status: {e}", parse_mode="")
+
+
+def _handle_sitrep_command(chat_id: str) -> None:
+    """Handle /sitrep — acknowledge then spawn full sitrep generation."""
+    if _check_cooldown("sitrep", 60):
+        _send_telegram_reply(chat_id, "Sitrep on cooldown (60s). Try again shortly.")
+        return
+    _send_telegram_reply(chat_id, "Generating sitrep...", parse_mode="")
+
+    def _run():
+        try:
+            env = dict(os.environ)
+            subprocess.Popen(
+                ["python3", "auto_sitrep.py", "--force-telegram"],
+                cwd=PROJECT_DIR,
+                env=env,
+                stdout=open("/tmp/auto-sitrep-manual.log", "a"),
+                stderr=subprocess.STDOUT,
+            )
+        except Exception as e:
+            _send_telegram_reply(chat_id, f"Failed to launch sitrep: {e}", parse_mode="")
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _handle_help_command(chat_id: str) -> None:
+    """Handle /help — list available commands."""
+    text = (
+        "Available commands:\n"
+        "/status — Quick training status (15s cooldown)\n"
+        "/sitrep — Full sitrep with metrics image (60s cooldown)\n"
+        "/help — This message"
+    )
+    _send_telegram_reply(chat_id, text, parse_mode="")
+
+
+_COMMAND_HANDLERS = {
+    "/status": _handle_status_command,
+    "/sitrep": _handle_sitrep_command,
+    "/help": _handle_help_command,
+}
+
+
+@app.route("/api/telegram/webhook", methods=["POST"])
+def telegram_webhook():
+    """Receive Telegram bot updates via webhook."""
+    # Validate secret token header
+    secret = app.config.get("TELEGRAM_WEBHOOK_SECRET", "")
+    if secret:
+        header_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if header_secret != secret:
+            abort(403)
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"ok": True})
+
+    message = data.get("message", {})
+    chat_id = str(message.get("chat", {}).get("id", ""))
+    text = (message.get("text") or "").strip()
+
+    # Only respond to configured chat
+    expected_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not chat_id or chat_id != expected_chat:
+        return jsonify({"ok": True})
+
+    # Parse command (strip @botname suffix)
+    command = text.split()[0].split("@")[0].lower() if text else ""
+
+    handler = _COMMAND_HANDLERS.get(command)
+    if handler:
+        threading.Thread(target=handler, args=(chat_id,), daemon=True).start()
+
+    return jsonify({"ok": True})
 
 
 @app.route("/")
@@ -2393,6 +2536,9 @@ if __name__ == "__main__":
     parser.add_argument("--spot-token",
                         default=os.environ.get("SPOT_TOKEN", ""),
                         help="Bearer token required for POST /api/spot-price")
+    parser.add_argument("--telegram-webhook-secret",
+                        default=os.environ.get("TELEGRAM_WEBHOOK_SECRET", ""),
+                        help="Secret token for Telegram webhook validation")
     args = parser.parse_args()
 
     if args.spot_token:
@@ -2400,6 +2546,12 @@ if __name__ == "__main__":
         print("  Spot-price POST auth: enabled")
     else:
         print("  Spot-price POST auth: disabled (no --spot-token)")
+
+    if args.telegram_webhook_secret:
+        app.config["TELEGRAM_WEBHOOK_SECRET"] = args.telegram_webhook_secret
+        print("  Telegram webhook auth: enabled")
+    else:
+        print("  Telegram webhook auth: disabled (no --telegram-webhook-secret)")
 
     print(f"Starting dashboard on http://{args.host}:{args.port}")
     print(f"  Project dir: {PROJECT_DIR}")
