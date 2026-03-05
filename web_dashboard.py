@@ -888,7 +888,7 @@ body::before {
 }
 .container { position: relative; z-index: 1; }
 .container {
-  max-width: 1404px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 12px;
   overflow: hidden;
@@ -1235,7 +1235,7 @@ body::before {
 .bs-spinner { display: inline-block; animation: spin 1s linear infinite; }
 
 /* Responsive */
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
   .grid { grid-template-columns: 1fr; }
   .bs-steps { grid-template-columns: 1fr; }
 }
@@ -1415,9 +1415,12 @@ body::before {
       <span>Phase: <strong id="phase">--</strong></span>
       <span>Remaining: <strong id="eta">--</strong></span>
     </div>
-    <div style="display:flex; gap:24px; margin-bottom:4px; font-size: 15px; color:var(--dim)">
-      <span>Total Training Time: <strong style="color:var(--text)" id="total-time">--</strong></span>
-      <span>This Instance: <strong style="color:var(--text)" id="elapsed">--</strong></span>
+    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:6px">
+      <div style="display:flex; gap:24px; font-size: 15px; color:var(--dim)">
+        <span>Total Training Time: <strong style="color:var(--text)" id="total-time">--</strong></span>
+        <span>This Instance: <strong style="color:var(--text)" id="elapsed">--</strong></span>
+      </div>
+      <div id="milestones" style="font-size: 14px; color:var(--dim)"></div>
     </div>
     <div class="progress-outer">
       <div class="progress-inner" id="progress-bar" style="width:0%">0%</div>
@@ -1564,17 +1567,13 @@ body::before {
         <span class="badge" id="badge-sync">Sync: ?</span>
       </div>
       <div style="margin-bottom:6px">
-        <span style="font-size: 15px;color:var(--dim)">Next milestones:</span>
-        <div id="milestones" style="font-size: 14px;margin-top:2px;line-height:1.6">--</div>
-      </div>
-      <div style="margin-bottom:6px">
-        <span style="font-size: 15px;color:var(--dim)">Checkpoints: v2</span>
-        <div id="last-ckpt" style="font-size: 14px; margin: 3px 0 4px; color:var(--green)"></div>
-        <div class="ckpt-list" id="ckpt-list">--</div>
+        <span style="font-size: 13px;color:var(--dim);text-transform:uppercase;letter-spacing:0.06em">Config</span>
+        <div id="config-info" style="font-size: 14px;color:var(--dim);margin-top:2px">--</div>
       </div>
       <div>
-        <span style="font-size: 15px;color:var(--dim)">Config:</span>
-        <div id="config-info" style="font-size: 15px;color:var(--dim);margin-top:2px">--</div>
+        <span style="font-size: 13px;color:var(--dim);text-transform:uppercase;letter-spacing:0.06em">Checkpoints: v2</span>
+        <div id="last-ckpt" style="font-size: 14px; margin: 3px 0 4px; color:var(--green)"></div>
+        <div class="ckpt-list" id="ckpt-list">--</div>
       </div>
     </div>
 
