@@ -215,6 +215,15 @@ PYEOF
     fleet_id="${FLEET_ID:-fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a}"
     if python3 -c "import sys; sys.exit(0 if float('$total_cost') >= float('$max_budget') else 1)" 2>/dev/null; then
         echo "[cost-tracker] BUDGET EXCEEDED: \$$total_cost >= \$$max_budget — shutting down fleet"
+        # Telegram budget alert
+        python3 -c "
+import sys
+sys.path.insert(0, '$PROJECT_DIR')
+from auto_sitrep import send_telegram
+send_telegram('*BUDGET EXCEEDED*
+Total cost: \$$total_cost >= limit \$$max_budget
+Fleet shutdown initiated.')
+" 2>/dev/null || true
         aws ec2 modify-fleet --fleet-id "$fleet_id" \
             --target-capacity-specification TotalTargetCapacity=0,SpotTargetCapacity=0 \
             --region "$REGION" 2>&1 || echo "[cost-tracker] WARNING: Fleet shutdown failed"

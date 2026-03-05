@@ -22,6 +22,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 import threading
 import urllib.request
@@ -73,6 +74,9 @@ def _poll_spot_termination():
                     if _spot_termination_time is None:
                         _spot_termination_time = data.get("time", datetime.now(timezone.utc).isoformat())
                         print(f"[dashboard] SPOT TERMINATION NOTICE: {data}")
+                        _send_telegram_alert(f"SPOT TERMINATION
+Instance will be reclaimed at {data.get('time', 'unknown')}
+Checkpoint sync in progress.")
         except Exception:
             pass
         time.sleep(5)
@@ -81,6 +85,109 @@ def _poll_spot_termination():
 # Start termination poller on import
 _term_thread = threading.Thread(target=_poll_spot_termination, daemon=True)
 _term_thread.start()
+
+# ── Training health monitor ──────────────────────────────────────────────────────────────
+_monitor_state = {
+    "last_step": 0,
+    "last_step_time": 0,
+    "last_stall_alert": 0,
+    "last_auroc": None,
+    "last_diff_loss": None,
+}
+
+
+def _monitor_training():
+    """Background thread: monitor training health, send Telegram alerts."""
+    import time as _time
+    _time.sleep(120)  # Wait 2 min after boot for training to start
+
+    while True:
+        try:
+            status = build_status()
+            now = _time.time()
+            step = status.get("current_step", 0)
+
+            # --- Stall detection (no progress for 15 min) ---
+            if step > 0:
+                if step != _monitor_state["last_step"]:
+                    _monitor_state["last_step"] = step
+                    _monitor_state["last_step_time"] = now
+                elif _monitor_state["last_step_time"] > 0:
+                    stall_duration = now - _monitor_state["last_step_time"]
+                    if stall_duration > 900 and now - _monitor_state["last_stall_alert"] > 900:
+                        _send_telegram_alert(
+                            f"TRAINING STALL
+"
+                            f"No step progress for {int(stall_duration // 60)} min
+"
+                            f"Stuck at step {step:,}"
+                        )
+                        _monitor_state["last_stall_alert"] = now
+
+            # --- Eval regression detection ---
+            latest_eval = status.get("latest_eval")
+            if latest_eval:
+                auroc = latest_eval.get("conf_auroc")
+                diff_loss = latest_eval.get("diff_loss")
+
+                if auroc is not None and _monitor_state["last_auroc"] is not None:
+                    drop = _monitor_state["last_auroc"] - auroc
+                    if drop > 0.05:
+                        _send_telegram_alert(
+                            f"EVAL REGRESSION -- AUROC
+"
+                            f"Drop: {_monitor_state['last_auroc']:.3f} -> {auroc:.3f} ({drop:+.3f})
+"
+                            f"Step: {latest_eval.get('step', '?'):,}"
+                        )
+
+                if diff_loss is not None and _monitor_state["last_diff_loss"] is not None:
+                    spike = diff_loss - _monitor_state["last_diff_loss"]
+                    if spike > 0.5:
+                        _send_telegram_alert(
+                            f"EVAL REGRESSION -- DIFF LOSS
+"
+                            f"Spike: {_monitor_state['last_diff_loss']:.2f} -> {diff_loss:.2f} (+{spike:.2f})
+"
+                            f"Step: {latest_eval.get('step', '?'):,}"
+                        )
+
+                if auroc is not None:
+                    _monitor_state["last_auroc"] = auroc
+                if diff_loss is not None:
+                    _monitor_state["last_diff_loss"] = diff_loss
+
+            # --- Spot price spike ---
+            inst = status.get("instance", {})
+            spot_rate = inst.get("spot_rate")
+            max_spot = float(os.environ.get("MAX_SPOT_PRICE", "0.75"))
+            if spot_rate is not None and spot_rate > max_spot:
+                _send_telegram_alert(
+                    f"SPOT PRICE SPIKE
+"
+                    f"Rate: ${spot_rate:.4f}/hr exceeds ceiling ${max_spot:.2f}/hr"
+                )
+
+            # --- Crash detection: trainer PID gone ---
+            infra = status.get("infra", {})
+            if not infra.get("trainer_running") and step > 0 and step < status.get("max_steps", 50000):
+                _send_telegram_alert(
+                    f"TRAINING CRASH
+"
+                    f"Trainer process not found at step {step:,} / {status.get('max_steps', 50000):,}
+"
+                    f"Training may have crashed."
+                )
+                _time.sleep(300)  # Don't spam -- wait 5 min before re-checking
+
+        except Exception as e:
+            print(f"[dashboard] monitor error: {e}", file=sys.stderr)
+
+        _time.sleep(60)
+
+
+_monitor_thread = threading.Thread(target=_monitor_training, daemon=True)
+_monitor_thread.start()
 
 # Regex for training step lines
 STEP_RE = re.compile(
@@ -135,6 +242,18 @@ def cached(key, ttl, fn):
     with _cache_lock:
         _cache[key] = {"v": val, "t": time.time()}
     return val
+
+
+
+def _send_telegram_alert(msg):
+    """Send a Telegram alert in a background thread (non-blocking)."""
+    def _send():
+        try:
+            from auto_sitrep import send_telegram
+            send_telegram(msg)
+        except Exception as e:
+            print(f"[dashboard] Telegram alert failed: {e}", file=sys.stderr)
+    threading.Thread(target=_send, daemon=True).start()
 
 
 # ── Data readers ─────────────────────────────────────────────────────────────
@@ -835,6 +954,29 @@ body::before {
 @keyframes breathe {
   0%, 100% { border-color: rgba(167, 139, 250, 0.3); box-shadow: 0 0 0 0 rgba(167, 139, 250, 0); }
   50% { border-color: #a78bfa; box-shadow: 0 0 8px rgba(167, 139, 250, 0.15); }
+}
+.sitrep-badge-fresh {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.3);
+  color: #f87171;
+  animation: breathe-red 3s ease-in-out infinite;
+}
+.sitrep-badge-fresh:hover {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: #f87171;
+}
+.sitrep-badge-fresh::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #f87171;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+@keyframes breathe-red {
+  0%, 100% { border-color: rgba(248, 113, 113, 0.3); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); }
+  50% { border-color: #f87171; box-shadow: 0 0 8px rgba(248, 113, 113, 0.15); }
 }
 .pulse {
   display: inline-block;
@@ -2146,6 +2288,25 @@ async function init() {
   await loadCharts();
   connectSSE();
 }
+
+// -- SITREP badge freshness --
+function updateSitrepBadge() {
+  fetch('/api/sitrep').then(r => r.json()).then(data => {
+    if (!data.modified) return;
+    const age = (Date.now() - new Date(data.modified).getTime()) / 60000;
+    const badges = document.querySelectorAll('.sitrep-badge, .sitrep-badge-fresh');
+    badges.forEach(b => {
+      if (age < 10) {
+        b.className = b.className.replace('sitrep-badge', 'sitrep-badge-fresh');
+        if (!b.className.includes('sitrep-badge-fresh')) b.className += ' sitrep-badge-fresh';
+      } else {
+        b.className = b.className.replace('sitrep-badge-fresh', 'sitrep-badge');
+      }
+    });
+  }).catch(() => {});
+}
+setInterval(updateSitrepBadge, 30000);
+setTimeout(updateSitrepBadge, 2000);
 
 init();
 </script>
