@@ -411,10 +411,19 @@ aws s3 cp /tmp/bootstrap_beacon.json "s3://$FALLBACK_BUCKET/bootstrap_beacon.jso
 # -- Notify via Telegram --
 if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
     python3 -c "
-import urllib.request, urllib.parse
+import urllib.request, urllib.parse, json
 token = '$TELEGRAM_BOT_TOKEN'
 chat_id = '$TELEGRAM_CHAT_ID'
-msg = '*Instance bootstrapped*\nIP: $INSTANCE_IP\nType: $(curl -sf http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo unknown)\nAll services started.'
+instance_id = '$INSTANCE_ID'
+instance_type = '$(curl -sf http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo unknown)'
+try:
+    ledger = json.load(open('/opt/dlami/nvme/ml-lab/cost/cost_ledger.json'))
+    n = len(ledger.get('sessions', []))
+    r = n - 1
+except Exception:
+    n, r = 1, 0
+label = f'Instance #{n}' if r == 0 else f'Instance #{n} ({r} recoveries)'
+msg = f'*{label} bootstrapped*\nID: {instance_id}\nType: {instance_type}\nAll services started.'
 data = urllib.parse.urlencode({'chat_id': chat_id, 'text': msg, 'parse_mode': 'Markdown'}).encode()
 urllib.request.urlopen(urllib.request.Request(f'https://api.telegram.org/bot{token}/sendMessage', data=data), timeout=10)
 " 2>/dev/null || true
