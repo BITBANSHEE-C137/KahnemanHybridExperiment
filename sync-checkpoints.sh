@@ -4,8 +4,10 @@ S3_BUCKET="${S3_BUCKET:-ml-lab-004507070771/dual-system-research-data}"
 DATA_DIR="${DATA_DIR:-/opt/dlami/nvme/ml-lab}"
 REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 CHECKPOINT_S3_PREFIX="${CHECKPOINT_S3_PREFIX:-checkpoints}"
+CHECKPOINT_DIR="${CHECKPOINT_DIR:-$DATA_DIR/$CHECKPOINT_S3_PREFIX}"
 EVAL_S3_PREFIX="${EVAL_S3_PREFIX:-eval_metrics}"
 INTERVAL=60
+CHECKPOINT_KEEP=${CHECKPOINT_KEEP:-3}
 
 echo "[sync] Artifact sync daemon started at $(date -u)"
 
@@ -13,7 +15,7 @@ sync_all() {
     for subdir in checkpoints eval_metrics benchmarks logs preprocessed cost; do
         local_dir="$DATA_DIR/$subdir"
         case "$subdir" in
-            checkpoints)  s3_dest="$CHECKPOINT_S3_PREFIX" ;;
+            checkpoints)  s3_dest="$CHECKPOINT_S3_PREFIX"; local_dir="$CHECKPOINT_DIR" ;;
             eval_metrics) s3_dest="$EVAL_S3_PREFIX" ;;
             *)            s3_dest="$subdir" ;;
         esac
@@ -22,6 +24,31 @@ sync_all() {
                 while read -r line; do echo "[sync][$subdir] $line"; done
         fi
     done
+
+    # Checkpoint retention: keep only the latest N checkpoints (local + S3)
+    if [ -d "$CHECKPOINT_DIR" ]; then
+        local stale
+        stale=$(ls -t "$CHECKPOINT_DIR"/step_*.pt 2>/dev/null | tail -n +$((CHECKPOINT_KEEP + 1)))
+        if [ -n "$stale" ]; then
+            echo "$stale" | xargs rm -f
+            echo "[sync][retention] Removed $(echo "$stale" | wc -l) old local checkpoints (keeping $CHECKPOINT_KEEP)"
+        fi
+        # Also prune old checkpoints from S3
+        local s3_files
+        s3_files=$(aws s3 ls "s3://$S3_BUCKET/$CHECKPOINT_S3_PREFIX/" --region "$REGION" 2>/dev/null \
+            | grep 'step_.*\.pt$' | awk '{print $4}' | sort -t_ -k2 -n)
+        local s3_count
+        s3_count=$(echo "$s3_files" | grep -c . 2>/dev/null || echo 0)
+        if [ "$s3_count" -gt "$CHECKPOINT_KEEP" ]; then
+            local to_delete
+            to_delete=$(echo "$s3_files" | head -n -"$CHECKPOINT_KEEP")
+            echo "$to_delete" | while read -r f; do
+                aws s3 rm "s3://$S3_BUCKET/$CHECKPOINT_S3_PREFIX/$f" --region "$REGION" 2>&1 | \
+                    while read -r line; do echo "[sync][retention] $line"; done
+            done
+            echo "[sync][retention] Removed $(echo "$to_delete" | wc -l) old S3 checkpoints (keeping $CHECKPOINT_KEEP)"
+        fi
+    fi
 
     # sync wandb/ from project directory (not in DATA_DIR)
     local wandb_dir="/home/ubuntu/KahnemanHybridExperiment/wandb"
