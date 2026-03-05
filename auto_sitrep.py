@@ -9,6 +9,7 @@ import glob
 import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
+from io import BytesIO
 from zoneinfo import ZoneInfo
 import urllib.request
 import urllib.parse
@@ -396,6 +397,324 @@ Style: direct, technical, no filler. Use ## headers, tables, bold for key number
         return generate_sitrep(status, trajectory_rows, prev_metrics, prev_step, ledger)
 
 
+def generate_telegram_summary(status: dict, trajectory_rows: list,
+                               prev_metrics: dict | None, prev_step: int | None,
+                               ledger: dict | None) -> str:
+    """Generate a compact ~500-800 char Telegram summary."""
+    now = datetime.now(ZoneInfo("America/New_York"))
+    step = status.get("current_step", 0)
+    max_steps = status.get("max_steps", 50000)
+    pct = status.get("progress_pct", 0)
+    gpu = status.get("gpu", {})
+    inst = status.get("instance", {})
+    le = status.get("latest_eval") or {}
+    eval_step = le.get("step", step)
+
+    # Compute rate
+    rate = 0
+    log_tail = status.get("log_tail", [])
+    log_times = []
+    for line in log_tail:
+        if "time:" in line and "step:" in line and "[eval]" not in line:
+            for part in line.split("|"):
+                if "time:" in part:
+                    try:
+                        log_times.append(float(part.strip().replace("time:", "").replace("s", "").strip()))
+                    except ValueError:
+                        pass
+    if len(log_times) >= 2:
+        interval = log_times[-1] - log_times[-2]
+        if interval > 0:
+            rate = 3600 / (interval / 100)
+    if rate == 0:
+        elapsed = status.get("elapsed_seconds", 1)
+        rate = step / (elapsed / 3600) if elapsed else 0
+
+    eta_s = status.get("eta_seconds", 0)
+    eta_h = eta_s / 3600 if eta_s else 0
+
+    # Metric values and status indicators
+    ar_ppl = le.get("ar_ppl", 0)
+    diff_loss = le.get("diff_loss", 0)
+    s1_acc = le.get("s1_tok_acc", 0)
+    auroc = le.get("conf_auroc", 0)
+    ece = le.get("conf_ece", 0)
+
+    def indicator(met: bool, improving: bool = True) -> str:
+        if met:
+            return "✅"
+        return "🔄" if improving else "⚠️"
+
+    ar_ind = indicator(ar_ppl < 40 and ar_ppl > 0)
+    diff_ind = "✅" if diff_loss <= 4.0 and diff_loss > 0 else ("🔄" if diff_loss < 6.0 else "⚠️")
+    s1_ind = "✅" if s1_acc >= 0.40 else ("🔄" if s1_acc >= 0.25 else "⚠️")
+    auroc_ind = indicator(auroc > 0.75)
+    ece_ind = indicator(ece < 0.05 and ece > 0)
+
+    # Cost
+    spot_rate = inst.get("spot_rate", "?")
+    spot_cost = inst.get("spot_cost", 0) or 0
+    total_cost = inst.get("total_run_cost") or spot_cost
+    projected = inst.get("spot_projected", 0) or 0
+    budget = 50
+    budget_pct = (total_cost / budget * 100) if budget else 0
+
+    lines = [
+        f"📊 SITREP — {now.strftime('%Y-%m-%d %-I:%M %p')} ET",
+        "",
+        f"Training: Step {step:,}/{max_steps // 1000}k ({pct:.0f}%)",
+        f"Rate: ~{rate:.0f} steps/hr | ETA: ~{eta_h:.0f}h",
+        f"GPU: {gpu.get('gpu_util', 0):.0f}% | {gpu.get('vram_used_mb', 0) / 1024:.1f}/{gpu.get('vram_total_mb', 0) / 1024:.0f} GB | {gpu.get('temp_c', 0):.0f}°C",
+        "",
+        f"Metrics (eval {eval_step // 1000}k):",
+        f"  AR PPL:    {ar_ppl:.2f}  {ar_ind} (<40)",
+        f"  Diff Loss:  {diff_loss:.2f}  {diff_ind} (→4.0)",
+        f"  S1 Acc:    {fmt_pct(s1_acc)}  {s1_ind} (→40%)",
+        f"  AUROC:     {auroc:.3f}  {auroc_ind} (>0.75)",
+        f"  ECE:       {ece:.3f}  {ece_ind} (<0.05)",
+        "",
+        f"Cost: ${spot_rate}/hr spot | Session ${spot_cost:.2f}",
+        f"Run Total: ${total_cost:.2f} | Projected: ${projected:.2f}",
+        f"Budget: ${budget} ({budget_pct:.0f}% used)",
+        "",
+        "🔗 train.bitbanshee.com",
+    ]
+    return "\n".join(lines)
+
+
+def generate_metrics_image(status: dict, latest_eval: dict,
+                           ledger: dict | None) -> bytes | None:
+    """Render a 700x420 dark-theme metrics card PNG using Pillow."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        print("[auto_sitrep] Pillow not installed, skipping image", file=sys.stderr)
+        return None
+
+    W, H = 700, 420
+    # Color palette matching dashboard
+    bg = (26, 26, 46)         # #1a1a2e
+    surface = (22, 33, 62)    # #16213e
+    accent = (167, 139, 250)  # #a78bfa
+    text_color = (224, 224, 224)  # #e0e0e0
+    dim = (140, 140, 160)
+    green = (74, 222, 128)    # #4ade80
+    yellow = (251, 191, 36)   # #fbbf24
+    red = (248, 113, 113)     # #f87171
+    bar_bg = (50, 50, 70)
+
+    img = Image.new("RGB", (W, H), bg)
+    draw = ImageDraw.Draw(img)
+
+    # Try to load monospace font
+    font_sm = None
+    font_md = None
+    font_lg = None
+    for font_path in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+    ]:
+        if os.path.exists(font_path):
+            try:
+                font_sm = ImageFont.truetype(font_path, 12)
+                font_md = ImageFont.truetype(font_path, 14)
+                font_lg = ImageFont.truetype(font_path, 16)
+                break
+            except Exception:
+                pass
+    if font_sm is None:
+        try:
+            font_sm = ImageFont.load_default()
+            font_md = font_sm
+            font_lg = font_sm
+        except Exception:
+            font_sm = font_md = font_lg = ImageFont.load_default()
+
+    step = status.get("current_step", 0)
+    max_steps = status.get("max_steps", 50000)
+    pct = status.get("progress_pct", 0)
+    gpu = status.get("gpu", {})
+    inst = status.get("instance", {})
+    le = latest_eval or {}
+
+    # Metric values
+    ar_ppl = le.get("ar_ppl", 0)
+    diff_loss = le.get("diff_loss", 0)
+    s1_acc = le.get("s1_tok_acc", 0)
+    auroc = le.get("conf_auroc", 0)
+    ece = le.get("conf_ece", 0)
+
+    # Cost
+    spot_rate = inst.get("spot_rate", "?")
+    spot_cost = inst.get("spot_cost", 0) or 0
+    total_cost = inst.get("total_run_cost") or spot_cost
+    projected = inst.get("spot_projected", 0) or 0
+    budget = 50
+    budget_pct = (total_cost / budget * 100) if budget else 0
+
+    # Rate / ETA
+    rate = 0
+    log_tail = status.get("log_tail", [])
+    log_times = []
+    for line in log_tail:
+        if "time:" in line and "step:" in line and "[eval]" not in line:
+            for part in line.split("|"):
+                if "time:" in part:
+                    try:
+                        log_times.append(float(part.strip().replace("time:", "").replace("s", "").strip()))
+                    except ValueError:
+                        pass
+    if len(log_times) >= 2:
+        interval = log_times[-1] - log_times[-2]
+        if interval > 0:
+            rate = 3600 / (interval / 100)
+    if rate == 0:
+        elapsed = status.get("elapsed_seconds", 1)
+        rate = step / (elapsed / 3600) if elapsed else 0
+    eta_s = status.get("eta_seconds", 0)
+    eta_h = eta_s / 3600 if eta_s else 0
+
+    y = 12
+
+    # ── Header ──
+    draw.rectangle([0, 0, W, 50], fill=surface)
+    draw.text((16, y), "DUAL-PROCESS LM — LIVE METRICS", fill=accent, font=font_lg)
+    y = 56
+
+    # ── Progress bar ──
+    prog_text = f"Step {step:,} / {max_steps:,} ({pct:.0f}%)"
+    draw.text((16, y), prog_text, fill=text_color, font=font_md)
+    bar_x, bar_y, bar_w, bar_h = 420, y + 2, 260, 16
+    draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=bar_bg)
+    fill_w = int(bar_w * min(pct, 100) / 100)
+    if fill_w > 0:
+        draw.rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h], fill=accent)
+    y += 30
+
+    # ── Divider ──
+    draw.line([(12, y), (W - 12, y)], fill=accent, width=1)
+    y += 8
+
+    # ── Metrics table header ──
+    draw.text((16, y), "METRIC", fill=dim, font=font_sm)
+    draw.text((220, y), "VALUE", fill=dim, font=font_sm)
+    draw.text((360, y), "TARGET", fill=dim, font=font_sm)
+    draw.text((500, y), "STATUS", fill=dim, font=font_sm)
+    y += 20
+
+    # Metric rows
+    def status_color(met: bool, close: bool = False) -> tuple:
+        if met:
+            return green
+        return yellow if close else red
+
+    metrics = [
+        ("AR Perplexity", f"{ar_ppl:.2f}" if ar_ppl else "—", "< 40",
+         ar_ppl > 0 and ar_ppl < 40, ar_ppl > 0 and ar_ppl < 60),
+        ("Diff Loss", f"{diff_loss:.2f}" if diff_loss else "—", "→ 4.0",
+         diff_loss > 0 and diff_loss <= 4.0, diff_loss > 0 and diff_loss < 6.0),
+        ("S1 Accuracy", fmt_pct(s1_acc) if s1_acc else "—", "→ 40%",
+         s1_acc >= 0.40, s1_acc >= 0.25),
+        ("AUROC", f"{auroc:.3f}" if auroc else "—", "> 0.75",
+         auroc > 0.75, auroc > 0.60),
+        ("ECE", f"{ece:.4f}" if ece else "—", "< 0.05",
+         ece > 0 and ece < 0.05, ece > 0 and ece < 0.10),
+    ]
+
+    for name, val, target, met, close in metrics:
+        draw.text((16, y), name, fill=text_color, font=font_md)
+        draw.text((220, y), val, fill=text_color, font=font_md)
+        draw.text((360, y), target, fill=dim, font=font_md)
+        # Status dot
+        dot_color = status_color(met, close)
+        dot_x, dot_y = 510, y + 4
+        draw.ellipse([dot_x, dot_y, dot_x + 10, dot_y + 10], fill=dot_color)
+        label = "MET" if met else ("WIP" if close else "MISS")
+        draw.text((dot_x + 16, y), label, fill=dot_color, font=font_sm)
+        y += 22
+
+    # ── Divider ──
+    y += 4
+    draw.line([(12, y), (W - 12, y)], fill=accent, width=1)
+    y += 8
+
+    # ── Instance & Cost ──
+    draw.text((16, y), "INSTANCE & COST", fill=dim, font=font_sm)
+    y += 18
+    itype = inst.get("instance_type", "?")
+    az = inst.get("az", "?")
+    draw.text((16, y), f"{itype} | {az} | Spot ${spot_rate}/hr", fill=text_color, font=font_md)
+    y += 20
+    draw.text((16, y), f"Session: ${spot_cost:.2f}  |  Run Total: ${total_cost:.2f}", fill=text_color, font=font_md)
+    y += 20
+    draw.text((16, y), f"Projected: ${projected:.2f}  |  Budget: ${budget} ({budget_pct:.0f}%)", fill=text_color, font=font_md)
+    y += 24
+
+    # ── Divider ──
+    draw.line([(12, y), (W - 12, y)], fill=accent, width=1)
+    y += 8
+
+    # ── GPU & Rate ──
+    gpu_util = gpu.get("gpu_util", 0)
+    vram_used = gpu.get("vram_used_mb", 0) / 1024
+    vram_total = gpu.get("vram_total_mb", 0) / 1024
+    temp = gpu.get("temp_c", 0)
+    draw.text((16, y), f"GPU: {gpu_util:.0f}% util  |  {vram_used:.1f}/{vram_total:.0f} GB  |  {temp:.0f}°C", fill=text_color, font=font_md)
+    y += 20
+    draw.text((16, y), f"Rate: ~{rate:.0f} steps/hr  |  ETA: ~{eta_h:.0f}h", fill=text_color, font=font_md)
+
+    # Save to bytes
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def send_telegram_photo(image_bytes: bytes, caption: str = "") -> None:
+    """Send a photo with caption via Telegram bot API."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not token or not chat_id:
+        return
+
+    # Telegram caption limit is 1024 chars
+    if len(caption) > 1020:
+        caption = caption[:1010] + "\n...(truncated)"
+
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+
+    # Build multipart/form-data manually (avoid extra dependencies)
+    boundary = "----SitrepBoundary9876543210"
+    body = BytesIO()
+
+    def write_field(name: str, value: str) -> None:
+        body.write(f"--{boundary}\r\n".encode())
+        body.write(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode())
+        body.write(f"{value}\r\n".encode())
+
+    write_field("chat_id", chat_id)
+    write_field("caption", caption)
+
+    # Photo file field
+    body.write(f"--{boundary}\r\n".encode())
+    body.write(b'Content-Disposition: form-data; name="photo"; filename="metrics.png"\r\n')
+    body.write(b"Content-Type: image/png\r\n\r\n")
+    body.write(image_bytes)
+    body.write(b"\r\n")
+    body.write(f"--{boundary}--\r\n".encode())
+
+    data = body.getvalue()
+
+    try:
+        req = urllib.request.Request(
+            url, data=data,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}
+        )
+        resp = urllib.request.urlopen(req, timeout=30)
+        print(f"[auto_sitrep] Telegram photo sent ({resp.status})", file=sys.stderr)
+    except Exception as e:
+        print(f"[auto_sitrep] Telegram photo send failed: {e}", file=sys.stderr)
+
+
 def git_commit_push():
     """Stage sitrep.md, commit, and push."""
     os.chdir(PROJECT)
@@ -470,9 +789,14 @@ def main():
     # 9. Git commit and push
     git_commit_push()
 
-    # 10. Send Telegram notification
+    # 10. Send Telegram notification (compact summary + metrics image)
     try:
-        send_telegram(md)
+        summary = generate_telegram_summary(status, trajectory_rows, prev_metrics, prev_step, ledger)
+        img_bytes = generate_metrics_image(status, latest_eval, ledger)
+        if img_bytes:
+            send_telegram_photo(img_bytes, caption=summary)
+        else:
+            send_telegram(summary)
     except Exception as e:
         print(f"[auto_sitrep] Telegram notification failed: {e}", file=sys.stderr)
 
