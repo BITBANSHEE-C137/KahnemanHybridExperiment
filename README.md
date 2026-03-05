@@ -366,7 +366,10 @@ KahnemanHybridExperiment/
 │   └── utils/
 │       └── s3_sync.py               # Non-blocking S3 uploads, spot termination handler
 ├── tests/                           # pytest test suite
-├── INFRASTRUCTURE.md                # Spot recovery, dashboards, deployment, cost
+├── auto_sitrep.py                   # Sitrep generator (cron + on-demand via Telegram)
+├── web_dashboard.py                 # Flask dashboard + Telegram webhook handler
+├── bootstrap.sh                     # 18-step autonomous instance setup
+├── INFRASTRUCTURE.md                # AWS architecture, spot recovery, Telegram commands, cost
 ├── LICENSE                          # MIT License
 ├── requirements.txt                 # Minimum version floors
 ├── requirements-lock.txt            # Exact pinned versions from training environment
@@ -375,7 +378,7 @@ KahnemanHybridExperiment/
 
 ## Infrastructure
 
-Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 checkpoint sync, and a live web dashboard. Automated cost controls cap total spend at $50 (budget circuit breaker) and shut down the fleet if spot prices exceed $0.75/hr (price ceiling). See **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** for spot recovery architecture, cost controls, monitoring dashboards, deployment details, and cost analysis.
+Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 checkpoint sync, and a live web dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Automated cost controls cap total spend at $50 (budget circuit breaker) and shut down the fleet if spot prices exceed $0.75/hr (price ceiling). A Telegram bot provides real-time alerts (spot reclaims, budget warnings) and on-demand commands (`/status`, `/sitrep`, `/help`) delivered via webhook through the CloudFront → nginx → Flask chain. See **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** for the full AWS architecture diagram, spot recovery, cost controls, Telegram command interface, and deployment details.
 
 ## References
 
