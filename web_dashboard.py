@@ -498,6 +498,7 @@ def build_status():
 
     # ETA — use steps per second from recent steps for accuracy
     eta_s = None
+    sps = 0
 
     # Phase — reflects bootstrap, recovery, and training states
     bootstrap = cached("bootstrap", 2, read_bootstrap_status)
