@@ -1546,9 +1546,10 @@ body::before {
       </table>
       <div class="spot-stale" id="spot-stale" style="display:none"></div>
       <div id="run-total-row" style="margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border);display:none">
-        <span style="color:var(--dim);font-size:13px">Run Total:</span>
-        <span id="run-total-sessions" style="color:var(--dim);font-size:12px;margin-left:4px"></span>
-        <span style="float:right;font-weight:600;font-size:15px;color:var(--accent)" id="run-total-cost">--</span>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+          <span style="white-space:nowrap"><span style="color:var(--dim);font-size:13px">Run Total</span> <span id="run-total-sessions" style="color:var(--dim);font-size:12px"></span></span>
+          <span style="font-weight:600;font-size:15px;color:var(--accent);white-space:nowrap" id="run-total-cost">--</span>
+        </div>
       </div>
       <div style="margin-top:6px;font-size:13px;" id="cost-controls"></div>
     </div>
