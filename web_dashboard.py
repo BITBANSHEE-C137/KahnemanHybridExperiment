@@ -1570,12 +1570,12 @@ body::before {
       <div id="cost-controls" style="margin-top:8px;padding:8px 0 0;border-top:1px solid var(--border);font-size:13px;display:none"></div>
     </div>
 
-  </div>
+    <!-- Log tail -->
+    <div class="card">
+      <h2>Log Tail</h2>
+      <div class="log-box" id="log-tail">--</div>
+    </div>
 
-  <!-- Log tail (full width, outside grid) -->
-  <div class="card" style="margin-top:12px">
-    <h2>Log Tail</h2>
-    <div class="log-box" id="log-tail">--</div>
   </div>
 
   <!-- Footer -->
