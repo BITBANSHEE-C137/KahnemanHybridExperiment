@@ -19,24 +19,26 @@ Same weights, different attention masks. A trained confidence head decides when 
 
 ## Project State
 
-### Current Run: v1 Baseline (DO NOT MODIFY while training)
+### Training Status
 
-- **Config:** `configs/tiny.yaml` — GPT-2 Small (124M), 50k steps, OpenWebText
-- **Instance:** g5.2xlarge / g6.xlarge spot fleet, A10G GPU
-- **Dashboard:** https://train.bitbanshee.com
-- Training is live. Code changes on disk do not affect the running process (already loaded in memory). Safe to edit files, commit, push.
+**v1 Baseline: COMPLETE** (March 1–3, 2026)
+- GPT-2 Small (124M), 50k steps, OpenWebText
+- 3/5 targets met. See README.md for full results.
 
-### v1 Metrics at Step ~10,200
+**v2 Training: IN PROGRESS** (March 4+, 2026)
+- Same config (`configs/tiny.yaml`), λ_diff increased 1.0→2.0
+- Eval metrics stored in `eval_metrics/v2/` (S3), v1 archived in `eval_metrics_v1/`
+- Automated cost controls active: $50 budget cap, $0.75/hr spot ceiling
+
+### v2 Metrics (Latest)
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| AR Perplexity | 26.5 | < 40 | ✅ Met |
-| S1 Token Accuracy | 14.7% | > 40% | 🔶 37% of target |
-| Diffusion Loss | 5.41 | < 4.0 | 🔶 64% of reduction done |
-| Confidence AUROC | 0.791 | > 0.75 | ✅ Met at step 8,000 |
-| Confidence ECE | 0.011 | < 0.05 | ✅ Met |
-
-The v1 run establishes the unmodified baseline. All fixes below target the v2 run.
+| AR Perplexity | 31.05 | < 40 | ✅ Met |
+| S1 Token Accuracy | 26.1% | > 40% | 🔶 Stalled |
+| Diffusion Loss | 4.33 | < 4.0 | 🔶 Improving |
+| Confidence AUROC | 0.852 | > 0.75 | ✅ Met |
+| Confidence ECE | 0.014 | < 0.05 | ✅ Met |
 
 ## Repository Layout
 
@@ -113,11 +115,47 @@ KahnemanHybridExperiment/
 
 ### Infrastructure
 
-- AWS spot fleet, NVMe ephemeral storage, S3 persistence
-- `bootstrap.sh`: 15-step autonomous instance setup
-- CloudFront → nginx → Flask dashboard
-- IMDSv2 for metadata, Secrets Manager for tokens
-- Cost ledger persisted across spot terminations
+- **S3:** `s3://ml-lab-004507070771/dual-system-research-data/`
+- **Instance:** g5.2xlarge / g6.xlarge spot fleet (A10G / L4 GPU)
+- **Fleet:** `fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a`
+- **AMI:** `ami-0f6e32b2ebf1c8a2d` (clean — no secrets baked in)
+- **Launch template:** `lt-06e111b12bd85396f` v19
+- **Volumes:** ~100GB EBS root + NVMe ephemeral at `/opt/dlami/nvme`
+- **EBS static data:** Tagged `ml-lab-static-data` volumes for preprocessed data (one per AZ)
+- **Data:** Preprocessed OpenWebText at `/opt/dlami/nvme/ml-lab/preprocessed/`
+- **Checkpoints:** `/opt/dlami/nvme/ml-lab/checkpoints/v2/` + S3
+- **Dashboard:** CloudFront → nginx → Flask :5000 at https://train.bitbanshee.com
+- **DNS:** `train.bitbanshee.com` (CloudFront ALIAS), `origin.train.bitbanshee.com` (EC2 A record)
+- **Secrets:** AWS Secrets Manager (7 secrets in `ml-lab/*` prefix — all fetched at boot, nothing baked)
+- **Notifications:** Telegram bot for spot reclaims, budget alerts, price ceiling, sitreps
+- **IAM:** `ml-lab-ec2-bootstrap` role (S3, Secrets Manager, EC2, Route53, EBS)
+- **Bootstrap:** `s3://.../deploy/bootstrap.sh` → pulled on every boot (18 autonomous steps)
+- **Cost controls:** $50 budget cap + $0.75/hr spot ceiling, both with Telegram alerts
+
+### Secrets & Credentials
+
+The AMI contains no secrets. All credentials are fetched from AWS Secrets Manager at bootstrap Step 1:
+- `ml-lab/wandb-api-key` — W&B experiment tracking
+- `ml-lab/hf-token` — HuggingFace model downloads
+- `ml-lab/dashboard-spot-token` — Dashboard write API auth
+- `ml-lab/claude-api-key` — Claude API for sitrep generation
+- `ml-lab/telegram-bot-token` — Telegram notifications
+- `ml-lab/telegram-chat-id` — Telegram chat destination
+- `ml-lab/gh-token` — GitHub push access
+
+Secrets are written to `~/.bashrc` as exports. Cron jobs receive them inline (cron doesn't source `.bashrc`).
+
+### Telegram Notifications
+
+Telegram bot sends alerts for: bootstrap complete, spot reclaim, budget exceeded, spot price ceiling hit, sitrep delivery. All notifications use `send_telegram()` from `auto_sitrep.py`. Env vars (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) are passed inline to cron jobs and the dashboard process since cron doesn't source `.bashrc`.
+
+### Cost Controls
+
+Two automated circuit breakers:
+- **Budget cap** ($50): `cost-tracker.sh` checks every 5 min. Sends Telegram alert + sets fleet capacity to 0.
+- **Spot price ceiling** ($0.75/hr): `update-spot-price.sh` checks every 5 min. Sends Telegram alert + sets fleet capacity to 0.
+
+Both thresholds configurable via env vars (`MAX_BUDGET`, `MAX_SPOT_PRICE`).
 
 ## Known Issues & v2 Fix Queue
 
@@ -241,18 +279,6 @@ Key question: does fixing the confidence signal change anything about training, 
 | datasets | 4.6.0 | |
 | accelerate | 1.12.0 | |
 | wandb | 0.25.0 | |
-
-## AWS Infrastructure
-
-- **S3:** `s3://ml-lab-004507070771/dual-system-research-data/`
-- **Instance:** g5.2xlarge / g6.xlarge spot (A10G / L4 GPU)
-- **Volumes:** 100GB EBS root + NVMe ephemeral at `/opt/dlami/nvme`
-- **Data:** Preprocessed OpenWebText at `/opt/dlami/nvme/ml-lab/preprocessed/`
-- **Checkpoints:** `/opt/dlami/nvme/ml-lab/checkpoints/` + S3
-- **Dashboard:** CloudFront → nginx → Flask :5000
-- **DNS:** `train.bitbanshee.com` (CloudFront ALIAS), `origin.train.bitbanshee.com` (EC2 A record)
-- **Secrets:** AWS Secrets Manager (`wandb-api-key`, `hf-token`, `dashboard-spot-token`)
-- **Bootstrap:** `s3://.../deploy/bootstrap.sh` → pulled on every boot
 
 ## Conventions
 
