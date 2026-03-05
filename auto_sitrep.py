@@ -20,6 +20,7 @@ PROJECT = "/home/ubuntu/KahnemanHybridExperiment"
 EVAL_DIR = "/opt/dlami/nvme/ml-lab/eval_metrics"
 COST_LEDGER = "/opt/dlami/nvme/ml-lab/cost/cost_ledger.json"
 HISTORY_FILE = "/tmp/auto-sitrep-eval-history.json"
+TELEGRAM_STEP_INTERVAL = 10_000  # only send Telegram every N training steps
 SITREP_PATH = os.path.join(PROJECT, "sitrep.md")
 
 ET = ZoneInfo("America/New_York")  # handles EST/EDT automatically
@@ -789,16 +790,21 @@ def main():
     # 9. Git commit and push
     git_commit_push()
 
-    # 10. Send Telegram notification (compact summary + metrics image)
-    try:
-        summary = generate_telegram_summary(status, trajectory_rows, prev_metrics, prev_step, ledger)
-        img_bytes = generate_metrics_image(status, latest_eval, ledger)
-        if img_bytes:
-            send_telegram_photo(img_bytes, caption=summary)
-        else:
-            send_telegram(summary)
-    except Exception as e:
-        print(f"[auto_sitrep] Telegram notification failed: {e}", file=sys.stderr)
+    # 10. Send Telegram notification (only every TELEGRAM_STEP_INTERVAL steps)
+    last_tg_step = history.get("last_telegram_step", 0)
+    if current_step - last_tg_step >= TELEGRAM_STEP_INTERVAL:
+        try:
+            summary = generate_telegram_summary(status, trajectory_rows, prev_metrics, prev_step, ledger)
+            img_bytes = generate_metrics_image(status, latest_eval, ledger)
+            if img_bytes:
+                send_telegram_photo(img_bytes, caption=summary)
+            else:
+                send_telegram(summary)
+            history["last_telegram_step"] = current_step
+        except Exception as e:
+            print(f"[auto_sitrep] Telegram notification failed: {e}", file=sys.stderr)
+    else:
+        print(f"[auto_sitrep] Telegram skipped (last at {last_tg_step}, next at {last_tg_step + TELEGRAM_STEP_INTERVAL})")
 
     # 11. Save history state for next run
     history["prev_step"] = current_step
