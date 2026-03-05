@@ -13,6 +13,7 @@
 - [Cost Analysis](#cost-analysis)
 - [Cost Controls](#cost-controls)
 - [Notifications](#notifications)
+- [Telegram Command Interface](#telegram-command-interface)
 
 ## AWS Architecture
 
@@ -29,6 +30,97 @@
 | **Dashboard** | [train.bitbanshee.com](https://train.bitbanshee.com) — live web UI with training progress, GPU stats, loss curves, and cost tracking |
 | **Notifications** | Telegram Bot — training alerts, spot reclaims, budget warnings, sitrep delivery |
 | **IAM** | `ml-lab-ec2-bootstrap` role — S3, Secrets Manager, EC2 (fleet, EBS, describe), Route53 |
+
+### Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph Internet
+        User["User Browser"]
+        TG["Telegram Bot API"]
+        Phone["Phone (Telegram)"]
+    end
+
+    subgraph AWS["AWS Cloud (us-east-1)"]
+        subgraph CF["CloudFront (EGWW28IMM7U2T)"]
+            CF_Default["/  → ec2-with-s3-fallback"]
+            CF_API["/api/*  → api-with-lambda-fallback"]
+            CF_TG["/api/telegram/*  → ec2-primary (POST)"]
+            CF_Stream["/stream  → api-with-lambda-fallback"]
+        end
+
+        subgraph Failover["Origin Groups"]
+            OG1["ec2-with-s3-fallback"]
+            OG2["api-with-lambda-fallback"]
+        end
+
+        subgraph EC2["EC2 Spot Fleet (g5/g6)"]
+            subgraph Instance["GPU Instance"]
+                nginx["nginx :80"]
+                Flask["Flask :5000<br/>web_dashboard.py"]
+                Training["joint_trainer.py<br/>(tmux)"]
+                Sync["sync-checkpoints.sh"]
+                Sitrep["auto_sitrep.py"]
+                CostTracker["cost-tracker.sh"]
+                SpotUpdater["update-spot-price.sh"]
+            end
+        end
+
+        S3["S3 Bucket<br/>ml-lab-004507070771"]
+        SM["Secrets Manager<br/>(7 secrets)"]
+        R53["Route 53<br/>train.bitbanshee.com"]
+        EBS["EBS Volumes<br/>(preprocessed data)"]
+        APIGW["API Gateway<br/>(fallback)"]
+        S3F["S3 Static<br/>(fallback page)"]
+        Lambda["Lambda<br/>(fallback API)"]
+    end
+
+    subgraph External
+        WandB["Weights & Biases"]
+        HF["HuggingFace Hub"]
+        GH["GitHub"]
+    end
+
+    Phone -->|"/status /sitrep /help"| TG
+    TG -->|"POST webhook"| CF_TG
+    User -->|"HTTPS"| CF_Default
+    CF_Default --> OG1
+    CF_API --> OG2
+    CF_TG --> nginx
+    CF_Stream --> OG2
+    OG1 -->|"primary"| nginx
+    OG1 -->|"failover"| S3F
+    OG2 -->|"primary"| nginx
+    OG2 -->|"failover"| APIGW
+    APIGW --> Lambda
+    nginx --> Flask
+
+    Flask -->|"build_status()"| Training
+    Flask -->|"spawn"| Sitrep
+    Sitrep -->|"sendMessage/sendPhoto"| TG
+
+    Training -->|"checkpoints"| Sync
+    Sync -->|"s3 sync"| S3
+    Training -->|"metrics"| WandB
+    CostTracker -->|"ledger"| S3
+    CostTracker -->|"alerts"| TG
+    SpotUpdater -->|"alerts"| TG
+
+    SM -->|"bootstrap"| Instance
+    EBS -->|"mount"| Instance
+    S3 -->|"restore"| Instance
+    Instance -->|"DNS update"| R53
+    Instance -->|"git pull"| GH
+    Instance -->|"model weights"| HF
+
+    style CF fill:#FF9900,color:#000
+    style S3 fill:#569A31,color:#fff
+    style SM fill:#DD344C,color:#fff
+    style EC2 fill:#FF9900,color:#000
+    style R53 fill:#8C4FFF,color:#fff
+    style TG fill:#26A5E4,color:#fff
+    style Lambda fill:#FF9900,color:#000
+```
 
 ## Spot Instance Resilience
 
@@ -58,12 +150,12 @@ Training runs on spot instances with four layers of protection:
 | 10 | Install nginx | apt install (if missing) |
 | 11 | Configure nginx | HTTP-only reverse proxy (CloudFront handles TLS) |
 | 12 | Install Flask | pip install (if missing) |
-| 13 | Start web dashboard | Flask on :5000, with TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID env vars |
+| 13 | Start web dashboard | Flask on :5000, with Telegram env vars and `--telegram-webhook-secret` |
 | 14 | Setup spot price updater | Initial run + cron every 5 min (with SPOT_TOKEN env var) |
 | 15 | Setup cost tracker | `cost-tracker.sh init` — download ledger from S3, cron every 5 min with Telegram env vars |
-| 16 | Setup auto-sitrep | Cron every 30 min with Telegram env vars, fetches CLAUDE_API_KEY from Secrets Manager |
-| 17 | Launch training | tmux session, auto-resumes from latest checkpoint |
-| 18 | Mark bootstrap complete | Write status JSON, send Telegram notification |
+| 16 | Setup auto-sitrep | Cron every 30 min with Telegram env vars |
+| 17 | Register Telegram webhook | `setWebhook` API with secret token, `drop_pending_updates=true` |
+| 18 | Launch training | tmux session, auto-resumes from latest checkpoint |
 
 ## Checkpoint Management
 
@@ -127,6 +219,7 @@ Single-file Flask application (1,800 lines) serving an inline HTML/CSS/JS dashbo
 | `GET /api/eval/history` | Merged eval JSONs + log-parsed eval lines |
 | `GET /stream` | SSE stream — pushes `/api/status` every 10s |
 | `POST /api/spot-price` | Accepts spot price data from external updater (token-auth) |
+| `POST /api/telegram/webhook` | Telegram bot command handler (secret-token auth) |
 
 ### monitor.sh — Terminal Dashboard
 
@@ -185,6 +278,7 @@ All secrets are stored in AWS Secrets Manager and fetched at boot (bootstrap Ste
 | `ml-lab/telegram-bot-token` | Telegram notification bot | auto_sitrep.py, cost-tracker.sh, update-spot-price.sh, web_dashboard.py |
 | `ml-lab/telegram-chat-id` | Telegram chat destination | Same as above |
 | `ml-lab/gh-token` | GitHub push access | bootstrap.sh (.git-credentials) |
+| *(derived)* `TELEGRAM_WEBHOOK_SECRET` | Telegram webhook validation | Generated from bot token hash at boot (not stored in Secrets Manager) |
 
 Secrets are written to `~/.bashrc` as exports during bootstrap Step 2, and `.git-credentials` is created for GitHub push access.
 
@@ -279,9 +373,63 @@ Telegram bot integration provides real-time alerts for critical events. The bot 
 | Spot price ceiling hit | `update-spot-price.sh` | `current_price >= MAX_SPOT_PRICE` ($0.75/hr default) |
 | Sitrep delivery | `auto_sitrep.py` | Every 30 min (includes formatted SITREP) |
 | Training milestone | `auto_sitrep.py` | Key step thresholds reached |
+| On-demand sitrep | `web_dashboard.py` → `auto_sitrep.py` | User sends `/sitrep` via Telegram |
+| On-demand status | `web_dashboard.py` | User sends `/status` via Telegram |
 
 ### Implementation
 
-All notifications use the `send_telegram()` function in `auto_sitrep.py` as the canonical implementation. Other scripts import or inline-call this function. The function uses the Telegram Bot API's `sendMessage` endpoint with Markdown formatting.
+Outbound notifications use `send_telegram()` in `auto_sitrep.py` as the canonical implementation. Other scripts import or inline-call this function. Inbound commands are handled by the webhook route in `web_dashboard.py`, which validates the secret token header and dispatches to per-command handlers. Both use the Telegram Bot API with `sendMessage` / `sendPhoto` endpoints.
 
 **Env var propagation:** Cron jobs don't inherit `.bashrc` (interactive shell guard). Bootstrap sets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` inline in each cron command. The dashboard process also receives these env vars explicitly at launch.
+
+## Telegram Command Interface
+
+On-demand commands via Telegram complement the scheduled notifications. The user sends a command from their phone; Telegram delivers it as a webhook POST to the Flask dashboard.
+
+### Request Flow
+
+```
+Phone → Telegram API → CloudFront (/api/telegram/*) → nginx → Flask → handler
+                                                                    ↓
+                                                            Telegram API ← response
+```
+
+**CloudFront note:** The `/api/telegram/*` behavior routes directly to `ec2-primary` (not an origin group) because CloudFront prohibits POST methods on behaviors using origin groups. The `AllViewerExceptHostHeader` origin request policy forwards the `X-Telegram-Bot-Api-Secret-Token` header for validation.
+
+### Commands
+
+| Command | Response | Cooldown | Implementation |
+|---------|----------|----------|----------------|
+| `/status` | Inline text: step, GPU, metrics, cost, ETA | 15s | `build_status()` in web_dashboard.py |
+| `/sitrep` | Acknowledges, then delivers full sitrep + metrics image | 60s | Spawns `auto_sitrep.py --force-telegram` |
+| `/help` | Lists available commands | none | Static text reply |
+
+### Security
+
+| Layer | Mechanism |
+|-------|-----------|
+| **Secret token** | Telegram includes `X-Telegram-Bot-Api-Secret-Token` header; Flask validates against `TELEGRAM_WEBHOOK_SECRET` |
+| **Chat ID filter** | Only responds to the configured `TELEGRAM_CHAT_ID`; other chats silently ignored (200 OK) |
+| **Rate limiting** | Per-command cooldowns prevent abuse (in-memory, resets on dashboard restart) |
+| **CloudFront** | TLS termination, DDoS protection, header forwarding via origin request policy |
+
+### Webhook Registration
+
+Registered automatically during bootstrap Step 16 via Telegram's `setWebhook` API:
+```bash
+curl -sf "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+    -d "url=https://train.bitbanshee.com/api/telegram/webhook" \
+    -d "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
+    -d "drop_pending_updates=true" \
+    -d 'allowed_updates=["message"]'
+```
+
+The webhook secret is generated deterministically from the bot token (`sha256sum`) during bootstrap Step 1, ensuring consistency across spot instance recoveries without storing an additional secret.
+
+### Files
+
+| File | Role |
+|------|------|
+| `web_dashboard.py` | Webhook route, command handlers, rate limiter, `_send_telegram_reply()` |
+| `auto_sitrep.py` | `--force-telegram` flag for on-demand sitrep generation with file lock |
+| `bootstrap.sh` | Webhook secret generation (Step 1), dashboard env var plumbing (Step 12), webhook registration (Step 16) |
