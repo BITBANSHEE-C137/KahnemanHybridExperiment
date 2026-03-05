@@ -1571,9 +1571,9 @@ body::before {
     </div>
 
     <!-- Log tail -->
-    <div class="card">
+    <div class="card" style="display:flex;flex-direction:column">
       <h2>Log Tail</h2>
-      <div class="log-box" id="log-tail">--</div>
+      <div class="log-box" id="log-tail" style="flex:1;max-height:none">--</div>
     </div>
 
   </div>
