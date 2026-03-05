@@ -563,9 +563,18 @@ def build_status():
         elif spot_rate:
             spot_cost = round(spot_rate * uptime_s / 3600, 4)
 
-    # Projected totals
-    od_projected = round(od_cost / current_step * max_steps, 2) if od_cost and current_step > 0 else None
-    spot_projected = round(spot_cost / current_step * max_steps, 2) if spot_cost and current_step > 0 else None
+    # Projected totals: total_run_cost + (remaining_steps / sps * rate)
+    remaining_steps = max(0, max_steps - current_step) if current_step else max_steps
+    od_projected = None
+    spot_projected = None
+    if sps and sps > 0 and remaining_steps > 0:
+        remaining_hours = remaining_steps / sps / 3600
+        if od_rate:
+            od_remaining_cost = od_rate * remaining_hours
+            od_projected = round((od_cost or 0) + od_remaining_cost, 2)
+        if spot_rate:
+            spot_remaining_cost = spot_rate * remaining_hours
+            spot_projected = round((spot_cost or 0) + spot_remaining_cost, 2)
 
     inst["ondemand_cost"] = od_cost
     inst["ondemand_projected"] = od_projected
