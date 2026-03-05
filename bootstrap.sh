@@ -164,19 +164,52 @@ echo "Restored checkpoints:"
 ls -lh "$DATA_DIR/checkpoints/v2/"*.pt 2>/dev/null || echo "  (none)"
 step_done 4
 
-# ── Step 5: Sync pre-processed training data (prefer AMI-local, fallback to S3) ──
+# ── Step 5: Sync pre-processed training data (prefer persistent EBS, fallback to S3) ──
 step_start 5
-if [ -d /opt/ml-lab-static/preprocessed ]; then
-    echo "Copying pre-processed data from AMI..."
-    cp -a /opt/ml-lab-static/preprocessed/* "$DATA_DIR/preprocessed/"
-    echo "  preprocessed data: COPIED from AMI (~2s)"
-else
+STATIC_COPIED=false
+# Try to attach persistent EBS volume tagged 'ml-lab-static-data' in this AZ
+INSTANCE_ID=$(curl -sf http://169.254.169.254/latest/meta-data/instance-id || echo "")
+MY_AZ=$(curl -sf http://169.254.169.254/latest/meta-data/placement/availability-zone || echo "")
+if [ -n "$INSTANCE_ID" ] && [ -n "$MY_AZ" ]; then
+    STATIC_VOL=$(aws ec2 describe-volumes --region "$REGION" \
+        --filters "Name=tag:Name,Values=ml-lab-static-data" \
+                  "Name=availability-zone,Values=$MY_AZ" \
+                  "Name=status,Values=available" \
+        --query "Volumes[0].VolumeId" --output text 2>/dev/null)
+    if [ -n "$STATIC_VOL" ] && [ "$STATIC_VOL" != "None" ]; then
+        echo "Attaching persistent EBS volume $STATIC_VOL ($MY_AZ)..."
+        aws ec2 attach-volume --volume-id "$STATIC_VOL" --instance-id "$INSTANCE_ID" \
+            --device /dev/sdf --region "$REGION" > /dev/null 2>&1
+        # Wait for device to appear (NVMe rename: /dev/sdf -> /dev/nvme*n1)
+        for i in $(seq 1 30); do
+            STATIC_DEV=$(lsblk -o NAME,SIZE,TYPE -nr 2>/dev/null | awk '$2=="20G" && $3=="disk" {print "/dev/"$1}' | grep -v nvme0 | grep -v nvme1 | head -1)
+            [ -n "$STATIC_DEV" ] && break
+            sleep 1
+        done
+        if [ -n "$STATIC_DEV" ]; then
+            mkdir -p /mnt/static-data
+            mount -o ro "$STATIC_DEV" /mnt/static-data 2>/dev/null
+            if [ -d /mnt/static-data/preprocessed ]; then
+                cp -a /mnt/static-data/preprocessed/* "$DATA_DIR/preprocessed/"
+                echo "  preprocessed data: COPIED from EBS volume"
+                STATIC_COPIED=true
+            fi
+            if [ -d /mnt/static-data/hf_cache ]; then
+                cp -a /mnt/static-data/hf_cache/* "$DATA_DIR/hf_cache/"
+                echo "  hf_cache: COPIED from EBS volume"
+            fi
+            umount /mnt/static-data 2>/dev/null
+        else
+            echo "  WARNING: EBS volume attached but device not found"
+        fi
+        # Detach so volume is available for next launch
+        aws ec2 detach-volume --volume-id "$STATIC_VOL" --region "$REGION" > /dev/null 2>&1
+    fi
+fi
+# Fallback to S3 if EBS copy didn't work
+if [ "$STATIC_COPIED" != "true" ]; then
     echo "Syncing pre-processed data from S3..."
     aws s3 sync "s3://$S3_BUCKET/preprocessed/" "$DATA_DIR/preprocessed/" --region "$REGION" || true
-fi
-if [ -d /opt/ml-lab-static/hf_cache ]; then
-    cp -a /opt/ml-lab-static/hf_cache/* "$DATA_DIR/hf_cache/"
-    echo "  hf_cache: COPIED from AMI"
 fi
 ls -lh "$DATA_DIR/preprocessed/" 2>/dev/null
 step_done 5
