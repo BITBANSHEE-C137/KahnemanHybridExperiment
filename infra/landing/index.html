@@ -185,6 +185,8 @@ body::before {
 }
 .status-badge.complete { color: var(--accent); background: rgba(96, 165, 250, 0.1); }
 .status-badge.complete .status-dot { background: var(--accent); }
+.status-badge.offline { color: var(--orange); background: rgba(251, 146, 60, 0.1); }
+.status-badge.offline .status-dot { background: var(--orange); }
 .experiment-desc {
   font-size: 14px;
   color: var(--dim);
@@ -486,6 +488,31 @@ body::before {
         <span class="arxiv-pill">ai</span>
         <span class="arxiv-pill">context-engineering</span>
         <span class="arxiv-pill">memory</span>
+      </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- SENTINEL -->
+    <div class="card">
+      <div class="card-inner">
+      <img class="card-thumb" src="/sentinel.png" alt="SENTINEL Dashboard">
+      <div>
+      <div class="experiment-title">
+        SENTINEL
+        <span class="status-badge archive"><span class="status-dot"></span>Archive</span>
+        <span class="status-badge offline"><span class="status-dot"></span>Offline</span>
+      </div>
+      <div class="experiment-desc">
+        AI-powered analytics platform for radio scanner call recordings. Automated transcription via local Whisper models, multi-tier geocoding with RadioReference integration (11,680+ frequencies), LLM-driven sentiment analysis and incident correlation, and real-time mapping with Leaflet. Built with React, TypeScript, Node.js, and PostgreSQL.
+      </div>
+      <!-- No links — repo is private -->
+      <div class="arxiv-refs">
+        <span class="arxiv-pill">ai</span>
+        <span class="arxiv-pill">radio</span>
+        <span class="arxiv-pill">transcription</span>
+        <span class="arxiv-pill">geospatial</span>
+        <span class="arxiv-pill">analytics</span>
       </div>
       </div>
       </div>
