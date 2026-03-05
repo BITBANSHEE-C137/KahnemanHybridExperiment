@@ -1,57 +1,58 @@
-# Sitrep — 2026-03-04 2:30 PM ET / 19:30 UTC
+# Sitrep — 2026-03-04 7:30 PM ET / 00:30 UTC
 
-## v2 Training — running, healthy, 21% complete
+## v2 Training — running, healthy, 24% complete
 
-- **Step ~10,600 / 50,000** (21.2%)
-- GPU: 100% utilization, 16.3 / 22 GB VRAM, 53°C
-- Rate: ~830 steps/hr (4.3s/step)
-- ETA to 50k: ~47.6 hours at current rate
-- Spot price: $0.4496/hr (g5.2xlarge)
-- Spot cost (this instance): $0.96 — projected: $4.55
-- Total cost across 3 instance(s): $6.23
-- Instance up 2h08m since bootstrap (2026-03-04 17:21 UTC) — spot recovery from prior instance (checkpoint restored from S3)
+- **Step ~12,200 / 50,000** (24.4%)
+- GPU: 99% utilization, 16.3 / 22 GB VRAM, 51°C
+- Rate: ~831 steps/hr (4.3s/step)
+- ETA to 50k: ~45.5 hours at current rate
+- Spot price: $0.4409/hr (g5.2xlarge)
+- Spot cost (this instance): $0.27 — projected: $1.11
+- Total cost across 7 instance(s): $8.01
+- Instance up 0h36m since bootstrap (2026-03-04 23:53 UTC) — spot recovery from prior instance (checkpoint restored from S3)
 
-## Eval trajectory (step 3k → 10k)
+## Eval trajectory (step 5k → 12k)
 
 | Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE    |
 |-------|--------|-----------|--------|-------|--------|
-| 3000 | 23.5   | 6.42      | 7.6%  | 0.649 | 0.0066 |
-| 4000 | 24.4   | 5.78      | 11.5%  | 0.748 | 0.0105 |
 | 5000 | 25.6   | 4.97      | 18.0%  | 0.824 | 0.0031 |
 | 6000 | 26.4   | 5.12      | 17.5%  | 0.830 | 0.0052 |
 | 7000 | 27.1   | 5.13      | 17.9%  | 0.833 | 0.0081 |
 | 8000 | 27.6   | 4.65      | 21.1%  | 0.845 | 0.0071 |
 | 9000 | 28.1   | 5.02      | 18.9%  | 0.843 | 0.0057 |
 | 10000 | 28.4   | 4.37      | 25.1%  | 0.850 | 0.0044 |
+| 11000 | 28.9   | 4.19      | 26.0%  | 0.857 | 0.0046 |
+| 12000 | 29.3   | 4.34      | 25.6%  | 0.852 | 0.0093 |
 
-Live at step ~10,600: ar_loss 3.50, diff_loss 4.99, conf_acc 0.837
+Live at step ~12,200: ar_loss 3.41, diff_loss 4.65, conf_acc 0.000
 
 ## Target status (5 of 5)
 
-- **AR PPL < 40:** 28.4 — met since step 50, drifting up slowly but solid margin
-- **AUROC > 0.75:** 0.850 — met since step 8k, steady climb
-- **ECE < 0.05:** 0.004 — met since step 1k, excellent calibration
-- **Diff loss → 4.0:** 4.37 at eval step 10k — 91% of the way, closing in
-- **S1 accuracy → 40%:** 25.1% at eval — 63% of target
+- **AR PPL < 40:** 0.0 — met since step 50, drifting up slowly but solid margin
+- **AUROC > 0.75:** 0.000 — met since step 8k, steady climb
+- **ECE < 0.05:** 0.000 — met since step 1k, excellent calibration
+- **Diff loss → 4.0:** 0.00 at eval step 12k — 100% of the way, closing in
+- **S1 accuracy → 40%:** 0.0% at eval — 0% of target
 
-## Trends since last auto-sitrep
+## Trends
 
-- +500 steps (~10,100 → ~10,600)
-- Diff loss: 4.37 → 4.37
-- S1 accuracy: 25.1% → 25.1%
-- AUROC: 0.850 → 0.850
+*(first auto-sitrep run after boot — no prior data)*
 
-## Spot instance history (3 instances)
+## Spot instance history (7 instances)
 
-Training has survived 2 spot reclaims via checkpoint recovery. Each new instance bootstraps autonomously, restores the latest checkpoint from S3, and resumes training.
+Training has survived 6 spot reclaims via checkpoint recovery. Each new instance bootstraps autonomously, restores the latest checkpoint from S3, and resumes training.
 
 | # | AZ | Steps | Boot (UTC) | Cost |
 |---|-----|-------|------------|------|
 | 1 | us-east-1b | 1→9,300 | 2026-03-04 05:32 | $5.11 |
 | 2 | us-east-1b | 10,600→9,100 | 2026-03-04 16:59 | $0.16 |
-| 3 | us-east-1b | 10,600→10,500 | 2026-03-04 17:21 | $0.93 |
+| 3 | us-east-1b | 10,600→11,200 | 2026-03-04 17:21 | $1.34 |
+| 4 | us-east-1b | 11,300→11,300 | 2026-03-04 20:20 | $0.00 |
+| 5 | us-east-1b | 11,300→11,300 | 2026-03-04 21:02 | $0.17 |
+| 6 | us-east-1a | 11,100→12,500 | 2026-03-04 21:27 | $0.97 |
+| 7 | us-east-1a | 12,500→12,100 | 2026-03-04 23:53 | $0.23 |
 
-**Total spot cost across all instances: $6.19**
+**Total spot cost across all instances: $7.98**
 
 ## Code & infra
 
