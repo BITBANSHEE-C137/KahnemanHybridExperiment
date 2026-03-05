@@ -175,11 +175,11 @@ if [ -n "$INSTANCE_ID" ] && [ -n "$MY_AZ" ]; then
         --filters "Name=tag:Name,Values=ml-lab-static-data" \
                   "Name=availability-zone,Values=$MY_AZ" \
                   "Name=status,Values=available" \
-        --query "Volumes[0].VolumeId" --output text 2>/dev/null)
+        --query "Volumes[0].VolumeId" --output text 2>/dev/null || echo "")
     if [ -n "$STATIC_VOL" ] && [ "$STATIC_VOL" != "None" ]; then
         echo "Attaching persistent EBS volume $STATIC_VOL ($MY_AZ)..."
         aws ec2 attach-volume --volume-id "$STATIC_VOL" --instance-id "$INSTANCE_ID" \
-            --device /dev/sdf --region "$REGION" > /dev/null 2>&1
+            --device /dev/sdf --region "$REGION" > /dev/null 2>&1 || true
         # Wait for device to appear (NVMe rename: /dev/sdf -> /dev/nvme*n1)
         for i in $(seq 1 30); do
             STATIC_DEV=$(lsblk -o NAME,SIZE,TYPE -nr 2>/dev/null | awk '$2=="20G" && $3=="disk" {print "/dev/"$1}' | grep -v nvme0 | grep -v nvme1 | head -1)
@@ -203,7 +203,7 @@ if [ -n "$INSTANCE_ID" ] && [ -n "$MY_AZ" ]; then
             echo "  WARNING: EBS volume attached but device not found"
         fi
         # Detach so volume is available for next launch
-        aws ec2 detach-volume --volume-id "$STATIC_VOL" --region "$REGION" > /dev/null 2>&1
+        aws ec2 detach-volume --volume-id "$STATIC_VOL" --region "$REGION" > /dev/null 2>&1 || true
     fi
 fi
 # Fallback to S3 if EBS copy didn't work
