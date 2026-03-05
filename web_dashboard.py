@@ -2440,16 +2440,15 @@ let _termDismissed = false;
 function checkTermination(data) {
   if (!data.spot_termination || _termDismissed) return;
   const modal = $('term-modal');
+  // Compute countdown to termination (updates every SSE tick)
+  const termTime = new Date(data.spot_termination);
+  const secsLeft = Math.max(0, Math.round((termTime - Date.now()) / 1000));
+  const m = Math.floor(secsLeft / 60);
+  const s = secsLeft % 60;
+  $('term-countdown').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  $('term-time').textContent = termTime.toLocaleTimeString();
   if (modal.classList.contains('hidden')) {
-    // Compute countdown to termination
-    const termTime = new Date(data.spot_termination);
-    const now = new Date(data.timestamp);
-    const secsLeft = Math.max(0, Math.round((termTime - now) / 1000));
-    const m = Math.floor(secsLeft / 60);
-    const s = secsLeft % 60;
-    $('term-countdown').textContent = m + ':' + (s < 10 ? '0' : '') + s;
-    $('term-time').textContent = termTime.toLocaleTimeString();
-    // Update status badge
+    // Update status badge on first show
     $('conn-status').textContent = 'Terminating';
     $('pulse').style.background = '#f87171';
     modal.classList.remove('hidden');
