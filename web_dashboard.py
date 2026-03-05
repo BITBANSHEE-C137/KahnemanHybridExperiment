@@ -1375,6 +1375,8 @@ body::before {
 .sitrep-body table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 13px; }
 .sitrep-body th { text-align: left; color: #a78bfa; border-bottom: 1px solid rgba(167, 139, 250, 0.2); padding: 4px 8px; }
 .sitrep-body td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.sitrep-body hr { border: none; border-top: 1px solid rgba(167,139,250,0.15); margin: 16px 0; }
+.sitrep-body blockquote { border-left: 3px solid rgba(167,139,250,0.3); margin: 8px 0; padding: 4px 12px; color: var(--dim); }
 </style>
 </head>
 <body>
@@ -2203,10 +2205,15 @@ function connectSSE() {
 function renderMarkdown(md) {
   let html = '';
   const lines = md.split('\n');
-  let inUl = false, inOl = false;
+  let inUl = false, inOl = false, inTable = false, isFirstTableRow = false, inBlockquote = false;
   for (let line of lines) {
+    // Close lists if line doesn't continue them
     if (inUl && !/^\s*[-*]\s/.test(line)) { html += '</ul>'; inUl = false; }
     if (inOl && !/^\s*\d+\.\s/.test(line)) { html += '</ol>'; inOl = false; }
+    // Close table if line is not a pipe row
+    if (inTable && !/^\|/.test(line.trim())) { html += '</tbody></table>'; inTable = false; }
+    // Close blockquote if line doesn't start with >
+    if (inBlockquote && !/^>\s?/.test(line)) { html += '</blockquote>'; inBlockquote = false; }
 
     if (/^###\s+(.*)/.test(line)) {
       html += '<h3>' + RegExp.$1 + '</h3>';
@@ -2214,6 +2221,22 @@ function renderMarkdown(md) {
       html += '<h2>' + RegExp.$1 + '</h2>';
     } else if (/^#\s+(.*)/.test(line)) {
       html += '<h1>' + RegExp.$1 + '</h1>';
+    } else if (/^(---+|\*\*\*+|___+)\s*$/.test(line.trim())) {
+      html += '<hr>';
+    } else if (/^>\s?(.*)/.test(line)) {
+      if (!inBlockquote) { html += '<blockquote>'; inBlockquote = true; }
+      html += '<p>' + inlineFormat(RegExp.$1) + '</p>';
+    } else if (/^\|.*\|/.test(line.trim())) {
+      // Table row — skip separator rows like |---|---|
+      if (/^\|[\s\-:|]+\|$/.test(line.trim())) continue;
+      const cells = line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+      if (!inTable) {
+        // First data row → header
+        html += '<table><thead><tr>' + cells.map(c => '<th>' + inlineFormat(c) + '</th>').join('') + '</tr></thead><tbody>';
+        inTable = true;
+      } else {
+        html += '<tr>' + cells.map(c => '<td>' + inlineFormat(c) + '</td>').join('') + '</tr>';
+      }
     } else if (/^\s*[-*]\s+(.*)/.test(line)) {
       if (!inUl) { html += '<ul>'; inUl = true; }
       html += '<li>' + inlineFormat(RegExp.$1) + '</li>';
@@ -2228,6 +2251,8 @@ function renderMarkdown(md) {
   }
   if (inUl) html += '</ul>';
   if (inOl) html += '</ol>';
+  if (inTable) html += '</tbody></table>';
+  if (inBlockquote) html += '</blockquote>';
   return html;
 }
 
