@@ -330,7 +330,7 @@ step_done 11
 # ── Step 12: Start web dashboard ──
 step_start 12
 echo "Starting web dashboard..."
-sudo -u ubuntu bash -c "cd $PROJECT && nohup python3 web_dashboard.py --port 5000 --spot-token '$SPOT_TOKEN' > /tmp/dashboard.log 2>&1 &"
+sudo -u ubuntu bash -c "cd $PROJECT && TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' nohup python3 web_dashboard.py --port 5000 --spot-token '$SPOT_TOKEN' > /tmp/dashboard.log 2>&1 &"
 sleep 3
 curl -sf http://127.0.0.1:5000/api/status > /dev/null && echo "  web dashboard: RUNNING" || echo "  WARNING: web dashboard failed to start"
 step_done 12
@@ -349,7 +349,7 @@ step_done 13
 step_start 14
 echo "Setting up cost tracker..."
 sudo -u ubuntu bash -c "cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' bash cost-tracker.sh init >> /tmp/cost-tracker.log 2>&1" || true
-COST_CRON="*/5 * * * * cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_BUDGET=50 bash cost-tracker.sh update >> /tmp/cost-tracker.log 2>&1"
+COST_CRON="*/5 * * * * cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_BUDGET=50 TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' bash cost-tracker.sh update >> /tmp/cost-tracker.log 2>&1"
 EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
 echo "$EXISTING" | grep -v cost-tracker | { cat; echo "$COST_CRON"; } | sudo -u ubuntu crontab -
 echo "  cost tracker: initialized + cron installed (every 5 min)"
@@ -358,7 +358,7 @@ step_done 14
 # ── Step 15: Setup auto-sitrep cron (every 30 min) ──
 step_start 15
 echo "Setting up auto-sitrep cron..."
-SITREP_CRON="*/30 * * * * cd $PROJECT && python3 auto_sitrep.py >> /tmp/auto-sitrep.log 2>&1"
+SITREP_CRON="*/30 * * * * cd $PROJECT && TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' python3 auto_sitrep.py >> /tmp/auto-sitrep.log 2>&1"
 EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
 echo "$EXISTING" | grep -v auto_sitrep | { cat; echo "$SITREP_CRON"; } | sudo -u ubuntu crontab -
 echo "  auto-sitrep: cron installed (every 30 min)"
