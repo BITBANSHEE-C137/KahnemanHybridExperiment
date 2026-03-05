@@ -96,21 +96,68 @@ body::before {
   border-radius:6px; font-size:14px; white-space:nowrap; transition:background .2s;
 }
 .header-menu a:hover { background:var(--bg); }
-.banner {
+
+/* Notice banners (idle + recovering) */
+.notice {
   border-radius:8px; padding:14px 18px; margin-bottom:12px;
   text-align:center; line-height:1.7;
-}
-.banner.offline {
   background:rgba(251,146,60,.08); border:1px solid rgba(251,146,60,.25);
 }
-.banner.booting {
+.notice .notice-title { font-weight:600; font-size:15px; color:var(--orange); }
+.notice .notice-sub { color:var(--dim); font-size:13px; }
+.notice.recovering {
   background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.25);
 }
-.banner .banner-title { font-weight:600; font-size:15px; }
-.banner.offline .banner-title { color:var(--orange); }
-.banner.booting .banner-title { color:var(--yellow); }
-.banner .banner-sub { color:var(--dim); font-size:13px; }
-.banner .countdown { font-size:28px; font-weight:700; color:var(--accent); margin:8px 0 4px; }
+.notice.recovering .notice-title { color:var(--yellow); }
+.timer-group {
+  display:flex; justify-content:center; gap:32px; margin:10px 0 4px;
+}
+.timer-item { text-align:center; }
+.timer-item .timer-label {
+  font-size:12px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px;
+}
+.timer-item .timer-value {
+  font-size:28px; font-weight:700; color:var(--accent);
+}
+
+/* Run cards */
+.run-cards {
+  display:grid; grid-template-columns:repeat(2,1fr);
+  gap:12px; margin-bottom:12px;
+}
+.run-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:14px; min-width:0; overflow:hidden;
+}
+.run-card h3 {
+  font-size:15px; font-weight:600; margin-bottom:12px;
+  display:flex; align-items:center; gap:8px;
+}
+.run-tag {
+  display:inline-block; font-size:11px; font-weight:700;
+  padding:2px 8px; border-radius:10px;
+  text-transform:uppercase; letter-spacing:.5px;
+}
+.run-tag.complete {
+  color:var(--green); background:rgba(52,211,153,.12);
+  border:1px solid rgba(52,211,153,.25);
+}
+.run-tag.in-progress {
+  color:var(--accent); background:rgba(96,165,250,.12);
+  border:1px solid rgba(96,165,250,.25);
+}
+.run-tag.paused {
+  color:var(--yellow); background:rgba(251,191,36,.12);
+  border:1px solid rgba(251,191,36,.25);
+}
+.run-metric {
+  display:flex; justify-content:space-between; padding:5px 0;
+  font-size:13px; border-bottom:1px solid rgba(42,45,58,.5);
+}
+.run-metric:last-child { border-bottom:none; }
+.run-metric span:first-child { color:var(--dim); }
+.run-metric span:last-child { color:var(--text); font-weight:600; }
+
 .card {
   background:var(--surface); border:1px solid var(--border);
   border-radius:8px; padding:14px; margin-bottom:12px;
@@ -145,21 +192,6 @@ body::before {
 .progress-fill { height:100%; border-radius:4px; transition:width .5s ease; }
 .progress-fill.blue { background:var(--accent); }
 .progress-fill.yellow { background:var(--yellow); }
-.metrics-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
-.metric-box {
-  background:var(--bg); border-radius:6px; padding:10px 8px;
-  text-align:center; min-width:0; overflow:hidden;
-  border-left:3px solid var(--border);
-}
-.metric-box .label { font-size:13px; color:var(--dim); margin-bottom:3px; }
-.metric-box .value { font-size:20px; font-weight:700; white-space:nowrap; }
-.metric-box .sub { font-size:12px; color:var(--dim); margin-top:2px; }
-.cost-row {
-  display:flex; gap:24px; flex-wrap:wrap; font-size:14px;
-  color:var(--dim); margin-top:14px; padding-top:12px;
-  border-top:1px solid var(--border);
-}
-.cost-row span { color:var(--text); font-weight:600; }
 .sessions-table { width:100%; border-collapse:collapse; font-size:13px; }
 .sessions-table th {
   text-align:left; color:var(--dim); font-weight:600;
@@ -176,16 +208,16 @@ body::before {
   margin-top:16px; padding:20px 14px; border-top:1px solid var(--border);
   text-align:center; font-size:14px; color:var(--dim);
 }
-@media(max-width:900px) {
-  .metrics-row { grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); }
+@media(max-width:700px) {
+  .run-cards { grid-template-columns:1fr; }
+  .sessions-table { font-size:12px; }
 }
-@media(max-width:700px) { .sessions-table { font-size:12px; } }
 @media(max-width:540px) {
   .header-links { display:none; }
   .header-hamburger { display:block; }
   .header h1 { font-size:17px; }
-  .metrics-row { grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); }
-  .cost-row { gap:12px; }
+  .timer-group { gap:16px; }
+  .timer-item .timer-value { font-size:22px; }
 }
 </style>
 </head>
@@ -211,20 +243,10 @@ body::before {
     <div class="subtitle" id="last-updated">Last updated: loading...</div>
   </div>
 
-  <!-- Offline banner (default) -->
-  <div class="banner offline" id="banner-offline">
-    <div class="banner-title">GPU instance is offline &mdash; showing last synced data from S3</div>
-    <div class="banner-sub">Training resumes automatically on next spot instance launch</div>
-  </div>
+  <!-- Notice area — managed by JS state machine -->
+  <div id="notice-area"></div>
 
-  <!-- Booting banner (shown when bootstrap beacon detected) -->
-  <div class="banner booting" id="banner-booting" style="display:none">
-    <div class="banner-title">Instance is bootstrapping &mdash; preparing to resume training</div>
-    <div class="countdown" id="countdown">--:--</div>
-    <div class="banner-sub" id="boot-sub">Estimated time remaining</div>
-  </div>
-
-  <!-- Bootstrap progress card -->
+  <!-- Bootstrap progress card (shown during recovery) -->
   <div class="card" id="bootstrap-card" style="display:none">
     <h2>Bootstrap Progress</h2>
     <div class="progress-wrap">
@@ -237,25 +259,34 @@ body::before {
     <div id="bs-steps"></div>
   </div>
 
-  <div class="card">
-    <h2>Training Progress</h2>
-    <div class="progress-wrap">
-      <div class="progress-label">
-        <span class="step" id="step-label">-- / 50,000</span>
-        <span class="pct" id="pct-label">--%</span>
+  <!-- Training run cards -->
+  <div class="run-cards">
+    <div class="run-card" id="v1-card">
+      <h3>v1 Baseline <span class="run-tag complete">COMPLETE</span></h3>
+      <div class="run-metric"><span>Steps</span><span>50,000 / 50,000</span></div>
+      <div class="run-metric"><span>Duration</span><span>~28 hours (4 instances)</span></div>
+      <div class="run-metric"><span>Total Cost</span><span>$27.62</span></div>
+      <div class="run-metric"><span>Final AR Loss</span><span>3.31</span></div>
+      <div class="run-metric"><span>Final Diff Loss</span><span>4.04</span></div>
+      <div class="run-metric"><span>Conf Accuracy</span><span>73.2%</span></div>
+      <div class="run-metric"><span>Dates</span><span>Mar 1&ndash;3, 2026</span></div>
+      <div class="run-metric"><span>Recoveries</span><span>3 spot reclamations</span></div>
+    </div>
+    <div class="run-card" id="v2-card">
+      <h3>v2 Training <span class="run-tag in-progress" id="v2-tag">IN PROGRESS</span></h3>
+      <div class="progress-wrap">
+        <div class="progress-label">
+          <span class="step" id="v2-steps">-- / --</span>
+          <span class="pct" id="v2-pct">--%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill blue" id="v2-progress-fill" style="width:0%"></div></div>
       </div>
-      <div class="progress-bar"><div class="progress-fill blue" id="progress-fill" style="width:0%"></div></div>
-    </div>
-    <div class="metrics-row">
-      <div class="metric-box" id="m-ar-ppl"><div class="label">AR PPL</div><div class="value">--</div><div class="sub">target &lt;40</div></div>
-      <div class="metric-box" id="m-auroc"><div class="label">AUROC</div><div class="value">--</div><div class="sub">target &gt;0.75</div></div>
-      <div class="metric-box" id="m-ece"><div class="label">ECE</div><div class="value">--</div><div class="sub">target &lt;0.05</div></div>
-      <div class="metric-box" id="m-diff"><div class="label">Diff Loss</div><div class="value">--</div><div class="sub">target 4.0</div></div>
-      <div class="metric-box" id="m-s1acc"><div class="label">S1 Accuracy</div><div class="value">--</div><div class="sub">target 40%</div></div>
-    </div>
-    <div class="cost-row">
-      <div>Total cost: <span id="total-cost">--</span></div>
-      <div>Sessions: <span id="total-sessions">--</span></div>
+      <div class="run-metric"><span>Elapsed</span><span id="v2-elapsed">&mdash;</span></div>
+      <div class="run-metric"><span>ETA Remaining</span><span id="v2-eta">&mdash;</span></div>
+      <div class="run-metric"><span>Cost So Far</span><span id="v2-cost">&mdash;</span></div>
+      <div class="run-metric"><span>Instances</span><span id="v2-instances">&mdash;</span></div>
+      <div class="run-metric"><span>Recoveries</span><span id="v2-recoveries">&mdash;</span></div>
+      <div class="run-metric"><span>Config</span><span>&lambda;_diff 2.0, GPT-2 Small</span></div>
     </div>
   </div>
 
@@ -294,11 +325,14 @@ var BS_STEPS = [
   {label:'Run v1 benchmarks (skipped)', est:1},
   {label:'Launch training', est:3}
 ];
-var TOTAL_EST = BS_STEPS.reduce(function(a,b){return a+b.est},0); // ~513s (~8.5 min)
+var TOTAL_EST = BS_STEPS.reduce(function(a,b){return a+b.est},0);
 
-var bootStarted = null;
 var instanceLive = false;
-var countdownInterval = null;
+var currentState = null;
+var cachedBeacon = null;
+var cachedApi = null;
+var downtimeInterval = null;
+var bootCountdownInterval = null;
 
 function $(id) { return document.getElementById(id); }
 
@@ -309,49 +343,162 @@ function fmtCountdown(seconds) {
   return m + ':' + (s < 10 ? '0' : '') + s;
 }
 
-function setBootState(state) {
-  var badge = $('status-badge');
-  var bannerOff = $('banner-offline');
-  var bannerBoot = $('banner-booting');
-  var bsCard = $('bootstrap-card');
+function fmtDuration(hours) {
+  if (hours == null || hours <= 0) return '--';
+  if (hours >= 24) {
+    var d = Math.floor(hours / 24);
+    var h = Math.floor(hours % 24);
+    return d + 'd ' + h + 'h';
+  }
+  var h = Math.floor(hours);
+  var m = Math.round((hours - h) * 60);
+  return h + 'h ' + m + 'm';
+}
 
-  if (state === 'booting') {
+function fmtDur(s) {
+  if (s == null) return '--';
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
+}
+
+function trunc(id) {
+  return (!id || id === '?') ? '?' : id.length > 12 ? id.slice(0, 12) + '...' : id;
+}
+
+// --- State machine ---
+
+function resolveState(beaconData, apiData) {
+  if (beaconData && beaconData.status && beaconData.status !== 'complete') {
+    return 'recovering';
+  }
+  return 'idle';
+}
+
+function updateStatusBadge(state) {
+  var badge = $('status-badge');
+  if (state === 'recovering') {
     badge.className = 'status-badge booting';
     $('status-text').textContent = 'Bootstrapping';
-    bannerOff.style.display = 'none';
-    bannerBoot.style.display = '';
-    bsCard.style.display = '';
   } else if (state === 'online') {
     badge.className = 'status-badge online';
     $('status-text').textContent = 'Instance Online';
-    bannerOff.style.display = 'none';
-    bannerBoot.style.display = 'none';
-    bsCard.style.display = 'none';
   } else {
     badge.className = 'status-badge offline';
     $('status-text').textContent = 'Instance Offline';
-    bannerOff.style.display = '';
-    bannerBoot.style.display = 'none';
-    bsCard.style.display = 'none';
   }
 }
 
-function updateCountdown() {
-  if (!bootStarted || instanceLive) return;
-  var elapsed = (Date.now() - bootStarted) / 1000;
-  var remaining = Math.max(0, TOTAL_EST - elapsed);
-  $('countdown').textContent = fmtCountdown(remaining);
-  if (remaining <= 0) {
-    $('countdown').textContent = 'Any moment now...';
-    $('boot-sub').textContent = 'Bootstrap may still be finishing';
+function renderNotice(state, beaconData) {
+  var area = $('notice-area');
+  if (state === 'idle') {
+    area.innerHTML =
+      '<div class="notice">' +
+        '<div class="notice-title">No training jobs are currently scheduled</div>' +
+        '<div class="notice-sub">Fleet capacity is at zero &mdash; start an instance to resume training</div>' +
+      '</div>';
+  } else if (state === 'recovering') {
+    area.innerHTML =
+      '<div class="notice recovering">' +
+        '<div class="notice-title">Instance is recovering &mdash; bootstrap in progress</div>' +
+        '<div class="timer-group">' +
+          '<div class="timer-item">' +
+            '<div class="timer-label">Downtime</div>' +
+            '<div class="timer-value" id="downtime-timer">--:--</div>' +
+          '</div>' +
+          '<div class="timer-item">' +
+            '<div class="timer-label">Bootstrap ETA</div>' +
+            '<div class="timer-value" id="bootstrap-eta">--:--</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
   } else {
-    $('boot-sub').textContent = 'Estimated time remaining';
+    area.innerHTML = '';
   }
-  updateBootstrapSteps(elapsed);
+}
+
+// --- Downtime timer ---
+
+function getLastSessionEnd(sessions) {
+  if (!sessions || !sessions.length) return null;
+  var last = sessions[sessions.length - 1];
+  if (last.end) return last.end;
+  if (last.start && last.duration_hours) {
+    return new Date(new Date(last.start).getTime() + last.duration_hours * 3600000).toISOString();
+  }
+  if (last.start && last.duration_s) {
+    return new Date(new Date(last.start).getTime() + last.duration_s * 1000).toISOString();
+  }
+  return null;
+}
+
+function startDowntimeTimer() {
+  if (downtimeInterval) { clearInterval(downtimeInterval); downtimeInterval = null; }
+  var sessions = cachedApi ? cachedApi.sessions_breakdown : null;
+  var lastEnd = getLastSessionEnd(sessions);
+  if (!lastEnd) return;
+  var endTime = new Date(lastEnd).getTime();
+
+  function tick() {
+    var el = $('downtime-timer');
+    if (!el) return;
+    var elapsed = (Date.now() - endTime) / 1000;
+    if (elapsed < 0) elapsed = 0;
+    var m = Math.floor(elapsed / 60);
+    var s = Math.floor(elapsed % 60);
+    el.textContent = m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+  }
+  tick();
+  downtimeInterval = setInterval(tick, 1000);
+}
+
+// --- Bootstrap ETA + step progress ---
+
+function startBootCountdown() {
+  if (bootCountdownInterval) { clearInterval(bootCountdownInterval); bootCountdownInterval = null; }
+
+  function tick() {
+    var el = $('bootstrap-eta');
+    if (!el || !cachedBeacon) return;
+
+    if (cachedBeacon.step != null && cachedBeacon.total_steps != null && cachedBeacon.started) {
+      var elapsed = (Date.now() - new Date(cachedBeacon.started).getTime()) / 1000;
+      var stepsDone = cachedBeacon.step;
+      var stepsTotal = cachedBeacon.total_steps;
+      if (stepsDone > 0) {
+        var rate = stepsDone / elapsed;
+        var remaining = (stepsTotal - stepsDone) / rate;
+        el.textContent = fmtCountdown(remaining);
+      } else {
+        el.textContent = fmtCountdown(Math.max(0, TOTAL_EST - elapsed));
+      }
+    } else if (cachedBeacon.started) {
+      var elapsed = (Date.now() - new Date(cachedBeacon.started).getTime()) / 1000;
+      var remaining = Math.max(0, TOTAL_EST - elapsed);
+      if (remaining <= 0) {
+        el.textContent = 'Any moment...';
+      } else {
+        el.textContent = fmtCountdown(remaining);
+      }
+    }
+
+    // Also update bootstrap step-by-step progress
+    if (cachedBeacon.started) {
+      var bsElapsed = (Date.now() - new Date(cachedBeacon.started).getTime()) / 1000;
+      updateBootstrapSteps(bsElapsed);
+    }
+  }
+  tick();
+  bootCountdownInterval = setInterval(tick, 1000);
+}
+
+function stopTimers() {
+  if (downtimeInterval) { clearInterval(downtimeInterval); downtimeInterval = null; }
+  if (bootCountdownInterval) { clearInterval(bootCountdownInterval); bootCountdownInterval = null; }
 }
 
 function updateBootstrapSteps(elapsed) {
   var container = $('bs-steps');
+  if (!container) return;
   var cumulative = 0;
   var doneCount = 0;
   var html = '';
@@ -380,78 +527,73 @@ function updateBootstrapSteps(elapsed) {
   $('bs-progress-fill').style.width = pct + '%';
 }
 
-// Check bootstrap beacon from S3
-async function checkBeacon() {
-  try {
-    var res = await fetch('https://train-bitbanshee-fallback.s3.amazonaws.com/bootstrap_beacon.json?t=' + Date.now());
-    if (!res.ok) return;
-    var data = await res.json();
-    if (data.status === 'bootstrapping' && data.started) {
-      bootStarted = new Date(data.started).getTime();
-      setBootState('booting');
-      if (!countdownInterval) {
-        countdownInterval = setInterval(updateCountdown, 1000);
-        updateCountdown();
-      }
-    } else if (data.status === 'ready') {
-      // Bootstrap done, instance should be live soon
-      setBootState('booting');
-      $('countdown').textContent = 'Starting training...';
-      $('boot-sub').textContent = 'Dashboard coming online';
-    }
-  } catch(e) { /* no beacon = truly offline */ }
+// --- v2 card ---
+
+function updateV2Card(apiData) {
+  if (!apiData) return;
+  var step = apiData.current_step || 0;
+  var max = apiData.max_steps || 50000;
+  var pct = apiData.progress_pct || (max > 0 ? (step / max * 100) : 0);
+
+  $('v2-steps').textContent = step.toLocaleString() + ' / ' + max.toLocaleString();
+  $('v2-pct').textContent = pct.toFixed(1) + '%';
+  $('v2-progress-fill').style.width = pct + '%';
+
+  var sessions = apiData.sessions_breakdown || [];
+  var totalHours = 0;
+  var totalSteps = 0;
+  var totalCost = 0;
+
+  for (var i = 0; i < sessions.length; i++) {
+    var s = sessions[i];
+    if (s.duration_hours != null) totalHours += s.duration_hours;
+    else if (s.duration_s != null) totalHours += s.duration_s / 3600;
+
+    if (s.steps != null) totalSteps += s.steps;
+    else if (s.steps_start != null && s.steps_end != null) totalSteps += (s.steps_end - s.steps_start);
+
+    if (s.cost != null) totalCost += s.cost;
+    else if (s.spot_cost != null) totalCost += s.spot_cost;
+  }
+
+  $('v2-elapsed').textContent = totalHours > 0 ? fmtDuration(totalHours) : '--';
+
+  var rate = totalHours > 0 && totalSteps > 0 ? totalSteps / totalHours : 0;
+  var remaining = max - step;
+  $('v2-eta').textContent = rate > 0 && remaining > 0 ? fmtDuration(remaining / rate) : '--';
+
+  $('v2-cost').textContent = totalCost > 0 ? '$' + totalCost.toFixed(2) : '--';
+  $('v2-instances').textContent = sessions.length > 0 ? sessions.length : '--';
+  $('v2-recoveries').textContent = sessions.length > 1
+    ? (sessions.length - 1) + ' spot reclamation' + (sessions.length - 1 > 1 ? 's' : '')
+    : sessions.length === 1 ? '0' : '--';
+
+  updateV2StatusTag(apiData);
 }
 
-// RAG colors
-function ragColor(metric, value) {
-  if (value == null) return 'var(--dim)';
-  switch (metric) {
-    case 'ar_ppl':     return value < 40 ? 'var(--green)' : value < 50 ? 'var(--yellow)' : 'var(--red)';
-    case 'conf_auroc': return value > .75 ? 'var(--green)' : value > .6 ? 'var(--yellow)' : 'var(--red)';
-    case 'conf_ece':   return value < .05 ? 'var(--green)' : value < .1 ? 'var(--yellow)' : 'var(--red)';
-    case 'diff_loss':  return value < 4.5 ? 'var(--green)' : value < 6  ? 'var(--yellow)' : 'var(--red)';
-    case 's1_tok_acc': return value > .3  ? 'var(--green)' : value > .15 ? 'var(--yellow)' : 'var(--red)';
-    default: return 'var(--text)';
+function updateV2StatusTag(apiData) {
+  var tag = $('v2-tag');
+  if (!tag) return;
+  if (!apiData || !apiData.phase) {
+    tag.textContent = 'IN PROGRESS';
+    tag.className = 'run-tag in-progress';
+    return;
+  }
+  if (apiData.phase === 'complete') {
+    tag.textContent = 'COMPLETE';
+    tag.className = 'run-tag complete';
+  } else if (apiData.phase === 'offline' || apiData.phase === 'paused') {
+    tag.textContent = 'PAUSED';
+    tag.className = 'run-tag paused';
+  } else {
+    tag.textContent = 'IN PROGRESS';
+    tag.className = 'run-tag in-progress';
   }
 }
 
-function setMetric(id, metric, value, fmt) {
-  var box = $(id);
-  if (!box) return;
-  var valEl = box.querySelector('.value');
-  var color = ragColor(metric, value);
-  valEl.textContent = value != null ? fmt(value) : '--';
-  valEl.style.color = color;
-  box.style.borderLeftColor = color;
-}
+// --- Sessions table ---
 
-function fmtDur(s) {
-  if (s == null) return '--';
-  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
-}
-
-function trunc(id) {
-  return (!id || id === '?') ? '?' : id.length > 12 ? id.slice(0, 12) + '...' : id;
-}
-
-function updateUI(data) {
-  if (data.timestamp) {
-    $('last-updated').textContent = 'Last updated: ' + new Date(data.timestamp).toLocaleString();
-  }
-  var step = data.current_step || 0, max = data.max_steps || 50000, pct = data.progress_pct || 0;
-  $('step-label').textContent = step.toLocaleString() + ' / ' + max.toLocaleString();
-  $('pct-label').textContent = pct.toFixed(1) + '%';
-  $('progress-fill').style.width = pct + '%';
-  var ev = data.latest_eval || {};
-  setMetric('m-ar-ppl', 'ar_ppl', ev.ar_ppl, function(v){return v.toFixed(1)});
-  setMetric('m-auroc', 'conf_auroc', ev.conf_auroc, function(v){return v.toFixed(3)});
-  setMetric('m-ece', 'conf_ece', ev.conf_ece, function(v){return v.toFixed(3)});
-  setMetric('m-diff', 'diff_loss', ev.diff_loss, function(v){return v.toFixed(2)});
-  setMetric('m-s1acc', 's1_tok_acc', ev.s1_tok_acc, function(v){return (v*100).toFixed(1)+'%'});
-  var inst = data.instance || {};
-  $('total-cost').textContent = inst.total_run_cost != null ? '$' + inst.total_run_cost.toFixed(2) : '--';
-  $('total-sessions').textContent = inst.total_sessions != null ? inst.total_sessions : '--';
+function updateSessions(data) {
   var sessions = data.sessions_breakdown || [];
   var tbody = $('sessions-body');
   if (!sessions.length) {
@@ -464,49 +606,115 @@ function updateUI(data) {
     var steps = s.steps_start != null && s.steps_end != null
       ? s.steps_start.toLocaleString() + ' - ' + s.steps_end.toLocaleString()
       : s.steps_start != null ? s.steps_start.toLocaleString() + ' - ...' : '--';
+    var cost = s.spot_cost != null ? s.spot_cost.toFixed(2) : s.cost != null ? s.cost.toFixed(2) : '--';
+    var dur = s.duration_s != null ? fmtDur(s.duration_s) : s.duration_hours != null ? fmtDuration(s.duration_hours) : '--';
     rows += '<tr><td>' + trunc(s.instance_id) + '</td><td>' + (s.instance_type||'?') +
-      '</td><td>' + (s.az||'?') + '</td><td>' + fmtDur(s.duration_s) +
-      '</td><td>' + steps + '</td><td>$' + (s.spot_cost!=null ? s.spot_cost.toFixed(2) : '--') +
+      '</td><td>' + (s.az||'?') + '</td><td>' + dur +
+      '</td><td>' + steps + '</td><td>$' + cost +
       '</td><td class="' + (s.finalized?'finalized-yes':'finalized-no') + '">' +
       (s.finalized?'Yes':'No') + '</td></tr>';
   }
   tbody.innerHTML = rows;
 }
 
-// Try to reach the live dashboard API
+// --- Data fetching ---
+
+async function fetchBeacon() {
+  try {
+    var res = await fetch('https://train-bitbanshee-fallback.s3.amazonaws.com/bootstrap_beacon.json?t=' + Date.now());
+    if (!res.ok) return null;
+    return await res.json();
+  } catch(e) { return null; }
+}
+
+async function fetchApi() {
+  try {
+    var res = await fetch('/api/status');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch(e) { return null; }
+}
+
+// Try to reach the live dashboard
 async function checkLive() {
   try {
     var res = await fetch('/api/status');
     if (res.ok) {
       var data = await res.json();
-      // Verify it's actually the live instance, not Lambda fallback
       if (data.gpu || data.infra || (data.bootstrap && data.bootstrap.status)) {
         instanceLive = true;
-        setBootState('online');
-        if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
-        updateUI(data);
-        // Redirect to live dashboard after a moment
+        updateStatusBadge('online');
+        stopTimers();
         setTimeout(function() { location.reload(); }, 3000);
         return true;
       }
-      // Lambda fallback response — still use the data
-      updateUI(data);
+      return data;
     }
-  } catch(e) { /* not live yet */ }
-  return false;
+  } catch(e) {}
+  return null;
 }
 
-// Initial load
-async function init() {
-  // Check beacon first
-  await checkBeacon();
-  // Try live API (also loads Lambda fallback data)
-  var live = await checkLive();
-  if (!live) {
-    // Poll: beacon every 10s, live API every 15s
-    setInterval(checkBeacon, 10000);
-    setInterval(checkLive, 15000);
+// --- Main poll loop ---
+
+async function poll() {
+  if (instanceLive) return;
+
+  var results = await Promise.allSettled([fetchBeacon(), fetchApi()]);
+  var beaconData = results[0].status === 'fulfilled' ? results[0].value : null;
+  var apiData = results[1].status === 'fulfilled' ? results[1].value : null;
+
+  // Check if API response is from a live instance
+  if (apiData && (apiData.gpu || apiData.infra || (apiData.bootstrap && apiData.bootstrap.status))) {
+    instanceLive = true;
+    updateStatusBadge('online');
+    stopTimers();
+    setTimeout(function() { location.reload(); }, 3000);
+    return;
   }
+
+  if (beaconData) cachedBeacon = beaconData;
+  if (apiData) cachedApi = apiData;
+
+  var newState = resolveState(cachedBeacon, cachedApi);
+
+  if (newState !== currentState) {
+    currentState = newState;
+    renderNotice(newState, cachedBeacon);
+    updateStatusBadge(newState);
+    $('bootstrap-card').style.display = newState === 'recovering' ? '' : 'none';
+
+    if (newState === 'recovering') {
+      startDowntimeTimer();
+      startBootCountdown();
+    } else {
+      stopTimers();
+    }
+  }
+
+  if (cachedApi) {
+    updateV2Card(cachedApi);
+    updateSessions(cachedApi);
+    if (cachedApi.timestamp) {
+      $('last-updated').textContent = 'Last updated: ' + new Date(cachedApi.timestamp).toLocaleString();
+    }
+  }
+}
+
+// --- Init ---
+
+async function init() {
+  // Try live dashboard first
+  var liveResult = await checkLive();
+  if (liveResult === true) return;
+
+  // Use Lambda fallback data if available
+  if (liveResult) cachedApi = liveResult;
+
+  // Run initial poll
+  await poll();
+
+  // Poll every 30s
+  setInterval(poll, 30000);
 }
 
 init();
