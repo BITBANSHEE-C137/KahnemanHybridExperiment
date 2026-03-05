@@ -74,6 +74,9 @@ FLEET_ID="${FLEET_ID:-fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a}"
 CURRENT_PRICE=$(echo "$PAYLOAD" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('current_price', 0))" 2>/dev/null || echo "0")
 if python3 -c "import sys; sys.exit(0 if float('$CURRENT_PRICE') > 0 and float('$CURRENT_PRICE') >= float('$MAX_SPOT_PRICE') else 1)" 2>/dev/null; then
     echo "[spot-price] PRICE CEILING HIT: \$$CURRENT_PRICE/hr >= \$$MAX_SPOT_PRICE/hr — shutting down fleet"
+    # Telegram alert
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    python3 -c "import sys; sys.path.insert(0, '$SCRIPT_DIR'); from auto_sitrep import send_telegram; send_telegram('*SPOT PRICE CEILING HIT*\nRate: \$$CURRENT_PRICE/hr >= ceiling \$$MAX_SPOT_PRICE/hr\nFleet shutdown initiated.')" 2>/dev/null || true
     aws ec2 modify-fleet --fleet-id "$FLEET_ID" \
         --target-capacity-specification TotalTargetCapacity=0,SpotTargetCapacity=0 \
         --region us-east-1 2>&1 || echo "[spot-price] WARNING: Fleet shutdown failed"
