@@ -1545,13 +1545,6 @@ body::before {
         </tr>
       </table>
       <div class="spot-stale" id="spot-stale" style="display:none"></div>
-      <div id="run-total-row" style="margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border);display:none">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
-          <span style="white-space:nowrap"><span style="color:var(--dim);font-size:13px">Run Total</span> <span id="run-total-sessions" style="color:var(--dim);font-size:12px"></span></span>
-          <span style="font-weight:600;font-size:15px;color:var(--accent);white-space:nowrap" id="run-total-cost">--</span>
-        </div>
-      </div>
-      <div style="margin-top:6px;font-size:13px;" id="cost-controls"></div>
     </div>
 
     <!-- Infra -->
@@ -1575,7 +1568,14 @@ body::before {
         <table class="session-tbl" id="sessions-table">
           <tr><th>#</th><th>AZ</th><th>Steps</th><th>Duration</th><th>Cost</th></tr>
         </table>
+        <div id="run-total-row" style="margin-top:6px;padding:6px 0 0;border-top:1px solid var(--border);display:none">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <span style="color:var(--dim);font-size:13px">Run Total <span id="run-total-sessions" style="font-size:12px"></span></span>
+            <span style="font-weight:600;font-size:15px;color:var(--accent)" id="run-total-cost">--</span>
+          </div>
+        </div>
       </div>
+      <div id="cost-controls" style="margin-top:8px;padding:8px 0 0;border-top:1px solid var(--border);font-size:13px;display:none"></div>
     </div>
 
   </div>
@@ -1932,11 +1932,12 @@ function updateUI(data) {
 
       const ccEl = document.getElementById('cost-controls');
       if (ccEl) {
+        ccEl.style.display = 'block';
         ccEl.innerHTML =
           '<span style="color:' + budgetColor + '">Budget: $' + totalCost.toFixed(2) + ' / $' + cc.max_budget.toFixed(0) + '</span>' +
-          ' <span style="color:var(--dim)">|</span> ' +
-          '<span style="color:' + spotColor + '">Spot ceiling: $' + cc.max_spot_price.toFixed(2) + '/hr</span>' +
-          ' <span style="color:var(--dim)">|</span> ' +
+          ' &middot; ' +
+          '<span style="color:' + spotColor + '">Ceiling: $' + cc.max_spot_price.toFixed(2) + '/hr</span>' +
+          ' &middot; ' +
           '<span>Rate: $' + spotRate.toFixed(4) + '/hr</span>';
       }
     }
