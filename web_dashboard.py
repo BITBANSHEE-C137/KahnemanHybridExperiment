@@ -74,9 +74,9 @@ def _poll_spot_termination():
                     if _spot_termination_time is None:
                         _spot_termination_time = data.get("time", datetime.now(timezone.utc).isoformat())
                         print(f"[dashboard] SPOT TERMINATION NOTICE: {data}")
-                        _send_telegram_alert(f"SPOT TERMINATION
-Instance will be reclaimed at {data.get('time', 'unknown')}
-Checkpoint sync in progress.")
+                        _send_telegram_alert("SPOT TERMINATION\n"
+                            "Instance will be reclaimed at " + str(data.get('time', 'unknown'))
+                            + "\nCheckpoint sync in progress.")
         except Exception:
             pass
         time.sleep(5)
@@ -116,10 +116,8 @@ def _monitor_training():
                     stall_duration = now - _monitor_state["last_step_time"]
                     if stall_duration > 900 and now - _monitor_state["last_stall_alert"] > 900:
                         _send_telegram_alert(
-                            f"TRAINING STALL
-"
-                            f"No step progress for {int(stall_duration // 60)} min
-"
+                            f"TRAINING STALL\n"
+                            f"No step progress for {int(stall_duration // 60)} min\n"
                             f"Stuck at step {step:,}"
                         )
                         _monitor_state["last_stall_alert"] = now
@@ -134,10 +132,8 @@ def _monitor_training():
                     drop = _monitor_state["last_auroc"] - auroc
                     if drop > 0.05:
                         _send_telegram_alert(
-                            f"EVAL REGRESSION -- AUROC
-"
-                            f"Drop: {_monitor_state['last_auroc']:.3f} -> {auroc:.3f} ({drop:+.3f})
-"
+                            f"EVAL REGRESSION -- AUROC\n"
+                            f"Drop: {_monitor_state['last_auroc']:.3f} -> {auroc:.3f} ({drop:+.3f})\n"
                             f"Step: {latest_eval.get('step', '?'):,}"
                         )
 
@@ -145,10 +141,8 @@ def _monitor_training():
                     spike = diff_loss - _monitor_state["last_diff_loss"]
                     if spike > 0.5:
                         _send_telegram_alert(
-                            f"EVAL REGRESSION -- DIFF LOSS
-"
-                            f"Spike: {_monitor_state['last_diff_loss']:.2f} -> {diff_loss:.2f} (+{spike:.2f})
-"
+                            f"EVAL REGRESSION -- DIFF LOSS\n"
+                            f"Spike: {_monitor_state['last_diff_loss']:.2f} -> {diff_loss:.2f} (+{spike:.2f})\n"
                             f"Step: {latest_eval.get('step', '?'):,}"
                         )
 
@@ -163,8 +157,7 @@ def _monitor_training():
             max_spot = float(os.environ.get("MAX_SPOT_PRICE", "0.75"))
             if spot_rate is not None and spot_rate > max_spot:
                 _send_telegram_alert(
-                    f"SPOT PRICE SPIKE
-"
+                    f"SPOT PRICE SPIKE\n"
                     f"Rate: ${spot_rate:.4f}/hr exceeds ceiling ${max_spot:.2f}/hr"
                 )
 
@@ -172,10 +165,8 @@ def _monitor_training():
             infra = status.get("infra", {})
             if not infra.get("trainer_running") and step > 0 and step < status.get("max_steps", 50000):
                 _send_telegram_alert(
-                    f"TRAINING CRASH
-"
-                    f"Trainer process not found at step {step:,} / {status.get('max_steps', 50000):,}
-"
+                    f"TRAINING CRASH\n"
+                    f"Trainer process not found at step {step:,} / {status.get('max_steps', 50000):,}\n"
                     f"Training may have crashed."
                 )
                 _time.sleep(300)  # Don't spam -- wait 5 min before re-checking
