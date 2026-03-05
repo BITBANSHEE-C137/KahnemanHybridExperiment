@@ -1329,7 +1329,7 @@ body::before {
   align-items: center; justify-content: center; z-index: 1000; }
 .modal.hidden { display: none; }
 .modal-content { background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; max-width: 700px; width: 90%; max-height: 80vh;
+  border-radius: 12px; max-width: 910px; width: 90%; max-height: 80vh;
   overflow-y: auto; padding: 28px 32px; position: relative; }
 .modal-close { position: absolute; top: 12px; right: 16px; background: none;
   border: none; color: var(--dim); font-size: 24px; cursor: pointer; line-height: 1; }

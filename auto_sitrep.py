@@ -317,6 +317,19 @@ def generate_sitrep_via_claude(status, trajectory_rows, prev_metrics, prev_step,
     """Generate sitrep via Claude API, falling back to template on failure."""
     api_key = os.environ.get("CLAUDE_API_KEY", "")
     if not api_key:
+        # Try AWS Secrets Manager
+        try:
+            import subprocess
+            api_key = subprocess.check_output(
+                ["aws", "secretsmanager", "get-secret-value",
+                 "--secret-id", "ml-lab/claude-api-key",
+                 "--region", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+                 "--query", "SecretString", "--output", "text"],
+                timeout=10, text=True
+            ).strip()
+        except Exception:
+            pass
+    if not api_key:
         return generate_sitrep(status, trajectory_rows, prev_metrics, prev_step, ledger)
 
     try:
@@ -346,9 +359,31 @@ def generate_sitrep_via_claude(status, trajectory_rows, prev_metrics, prev_step,
         }
 
         message = client.messages.create(
-            model="claude-opus-4-6-20250610",
+            model="claude-sonnet-4-20250514",
             max_tokens=2048,
-            system="You are an ML ops analyst. Write a concise markdown SITREP report. Keep it under 3500 characters. Include: training progress, key metrics with trends, infrastructure status, and any concerns. Use ## headers, bullet points, and bold for emphasis. Be direct and technical.",
+            system="""You are an ML ops analyst for a dual-process language model research project.
+
+Write a concise markdown SITREP report (under 4000 chars). Structure:
+
+## v2 Training Status
+Progress, step count, GPU utilization, rate, ETA, spot cost.
+
+## Eval Metrics & Trends
+Table of recent eval checkpoints. Highlight trends in AR perplexity, diffusion loss, S1 token accuracy, confidence AUROC/ECE. Flag any regressions.
+
+## Target Scorecard
+5 targets: AR PPL < 40, AUROC > 0.75, ECE < 0.05, Diff loss -> 4.0, S1 accuracy -> 40%. Show current values and whether met.
+
+## v1 Benchmark Baseline
+v1 final (step 50k) LAMBADA accuracy: 94.26%, LAMBADA PPL: 1.46, WikiText-103 PPL: 43.86, S1 loss: 4.12. Pretrained GPT-2 baseline: LAMBADA 95.08%, WikiText PPL 29.07. AR regressed slightly from joint training; S1 loss dropped 67%.
+
+## Infrastructure
+Spot instance history, cost, uptime. Note any spot reclaims or issues.
+
+## What's Next
+After v2 completes: v2 benchmarks, v1 vs v2 comparison, confidence head analysis.
+
+Style: direct, technical, no filler. Use ## headers, tables, bold for key numbers. Be opinionated about trends.""",
             messages=[{"role": "user", "content": f"Generate a SITREP from this raw training data:\n\n```json\n{json.dumps(raw_data, indent=2, default=str)}\n```"}],
         )
 
