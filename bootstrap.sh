@@ -155,7 +155,7 @@ step_done 3
 # ── Step 4: Restore prior artifacts from S3 ──
 step_start 4
 echo "Restoring prior artifacts from S3..."
-aws s3 sync "s3://$S3_BUCKET/checkpoints/v2/" "$DATA_DIR/checkpoints/v2/" --region "$REGION" || true
+aws s3 sync "s3://$S3_BUCKET/checkpoints/v2/" "$DATA_DIR/checkpoints/v2/" --region "$REGION" --exclude "v2/*" || true
 aws s3 sync "s3://$S3_BUCKET/logs/" "$DATA_DIR/logs/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/eval_metrics/v2/" "$DATA_DIR/eval_metrics/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/benchmarks/" "$DATA_DIR/benchmarks/" --region "$REGION" || true
@@ -164,10 +164,20 @@ echo "Restored checkpoints:"
 ls -lh "$DATA_DIR/checkpoints/v2/"*.pt 2>/dev/null || echo "  (none)"
 step_done 4
 
-# ── Step 5: Sync pre-processed training data from S3 ──
+# ── Step 5: Sync pre-processed training data (prefer AMI-local, fallback to S3) ──
 step_start 5
-echo "Syncing pre-processed data from S3..."
-aws s3 sync "s3://$S3_BUCKET/preprocessed/" "$DATA_DIR/preprocessed/" --region "$REGION" || true
+if [ -d /opt/ml-lab-static/preprocessed ]; then
+    echo "Copying pre-processed data from AMI..."
+    cp -a /opt/ml-lab-static/preprocessed/* "$DATA_DIR/preprocessed/"
+    echo "  preprocessed data: COPIED from AMI (~2s)"
+else
+    echo "Syncing pre-processed data from S3..."
+    aws s3 sync "s3://$S3_BUCKET/preprocessed/" "$DATA_DIR/preprocessed/" --region "$REGION" || true
+fi
+if [ -d /opt/ml-lab-static/hf_cache ]; then
+    cp -a /opt/ml-lab-static/hf_cache/* "$DATA_DIR/hf_cache/"
+    echo "  hf_cache: COPIED from AMI"
+fi
 ls -lh "$DATA_DIR/preprocessed/" 2>/dev/null
 step_done 5
 
