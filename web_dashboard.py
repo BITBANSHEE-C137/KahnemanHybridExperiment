@@ -1400,8 +1400,8 @@ body::before {
     <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size: 16px">
       <span>Step <strong id="cur-step">--</strong> / <span id="max-step">--</span></span>
       <span>Phase: <strong id="phase">--</strong></span>
-      <span>Total Time: <strong id="total-time">--</strong></span>
-      <span>Training: <strong id="elapsed">--</strong></span>
+      <span>Total Training Time: <strong id="total-time">--</strong></span>
+      <span>This Instance: <strong id="elapsed">--</strong></span>
       <span>Remaining: <strong id="eta">--</strong></span>
     </div>
     <div class="progress-outer">
