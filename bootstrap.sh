@@ -10,7 +10,7 @@ DATA_DIR="$NVME/ml-lab"
 # ── Bootstrap status tracking ──
 BOOTSTRAP_STATUS="/tmp/bootstrap_status.json"
 
-STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Setup cost tracker","Setup auto-sitrep","Run v1 benchmarks (skipped)","Launch training"]'
+STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Setup cost tracker","Setup auto-sitrep","Register Telegram webhook","Launch training"]'
 
 init_bootstrap_status() {
     python3 -c "
@@ -111,13 +111,19 @@ SPOT_TOKEN=$(aws secretsmanager get-secret-value --secret-id "ml-lab/dashboard-s
 CLAUDE_API_KEY=$(aws secretsmanager get-secret-value --secret-id "ml-lab/claude-api-key" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
 TELEGRAM_BOT_TOKEN=$(aws secretsmanager get-secret-value --secret-id "ml-lab/telegram-bot-token" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
 TELEGRAM_CHAT_ID=$(aws secretsmanager get-secret-value --secret-id "ml-lab/telegram-chat-id" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
+# Generate webhook secret deterministically from bot token
+if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+    TELEGRAM_WEBHOOK_SECRET=$(echo -n "$TELEGRAM_BOT_TOKEN" | sha256sum | cut -c1-64)
+else
+    TELEGRAM_WEBHOOK_SECRET=""
+fi
 step_done 1
 
 # ── Step 2: Ubuntu user environment ──
 step_start 2
 echo "Configuring ubuntu user environment..."
 # Clean old env vars
-sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /CHECKPOINT_S3_PREFIX/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d; /FLEET_ID/d; /MAX_BUDGET/d; /MAX_SPOT_PRICE/d; /CLAUDE_API_KEY/d; /TELEGRAM_BOT_TOKEN/d; /TELEGRAM_CHAT_ID/d' /home/ubuntu/.bashrc
+sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /CHECKPOINT_S3_PREFIX/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d; /FLEET_ID/d; /MAX_BUDGET/d; /MAX_SPOT_PRICE/d; /CLAUDE_API_KEY/d; /TELEGRAM_BOT_TOKEN/d; /TELEGRAM_CHAT_ID/d; /TELEGRAM_WEBHOOK_SECRET/d' /home/ubuntu/.bashrc
 
 # Inject env vars
 cat >> /home/ubuntu/.bashrc << BASHRC
@@ -141,6 +147,7 @@ export MAX_SPOT_PRICE=0.75
 export CLAUDE_API_KEY="$CLAUDE_API_KEY"
 export TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
 export TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID"
+export TELEGRAM_WEBHOOK_SECRET="$TELEGRAM_WEBHOOK_SECRET"
 BASHRC
 
 # Git credentials
@@ -330,7 +337,7 @@ step_done 11
 # ── Step 12: Start web dashboard ──
 step_start 12
 echo "Starting web dashboard..."
-sudo -u ubuntu bash -c "cd $PROJECT && TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' nohup python3 web_dashboard.py --port 5000 --spot-token '$SPOT_TOKEN' > /tmp/dashboard.log 2>&1 &"
+sudo -u ubuntu bash -c "cd $PROJECT && TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' TELEGRAM_WEBHOOK_SECRET='$TELEGRAM_WEBHOOK_SECRET' nohup python3 web_dashboard.py --port 5000 --spot-token '$SPOT_TOKEN' --telegram-webhook-secret '$TELEGRAM_WEBHOOK_SECRET' > /tmp/dashboard.log 2>&1 &"
 sleep 3
 curl -sf http://127.0.0.1:5000/api/status > /dev/null && echo "  web dashboard: RUNNING" || echo "  WARNING: web dashboard failed to start"
 step_done 12
@@ -364,9 +371,21 @@ echo "$EXISTING" | grep -v auto_sitrep | { cat; echo "$SITREP_CRON"; } | sudo -u
 echo "  auto-sitrep: cron installed (every 30 min)"
 step_done 15
 
-# ── Step 16: Run v1 benchmarks ──
+# ── Step 16: Register Telegram webhook ──
 step_start 16
-echo "  SKIPPED (v1 benchmarks not needed for v2)"
+echo "Registering Telegram webhook..."
+if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_WEBHOOK_SECRET" ]; then
+    WEBHOOK_URL="https://train.bitbanshee.com/api/telegram/webhook"
+    curl -sf "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+        -d "url=${WEBHOOK_URL}" \
+        -d "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
+        -d "drop_pending_updates=true" \
+        -d "allowed_updates=[\"message\"]" > /dev/null 2>&1 \
+        && echo "  Telegram webhook: REGISTERED ($WEBHOOK_URL)" \
+        || echo "  WARNING: Telegram webhook registration failed"
+else
+    echo "  Telegram webhook: SKIPPED (no bot token)"
+fi
 step_done 16
 
 # ── Step 17: Launch training in tmux (fresh start for v2) ──
