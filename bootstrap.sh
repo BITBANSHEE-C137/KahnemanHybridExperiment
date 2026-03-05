@@ -182,13 +182,13 @@ if [ -n "$INSTANCE_ID" ] && [ -n "$MY_AZ" ]; then
             --device /dev/sdf --region "$REGION" > /dev/null 2>&1 || true
         # Wait for device to appear (NVMe rename: /dev/sdf -> /dev/nvme*n1)
         for i in $(seq 1 30); do
-            STATIC_DEV=$(lsblk -o NAME,SIZE,TYPE -nr 2>/dev/null | awk '$2=="20G" && $3=="disk" {print "/dev/"$1}' | grep -v nvme0 | grep -v nvme1 | head -1)
+            STATIC_DEV=$(lsblk -o NAME,SIZE,TYPE -nr 2>/dev/null | awk '$2=="20G" && $3=="disk" && $1 !~ /nvme0|nvme1/ {print "/dev/"$1; exit}') || true
             [ -n "$STATIC_DEV" ] && break
             sleep 1
         done
         if [ -n "$STATIC_DEV" ]; then
             mkdir -p /mnt/static-data
-            mount -o ro "$STATIC_DEV" /mnt/static-data 2>/dev/null
+            mount -o ro,norecovery "$STATIC_DEV" /mnt/static-data 2>/dev/null || true
             if [ -d /mnt/static-data/preprocessed ]; then
                 cp -a /mnt/static-data/preprocessed/* "$DATA_DIR/preprocessed/"
                 echo "  preprocessed data: COPIED from EBS volume"
@@ -198,7 +198,7 @@ if [ -n "$INSTANCE_ID" ] && [ -n "$MY_AZ" ]; then
                 cp -a /mnt/static-data/hf_cache/* "$DATA_DIR/hf_cache/"
                 echo "  hf_cache: COPIED from EBS volume"
             fi
-            umount /mnt/static-data 2>/dev/null
+            umount /mnt/static-data 2>/dev/null || true
         else
             echo "  WARNING: EBS volume attached but device not found"
         fi
