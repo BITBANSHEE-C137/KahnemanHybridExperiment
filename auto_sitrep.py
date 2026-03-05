@@ -8,6 +8,8 @@ import os
 import glob
 import subprocess
 import sys
+import fcntl
+import argparse
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from zoneinfo import ZoneInfo
@@ -738,8 +740,15 @@ def git_commit_push():
     print("Committed and pushed sitrep.md")
 
 
-def main():
+def main(force_telegram: bool = False):
     print(f"[auto_sitrep] {datetime.now(timezone.utc).isoformat()}")
+
+    lock_fd = open("/tmp/auto-sitrep.lock", "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("[auto_sitrep] another instance is running, exiting.", file=sys.stderr)
+        return
 
     # 1. Fetch live status
     status = fetch_status()
@@ -790,9 +799,10 @@ def main():
     # 9. Git commit and push
     git_commit_push()
 
-    # 10. Send Telegram notification (only every TELEGRAM_STEP_INTERVAL steps)
+    # 10. Send Telegram notification (forced or every TELEGRAM_STEP_INTERVAL steps)
     last_tg_step = history.get("last_telegram_step", 0)
-    if current_step - last_tg_step >= TELEGRAM_STEP_INTERVAL:
+    should_send_telegram = force_telegram or (current_step - last_tg_step >= TELEGRAM_STEP_INTERVAL)
+    if should_send_telegram:
         try:
             summary = generate_telegram_summary(status, trajectory_rows, prev_metrics, prev_step, ledger)
             img_bytes = generate_metrics_image(status, latest_eval, ledger)
@@ -800,7 +810,9 @@ def main():
                 send_telegram_photo(img_bytes, caption=summary)
             else:
                 send_telegram(summary)
-            history["last_telegram_step"] = current_step
+            # Don't update last_telegram_step on forced sends so scheduled sends stay on track
+            if not force_telegram:
+                history["last_telegram_step"] = current_step
         except Exception as e:
             print(f"[auto_sitrep] Telegram notification failed: {e}", file=sys.stderr)
     else:
@@ -824,4 +836,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Auto-sitrep generator")
+    parser.add_argument("--force-telegram", action="store_true",
+                        help="Force Telegram notification regardless of step interval")
+    args = parser.parse_args()
+    main(force_telegram=args.force_telegram)
