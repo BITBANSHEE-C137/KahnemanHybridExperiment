@@ -37,7 +37,7 @@ DATA_DIR = "/opt/dlami/nvme/ml-lab"
 EVAL_DIR = os.path.join(DATA_DIR, "eval_metrics")
 CONFIG_PATH = os.path.join(PROJECT_DIR, "configs/tiny.yaml")
 WANDB_DIR = os.path.join(PROJECT_DIR, "wandb")
-CHECKPOINT_DIR = os.environ.get("CHECKPOINT_DIR", os.path.join(DATA_DIR, "checkpoints"))
+CHECKPOINT_DIR = os.environ.get("CHECKPOINT_DIR", os.path.join(DATA_DIR, "checkpoints", "v2"))
 SPOT_PRICE_FILE = "/tmp/spot_price.json"
 BOOTSTRAP_STATUS_FILE = "/tmp/bootstrap_status.json"
 COST_LEDGER_FILE = os.path.join(DATA_DIR, "cost", "cost_ledger.json")
@@ -344,13 +344,26 @@ def get_infra_status():
             return False
 
     checkpoints = []
+    last_checkpoint = None
     if os.path.isdir(CHECKPOINT_DIR):
         checkpoints = sorted(os.listdir(CHECKPOINT_DIR))
+        # Find most recent .pt file by mtime
+        pt_files = [f for f in checkpoints if f.endswith('.pt')]
+        if pt_files:
+            latest = max(pt_files, key=lambda f: os.path.getmtime(os.path.join(CHECKPOINT_DIR, f)))
+            mtime = os.path.getmtime(os.path.join(CHECKPOINT_DIR, latest))
+            from datetime import datetime, timezone
+            last_checkpoint = {
+                "name": latest,
+                "time_utc": datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+                "size_mb": round(os.path.getsize(os.path.join(CHECKPOINT_DIR, latest)) / 1e6, 1),
+            }
 
     return {
         "trainer_running": is_running("joint_trainer"),
         "sync_running": is_running("sync-checkpoint"),
         "checkpoints": checkpoints,
+        "last_checkpoint": last_checkpoint,
     }
 
 
@@ -875,7 +888,7 @@ body::before {
 }
 .container { position: relative; z-index: 1; }
 .container {
-  max-width: 1080px;
+  max-width: 1404px;
   margin: 0 auto;
   padding: 12px;
   overflow: hidden;
@@ -1222,7 +1235,7 @@ body::before {
 .bs-spinner { display: inline-block; animation: spin 1s linear infinite; }
 
 /* Responsive */
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .grid { grid-template-columns: 1fr; }
   .bs-steps { grid-template-columns: 1fr; }
 }
@@ -1400,9 +1413,11 @@ body::before {
     <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size: 16px">
       <span>Step <strong id="cur-step">--</strong> / <span id="max-step">--</span></span>
       <span>Phase: <strong id="phase">--</strong></span>
-      <span>Total Training Time: <strong id="total-time">--</strong></span>
-      <span>This Instance: <strong id="elapsed">--</strong></span>
       <span>Remaining: <strong id="eta">--</strong></span>
+    </div>
+    <div style="display:flex; gap:24px; margin-bottom:4px; font-size: 15px; color:var(--dim)">
+      <span>Total Training Time: <strong style="color:var(--text)" id="total-time">--</strong></span>
+      <span>This Instance: <strong style="color:var(--text)" id="elapsed">--</strong></span>
     </div>
     <div class="progress-outer">
       <div class="progress-inner" id="progress-bar" style="width:0%">0%</div>
@@ -1553,7 +1568,8 @@ body::before {
         <div id="milestones" style="font-size: 14px;margin-top:2px;line-height:1.6">--</div>
       </div>
       <div style="margin-bottom:6px">
-        <span style="font-size: 15px;color:var(--dim)">Checkpoints:</span>
+        <span style="font-size: 15px;color:var(--dim)">Checkpoints: v2</span>
+        <div id="last-ckpt" style="font-size: 14px; margin: 3px 0 4px; color:var(--green)"></div>
         <div class="ckpt-list" id="ckpt-list">--</div>
       </div>
       <div>
@@ -2038,6 +2054,14 @@ function updateUI(data) {
     setBadge('badge-trainer', 'Trainer', inf.trainer_running);
     setBadge('badge-sync', 'Sync', inf.sync_running);
     const ckptEl = $('ckpt-list');
+    const lastCkptEl = $('last-ckpt');
+    if (inf.last_checkpoint) {
+      lastCkptEl.innerHTML = '✓ <strong>' + esc(inf.last_checkpoint.name) + '</strong>' +
+        ' <span style="color:var(--dim);font-size:13px">' + esc(inf.last_checkpoint.time_utc) +
+        ' · ' + inf.last_checkpoint.size_mb + ' MB</span>';
+    } else {
+      lastCkptEl.textContent = '';
+    }
     if (inf.checkpoints && inf.checkpoints.length > 0) {
       ckptEl.innerHTML = inf.checkpoints.map(c => '<span>' + esc(c) + '</span>').join(' ');
     } else {
