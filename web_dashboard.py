@@ -1568,12 +1568,7 @@ body::before {
         <table class="session-tbl" id="sessions-table">
           <tr><th>#</th><th>AZ</th><th>Steps</th><th>Duration</th><th>Cost</th></tr>
         </table>
-        <div id="run-total-row" style="margin-top:6px;padding:6px 0 0;border-top:1px solid var(--border);display:none">
-          <div style="display:flex;justify-content:space-between;align-items:baseline">
-            <span style="color:var(--dim);font-size:13px">Run Total <span id="run-total-sessions" style="font-size:12px"></span></span>
-            <span style="font-weight:600;font-size:15px;color:var(--accent)" id="run-total-cost">--</span>
-          </div>
-        </div>
+
       </div>
       <div id="cost-controls" style="margin-top:8px;padding:8px 0 0;border-top:1px solid var(--border);font-size:13px;display:none"></div>
     </div>
@@ -1911,13 +1906,6 @@ function updateUI(data) {
 
     // Run total cost (across all spot sessions)
     if (inst.total_run_cost != null) {
-      $('run-total-row').style.display = 'block';
-      $('run-total-cost').textContent = '$' + inst.total_run_cost.toFixed(2);
-      if (inst.total_sessions > 1) {
-        $('run-total-sessions').textContent = '(' + inst.total_sessions + ' sessions)';
-      } else {
-        $('run-total-sessions').textContent = '(1 session)';
-      }
     }
 
     // Cost controls display
@@ -1959,6 +1947,11 @@ function updateUI(data) {
       const cls = s.finalized ? '' : ' style="color:var(--accent)"';
       tbl.innerHTML += '<tr' + cls + '><td class="dim">' + (i+1) + '</td><td>' + esc(az) + '</td><td>' + steps + '</td><td>' + dur + '</td><td>' + cost + '</td></tr>';
     });
+    // Run total as footer row aligned to Cost column
+    if (inst && inst.total_run_cost != null) {
+      const sessLabel = inst.total_sessions > 1 ? '(' + inst.total_sessions + ' sessions)' : '(1 session)';
+      tbl.innerHTML += '<tr style="border-top:1px solid var(--border)"><td colspan="4" style="padding-top:5px;color:var(--dim);font-size:13px">Run Total ' + sessLabel + '</td><td style="padding-top:5px;font-weight:600;color:var(--accent)">$' + inst.total_run_cost.toFixed(2) + '</td></tr>';
+    }
   }
 
   // Live metrics
