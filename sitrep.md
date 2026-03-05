@@ -1,15 +1,15 @@
-# Sitrep — 2026-03-04 11:15 PM ET / 04:15 UTC
+# Sitrep — 2026-03-04 11:17 PM ET / 04:17 UTC
 
 ## v2 Training — running, healthy, 27% complete
 
-- **Step ~13,600 / 50,000** (27.2%)
+- **Step ~13,700 / 50,000** (27.4%)
 - GPU: 100% utilization, 16.3 / 22 GB VRAM, 52°C
-- Rate: ~831 steps/hr (4.3s/step)
-- ETA to 50k: ~43.8 hours at current rate
+- Rate: ~830 steps/hr (4.3s/step)
+- ETA to 50k: ~43.7 hours at current rate
 - Spot price: $0.4247/hr (g5.xlarge)
-- Spot cost (this instance): $0.68 — projected: $2.52
-- Total cost across 9 instance(s): $9.54
-- Instance up 1h36m since bootstrap (2026-03-05 02:38 UTC) — spot recovery from prior instance (checkpoint restored from S3)
+- Spot cost (this instance): $0.70 — projected: $2.56
+- Total cost across 9 instance(s): $9.56
+- Instance up 1h39m since bootstrap (2026-03-05 02:38 UTC) — spot recovery from prior instance (checkpoint restored from S3)
 
 ## Eval trajectory (step 6k → 13k)
 
@@ -24,7 +24,7 @@
 | 12000 | 29.3   | 4.34      | 25.6%  | 0.852 | 0.0093 |
 | 13000 | 30.5   | 4.40      | 25.5%  | 0.852 | 0.0124 |
 
-Live at step ~13,600: ar_loss 3.45, diff_loss 5.05, conf_acc 0.000
+Live at step ~13,700: ar_loss 3.39, diff_loss 5.14, conf_acc 0.000
 
 ## Target status (5 of 5)
 
@@ -36,7 +36,7 @@ Live at step ~13,600: ar_loss 3.45, diff_loss 5.05, conf_acc 0.000
 
 ## Trends since last auto-sitrep
 
-- +0 steps (~13,600 → ~13,600)
+- +100 steps (~13,600 → ~13,700)
 
 ## Spot instance history (9 instances)
 
