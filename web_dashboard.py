@@ -1466,37 +1466,69 @@ body::before {
       </div>
     </div>
 
-    <!-- GPU -->
+    <!-- Instance, GPU & Cost -->
     <div class="card">
-      <h2>GPU</h2>
-      <div id="gpu-name" style="color:var(--dim);font-size:15px;margin-bottom:8px">--</div>
-      <div class="gpu-metric">
-        <div class="gpu-metric-header">
-          <span class="gpu-metric-label">Utilization</span>
-          <span class="gpu-metric-value" id="gpu-util-val">--</span>
-        </div>
-        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-util-bar"></div></div>
+      <h2>Instance & GPU</h2>
+      <div class="inst-row" style="margin-bottom:8px">
+        <span class="inst-item"><span class="inst-val" id="inst-type">--</span></span>
+        <span class="inst-item"><span class="inst-val" id="inst-lifecycle">--</span></span>
+        <span class="inst-item"><span class="inst-val" id="inst-az">--</span></span>
+        <span class="inst-item">up <span class="inst-val" id="inst-uptime">--</span></span>
       </div>
-      <div class="gpu-metric">
-        <div class="gpu-metric-header">
-          <span class="gpu-metric-label">VRAM</span>
-          <span class="gpu-metric-value" id="gpu-vram-val">--</span>
+      <div id="gpu-name" style="color:var(--dim);font-size:14px;margin-bottom:6px">--</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin-bottom:10px">
+        <div class="gpu-metric" style="margin:0">
+          <div class="gpu-metric-header">
+            <span class="gpu-metric-label">Utilization</span>
+            <span class="gpu-metric-value" id="gpu-util-val">--</span>
+          </div>
+          <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-util-bar"></div></div>
         </div>
-        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-vram-bar"></div></div>
+        <div class="gpu-metric" style="margin:0">
+          <div class="gpu-metric-header">
+            <span class="gpu-metric-label">VRAM</span>
+            <span class="gpu-metric-value" id="gpu-vram-val">--</span>
+          </div>
+          <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-vram-bar"></div></div>
+        </div>
+        <div class="gpu-metric" style="margin:0">
+          <div class="gpu-metric-header">
+            <span class="gpu-metric-label">Temp</span>
+            <span class="gpu-metric-value" id="gpu-temp-val">--</span>
+          </div>
+          <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-temp-bar"></div></div>
+        </div>
+        <div class="gpu-metric" style="margin:0">
+          <div class="gpu-metric-header">
+            <span class="gpu-metric-label">Power</span>
+            <span class="gpu-metric-value" id="gpu-power-val">--</span>
+          </div>
+          <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-power-bar"></div></div>
+        </div>
       </div>
-      <div class="gpu-metric">
-        <div class="gpu-metric-header">
-          <span class="gpu-metric-label">Temp</span>
-          <span class="gpu-metric-value" id="gpu-temp-val">--</span>
-        </div>
-        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-temp-bar"></div></div>
-      </div>
-      <div class="gpu-metric">
-        <div class="gpu-metric-header">
-          <span class="gpu-metric-label">Power</span>
-          <span class="gpu-metric-value" id="gpu-power-val">--</span>
-        </div>
-        <div class="gpu-bar-track"><div class="gpu-bar-fill" id="gpu-power-bar"></div></div>
+      <div style="border-top:1px solid var(--border);padding-top:8px">
+        <table class="cost-tbl">
+          <tr><th></th><th>Rate</th><th>Cost</th><th>Projected</th></tr>
+          <tr style="color:var(--red)">
+            <td>On-Demand</td>
+            <td id="od-rate">--</td>
+            <td class="cost-accent" id="od-cost">--</td>
+            <td id="od-proj">--</td>
+          </tr>
+          <tr style="color:var(--green)">
+            <td>Spot</td>
+            <td id="spot-rate">--</td>
+            <td class="cost-accent" id="spot-cost">--</td>
+            <td id="spot-proj">--</td>
+          </tr>
+          <tr class="row-savings">
+            <td>Savings</td>
+            <td id="delta-pct">--</td>
+            <td class="cost-accent" id="delta-cost">--</td>
+            <td id="delta-proj">--</td>
+          </tr>
+        </table>
+        <div class="spot-stale" id="spot-stale" style="display:none"></div>
       </div>
     </div>
 
@@ -1510,41 +1542,6 @@ body::before {
     <div class="card">
       <h2>Eval Metrics <span id="eval-chart-note" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim)"></span></h2>
       <div class="chart-container"><canvas id="chart-eval"></canvas></div>
-    </div>
-
-    <!-- Instance & Cost -->
-    <div class="card">
-      <div style="margin-bottom:8px">
-        <h2 style="margin-bottom:0">Instance & Cost</h2>
-        <div class="inst-row">
-          <span class="inst-item"><span class="inst-val" id="inst-type">--</span></span>
-          <span class="inst-item"><span class="inst-val" id="inst-lifecycle">--</span></span>
-          <span class="inst-item"><span class="inst-val" id="inst-az">--</span></span>
-          <span class="inst-item">up <span class="inst-val" id="inst-uptime">--</span></span>
-        </div>
-      </div>
-      <table class="cost-tbl">
-        <tr><th></th><th>Rate</th><th>Cost</th><th>Projected</th></tr>
-        <tr style="color:var(--red)">
-          <td>On-Demand</td>
-          <td id="od-rate">--</td>
-          <td class="cost-accent" id="od-cost">--</td>
-          <td id="od-proj">--</td>
-        </tr>
-        <tr style="color:var(--green)">
-          <td>Spot</td>
-          <td id="spot-rate">--</td>
-          <td class="cost-accent" id="spot-cost">--</td>
-          <td id="spot-proj">--</td>
-        </tr>
-        <tr class="row-savings">
-          <td>Savings</td>
-          <td id="delta-pct">--</td>
-          <td class="cost-accent" id="delta-cost">--</td>
-          <td id="delta-proj">--</td>
-        </tr>
-      </table>
-      <div class="spot-stale" id="spot-stale" style="display:none"></div>
     </div>
 
     <!-- Infra -->
