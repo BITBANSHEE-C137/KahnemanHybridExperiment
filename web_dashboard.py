@@ -1551,12 +1551,6 @@ body::before {
         <span style="float:right;font-weight:600;font-size:15px;color:var(--accent)" id="run-total-cost">--</span>
       </div>
       <div style="margin-top:6px;font-size:13px;" id="cost-controls"></div>
-      <div id="sessions-breakdown" style="display:none;margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border)">
-        <span style="color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:0.06em">Instance History</span>
-        <table class="session-tbl" id="sessions-table">
-          <tr><th>#</th><th>AZ</th><th>Steps</th><th>Duration</th><th>Cost</th></tr>
-        </table>
-      </div>
     </div>
 
     <!-- Infra -->
@@ -1574,6 +1568,12 @@ body::before {
         <span style="font-size: 13px;color:var(--dim);text-transform:uppercase;letter-spacing:0.06em">Checkpoints: v2</span>
         <div id="last-ckpt" style="font-size: 14px; margin: 3px 0 4px; color:var(--green)"></div>
         <div class="ckpt-list" id="ckpt-list">--</div>
+      </div>
+      <div id="sessions-breakdown" style="display:none;margin-top:8px;padding:8px 0 0;border-top:1px solid var(--border)">
+        <span style="font-size: 13px;color:var(--dim);text-transform:uppercase;letter-spacing:0.06em">Instance History</span>
+        <table class="session-tbl" id="sessions-table">
+          <tr><th>#</th><th>AZ</th><th>Steps</th><th>Duration</th><th>Cost</th></tr>
+        </table>
       </div>
     </div>
 
