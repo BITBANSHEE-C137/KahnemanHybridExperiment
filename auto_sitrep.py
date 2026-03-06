@@ -719,25 +719,30 @@ def send_telegram_photo(image_bytes: bytes, caption: str = "") -> None:
 
 
 def git_commit_push():
-    """Stage sitrep.md, commit, and push."""
+    """Stage sitrep.md, commit, and push. Non-fatal on failure."""
     os.chdir(PROJECT)
-    subprocess.run(["git", "add", "sitrep.md"], check=True)
+    try:
+        subprocess.run(["git", "add", "sitrep.md"], check=True)
 
-    # Check if there are staged changes
-    result = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"],
-        capture_output=True,
-    )
-    if result.returncode == 0:
-        print("No changes to sitrep.md, skipping commit.")
-        return
+        # Check if there are staged changes
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            print("No changes to sitrep.md, skipping commit.")
+            return
 
-    subprocess.run(
-        ["git", "commit", "-m", "auto-sitrep: update metrics"],
-        check=True,
-    )
-    subprocess.run(["git", "push"], check=True)
-    print("Committed and pushed sitrep.md")
+        subprocess.run(
+            ["git", "commit", "-m", "auto-sitrep: update metrics"],
+            check=True,
+        )
+        # Pull --rebase to integrate any remote changes before pushing
+        subprocess.run(["git", "pull", "--rebase", "--autostash"], check=True)
+        subprocess.run(["git", "push"], check=True)
+        print("Committed and pushed sitrep.md")
+    except subprocess.CalledProcessError as e:
+        print(f"[auto_sitrep] git failed (non-fatal): {e}", file=sys.stderr)
 
 
 def main(force_telegram: bool = False):
@@ -796,10 +801,7 @@ def main(force_telegram: bool = False):
         f.write(md)
     print(f"Wrote {SITREP_PATH}")
 
-    # 9. Git commit and push
-    git_commit_push()
-
-    # 10. Send Telegram notification (forced or every TELEGRAM_STEP_INTERVAL steps)
+    # 9. Send Telegram notification BEFORE git (so push failures don't block it)
     last_tg_step = history.get("last_telegram_step", 0)
     should_send_telegram = force_telegram or (current_step - last_tg_step >= TELEGRAM_STEP_INTERVAL)
     if should_send_telegram:
@@ -817,6 +819,9 @@ def main(force_telegram: bool = False):
             print(f"[auto_sitrep] Telegram notification failed: {e}", file=sys.stderr)
     else:
         print(f"[auto_sitrep] Telegram skipped (last at {last_tg_step}, next at {last_tg_step + TELEGRAM_STEP_INTERVAL})")
+
+    # 10. Git commit and push (non-fatal — sitrep already sent)
+    git_commit_push()
 
     # 11. Save history state for next run
     history["prev_step"] = current_step

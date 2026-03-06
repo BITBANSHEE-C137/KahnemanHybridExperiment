@@ -914,7 +914,7 @@ def _handle_status_command(chat_id: str) -> None:
 
 
 def _handle_sitrep_command(chat_id: str) -> None:
-    """Handle /sitrep — acknowledge then spawn full sitrep generation."""
+    """Handle /sitrep — acknowledge, run sitrep, report errors."""
     if _check_cooldown("sitrep", 60):
         _send_telegram_reply(chat_id, "Sitrep on cooldown (60s). Try again shortly.")
         return
@@ -923,13 +923,28 @@ def _handle_sitrep_command(chat_id: str) -> None:
     def _run():
         try:
             env = dict(os.environ)
-            subprocess.Popen(
+            result = subprocess.run(
                 ["python3", "auto_sitrep.py", "--force-telegram"],
                 cwd=PROJECT_DIR,
                 env=env,
-                stdout=open("/tmp/auto-sitrep-manual.log", "a"),
-                stderr=subprocess.STDOUT,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
+            # Log output for debugging
+            with open("/tmp/auto-sitrep-manual.log", "a") as f:
+                f.write(result.stdout)
+                if result.stderr:
+                    f.write(result.stderr)
+            if result.returncode != 0:
+                err_tail = (result.stderr or result.stdout or "unknown error")[-500:]
+                _send_telegram_reply(
+                    chat_id,
+                    f"Sitrep generation failed (rc={result.returncode}):\n{err_tail}",
+                    parse_mode="",
+                )
+        except subprocess.TimeoutExpired:
+            _send_telegram_reply(chat_id, "Sitrep generation timed out (120s).", parse_mode="")
         except Exception as e:
             _send_telegram_reply(chat_id, f"Failed to launch sitrep: {e}", parse_mode="")
 
