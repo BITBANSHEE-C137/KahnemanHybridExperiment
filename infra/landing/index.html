@@ -529,7 +529,7 @@ body::before {
         <span class="status-badge"><span class="status-dot"></span>In Development</span>
       </div>
       <div class="experiment-desc">
-        Cat photo sharing platform for the family &mdash; upload, vote, comment, and rank the cutest cats. Fully serverless on AWS with React 19, DynamoDB single-table design, and AI content moderation via Rekognition and Claude Vision. Five Lambda functions, CDK v2 infrastructure, Google OAuth, and Lambda@Edge SEO.
+        Cat photo sharing platform for the family &mdash; upload, vote, comment, and rank the cutest cats. Two-stage AI moderation pipeline (Rekognition for image safety, then Claude Vision + Claude Text for contextual review) screens every upload via SQS with minimal human oversight. Fully serverless on AWS with React 19, DynamoDB single-table design, CDK v2, Google OAuth, and Lambda@Edge SEO.
       </div>
       <div class="experiment-links">
         <a href="https://deadcatsociety.com" target="_blank" rel="noopener">App &rarr;</a>
