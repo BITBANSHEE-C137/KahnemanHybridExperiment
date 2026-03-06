@@ -1,33 +1,47 @@
-# v2 Training SITREP
+# v2 Training Status SITREP
 
 ## v2 Training Status
-**Step 30,700/50,000** (61.4%) | **GPU:** 100% util, A10G @ 197W/300W, 54°C | **Rate:** ~400 steps/hr | **ETA:** ~48h | **Spot cost:** $0.45/hr (62.8% savings vs on-demand)
+**Step 31,100/50,000 (62.2%)**  
+GPU: A10G @ **100% util**, 192W/300W, 53°C, 16.6GB/23GB VRAM  
+Rate: ~6.5 steps/min | ETA: **~2 days** | Spot: **$0.45/hr** (62.8% savings)  
+Current session: 3h57m uptime, $1.78 spent
 
 ## Eval Metrics & Trends
-| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
-|------|--------|-----------|---------|-------|-----|
-| 23k  | 31.03  | 4.03      | 27.9%   | 0.864 | 0.010 |
-| 25k  | 31.22  | 4.20      | 27.6%   | 0.860 | 0.012 |
-| 27k  | 31.46  | 4.48      | 24.4%   | 0.862 | 0.009 |
-| 29k  | 31.43  | 4.21      | 27.7%   | 0.860 | 0.022 |
-| **30k** | **31.68** | **4.08** | **28.1%** | **0.864** | **0.023** |
 
-**Trends:** AR PPL stable ~31-32 (good). Diffusion loss volatile 4.0-4.5. S1 accuracy oscillating 24-28%. AUROC plateaued ~0.86. ECE degrading 0.01→0.023.
+| Step | AR PPL | AUROC | ECE | Diff Loss | S1 Acc |
+|------|--------|-------|-----|-----------|--------|
+| 24k  | 30.98  | 0.863 | 0.005 | 4.46 | 24.3% |
+| 25k  | 31.22  | 0.860 | **0.012** | 4.20 | **27.6%** |
+| 26k  | 31.46  | 0.863 | **0.018** | 4.06 | **28.0%** |
+| 27k  | 31.46  | 0.862 | 0.009 | **4.48** | 24.4% |
+| 28k  | 31.32  | **0.872** | 0.007 | **3.95** | **28.2%** |
+| 29k  | 31.43  | 0.860 | **0.022** | 4.21 | 27.7% |
+| 30k  | 31.68  | 0.864 | **0.023** | 4.08 | **28.1%** |
+| 31k  | **31.60** | 0.862 | 0.014 | **4.49** | 24.5% |
+
+**Trends:** AR PPL **stable** ~31.5. AUROC **strong** 0.86+. ECE **volatile** (0.005→0.023). Diff loss **unstable** 3.95-4.49. S1 accuracy **oscillating** 24-28%.
 
 ## Target Scorecard
-| Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| AR PPL | < 40 | **31.68** | ✅ **PASS** |
-| AUROC | > 0.75 | **0.864** | ✅ **PASS** |
-| ECE | < 0.05 | **0.023** | ✅ **PASS** |
-| Diff Loss | → 4.0 | **4.08** | 🟡 **Near target** |
-| S1 Accuracy | → 40% | **28.1%** | ❌ **MISS** (-12pp) |
+❌ **AR PPL < 40:** 31.6 ✅  
+✅ **AUROC > 0.75:** 0.862 ✅  
+⚠️ **ECE < 0.05:** 0.014 ✅ (volatile)  
+❌ **Diff loss → 4.0:** 4.49 (regressed from 3.95)  
+❌ **S1 accuracy → 40%:** 24.5% (dropped from 28.1%)
+
+**3/5 targets met**
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26%/1.46 PPL, WikiText 43.86 PPL, S1 loss 4.12. GPT-2: LAMBADA 95.08%, WikiText 29.07 PPL. **Current v2 AR PPL (31.68) significantly better than v1 WikiText (43.86).**
+v1 final: LAMBADA 94.26%/1.46 PPL, WikiText 43.86 PPL, S1 loss 4.12  
+GPT-2 baseline: LAMBADA 95.08%, WikiText 29.07 PPL  
+v2 current: AR PPL **better** than v1 (31.6 vs 43.86), diff loss **similar** to v1
 
 ## Infrastructure
-**13 spot sessions**, **$20.53 total cost**. Current session: 3.5h uptime, $1.55 cost. **Spot reclaim history:** 12 interruptions across us-east-1a/b/f zones. Aggressive cost optimization working - 63% savings maintained.
+**13 spot sessions**, $20.80 total cost  
+**12 spot reclaims** in 2 days - high churn rate  
+Current: g5.2xlarge us-east-1b, stable 4h  
+Checkpoint: step_31000.pt (1.5GB) synced
 
 ## What's Next
-**ETA:** Step 50k in ~48h. Priority: **S1 accuracy regression** needs investigation - stuck at 28% vs 40% target. Post-completion: v2 benchmarks, confidence calibration analysis, v1/v2 head-to-head on LAMBADA/WikiText.
+Complete v2 training (~18.9k steps remaining)  
+Run full benchmark suite vs v1 baselines  
+**Priority:** Stabilize diffusion loss oscillation and S1 accuracy regression
