@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v2 Run Report — Dual-Process LM</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2a2d3a;
+  --text: #e0e0e0;
+  --dim: #888;
+  --accent: #60a5fa;
+  --green: #34d399;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --orange: #fb923c;
+  --purple: #a78bfa;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 32px 16px;
+  line-height: 1.6;
+}
+.container { max-width: 1000px; margin: 0 auto; }
+.header {
+  margin-bottom: 32px;
+  padding: 60px 24px 20px;
+  border-bottom: 1px solid var(--border);
+  background: url('/hero.png') center -75px / cover no-repeat;
+  position: relative;
+  border-radius: 8px 8px 0 0;
+}
+.header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 17, 23, 0.65);
+  border-radius: inherit;
+}
+.header > * { position: relative; z-index: 1; }
+.header .breadcrumb { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+.header .breadcrumb a { color: var(--accent); text-decoration: none; }
+.header .breadcrumb a:hover { text-decoration: underline; }
+.header h1 { font-size: 24px; margin-bottom: 4px; }
+.header .subtitle { color: var(--dim); font-size: 14px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+.card h2 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  margin-bottom: 16px;
+}
+.targets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+.target-box {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 12px 14px;
+  border-left: 3px solid transparent;
+}
+.target-box.met { border-left-color: var(--green); }
+.target-box.missed { border-left-color: var(--red); }
+.target-box.near { border-left-color: var(--yellow); }
+.target-box .t-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.target-box .t-value { font-size: 20px; font-weight: 700; margin: 4px 0 2px; }
+.target-box .t-value.green { color: var(--green); }
+.target-box .t-value.yellow { color: var(--yellow); }
+.target-box .t-value.red { color: var(--red); }
+.target-box .t-target { font-size: 12px; color: var(--dim); }
+.target-box .t-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 8px;
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+.target-box .t-badge.met { background: var(--green); color: #000; }
+.target-box .t-badge.near { background: var(--yellow); color: #000; }
+.target-box .t-badge.missed { background: var(--red); color: #000; }
+.target-box .t-delta { font-size: 11px; margin-top: 4px; }
+.target-box .t-delta.better { color: var(--green); }
+.target-box .t-delta.worse { color: var(--red); }
+.target-box .t-delta.neutral { color: var(--dim); }
+.chart-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 700px) { .chart-row { grid-template-columns: 1fr; } }
+.chart-box {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 16px;
+  position: relative;
+}
+.chart-box canvas { width: 100% !important; height: 220px !important; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--dim);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(42, 45, 58, 0.5);
+}
+tr:hover td { background: rgba(96, 165, 250, 0.03); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.highlight-row td { background: rgba(96, 165, 250, 0.06); }
+.spot-total {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.spot-total .label { color: var(--dim); }
+.spot-total .value { font-weight: 700; color: var(--accent); }
+.obs-list { list-style: none; }
+.obs-list li {
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.obs-list li strong { color: var(--accent); }
+.obs-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  margin-right: 6px;
+}
+.obs-tag.finding { background: var(--purple); color: #000; }
+.obs-tag.concern { background: var(--yellow); color: #000; }
+.obs-tag.positive { background: var(--green); color: #000; }
+.obs-tag.regression { background: var(--red); color: #000; }
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+.config-item {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.config-item .c-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.config-item .c-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
+.footer {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  color: var(--dim);
+  font-size: 12px;
+}
+.footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="breadcrumb"><a href="../">Reports</a> / v2</div>
+    <h1>v2 &mdash; &lambda;-Rebalanced Joint Training</h1>
+    <div class="subtitle">GPT-2 Small (124M) &middot; 50,000 steps &middot; March 4&ndash;7, 2026 &middot; $31.44 total</div>
+  </div>
+
+  <!-- Target Achievement -->
+  <div class="card">
+    <h2>Target Achievement &mdash; 3 of 5 Met</h2>
+    <div class="targets-grid">
+      <div class="target-box met">
+        <div class="t-label">AR Perplexity</div>
+        <div class="t-value green">29.65</div>
+        <div class="t-target">Target: &lt; 40</div>
+        <span class="t-badge met">Met</span>
+        <div class="t-delta worse">v1: 26.9 (+10%)</div>
+      </div>
+      <div class="target-box met">
+        <div class="t-label">AUROC</div>
+        <div class="t-value green">0.863</div>
+        <div class="t-target">Target: &gt; 0.75</div>
+        <span class="t-badge met">Met</span>
+        <div class="t-delta better">v1: 0.854 (+1%)</div>
+      </div>
+      <div class="target-box met">
+        <div class="t-label">ECE</div>
+        <div class="t-value green">0.009</div>
+        <div class="t-target">Target: &lt; 0.05</div>
+        <span class="t-badge met">Met</span>
+        <div class="t-delta better">v1: 0.010 (-10%)</div>
+      </div>
+      <div class="target-box missed">
+        <div class="t-label">Diffusion Loss</div>
+        <div class="t-value red">4.70</div>
+        <div class="t-target">Target: &lt; 4.0 (83%)</div>
+        <span class="t-badge missed">Missed</span>
+        <div class="t-delta worse">v1: 4.13 (+14%)</div>
+      </div>
+      <div class="target-box missed">
+        <div class="t-label">S1 Accuracy</div>
+        <div class="t-value red">22.0%</div>
+        <div class="t-target">Target: 40% (55%)</div>
+        <span class="t-badge missed">Missed</span>
+        <div class="t-delta worse">v1: 28.7% (-23%)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="card">
+    <h2>Training Trajectory (v2 vs v1)</h2>
+    <div class="chart-row">
+      <div class="chart-box">
+        <canvas id="chart-loss"></canvas>
+      </div>
+      <div class="chart-box">
+        <canvas id="chart-confidence"></canvas>
+      </div>
+    </div>
+    <div class="chart-row" style="margin-top:16px">
+      <div class="chart-box">
+        <canvas id="chart-ppl"></canvas>
+      </div>
+      <div class="chart-box">
+        <canvas id="chart-ece"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full Trajectory Table -->
+  <div class="card">
+    <h2>Evaluation Metrics by Step</h2>
+    <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Step</th>
+          <th class="num">AR PPL</th>
+          <th class="num">Diff Loss</th>
+          <th class="num">S1 Acc</th>
+          <th class="num">AUROC</th>
+          <th class="num">ECE</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1,000</td>
+          <td class="num">21.4</td>
+          <td class="num">6.74</td>
+          <td class="num">5.0%</td>
+          <td class="num">0.557</td>
+          <td class="num">0.002</td>
+        </tr>
+        <tr>
+          <td>5,000</td>
+          <td class="num">25.6</td>
+          <td class="num">4.97</td>
+          <td class="num">18.0%</td>
+          <td class="num">0.824</td>
+          <td class="num">0.003</td>
+        </tr>
+        <tr>
+          <td>10,000</td>
+          <td class="num">28.4</td>
+          <td class="num">4.37</td>
+          <td class="num">25.1%</td>
+          <td class="num">0.850</td>
+          <td class="num">0.004</td>
+        </tr>
+        <tr>
+          <td>20,000</td>
+          <td class="num">30.9</td>
+          <td class="num">4.75</td>
+          <td class="num">21.3%</td>
+          <td class="num">0.851</td>
+          <td class="num">0.007</td>
+        </tr>
+        <tr>
+          <td>30,000</td>
+          <td class="num">31.7</td>
+          <td class="num">4.08</td>
+          <td class="num">28.1%</td>
+          <td class="num">0.864</td>
+          <td class="num">0.023</td>
+        </tr>
+        <tr>
+          <td>40,000</td>
+          <td class="num">30.2</td>
+          <td class="num">4.56</td>
+          <td class="num">23.2%</td>
+          <td class="num">0.857</td>
+          <td class="num">0.007</td>
+        </tr>
+        <tr class="highlight-row">
+          <td><strong>50,000</strong></td>
+          <td class="num"><strong>29.65</strong></td>
+          <td class="num"><strong>4.70</strong></td>
+          <td class="num"><strong>22.0%</strong></td>
+          <td class="num"><strong>0.863</strong></td>
+          <td class="num"><strong>0.009</strong></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- Key Observations -->
+  <div class="card">
+    <h2>Key Observations</h2>
+    <ul class="obs-list">
+      <li>
+        <span class="obs-tag regression">Regression</span>
+        <strong>&lambda;_diff=2.0 Backfired on S1 Accuracy.</strong>
+        Doubling the diffusion loss weight was intended to improve S1 token accuracy beyond v1&rsquo;s 28.7%. Instead, S1 accuracy peaked at 28.1% (step 30k) then collapsed to 22.0% by step 50k. The higher &lambda; appears to have destabilized the diffusion objective rather than strengthening it, suggesting the problem is not gradient magnitude but objective interference at a deeper level.
+      </li>
+      <li>
+        <span class="obs-tag concern">Concern</span>
+        <strong>Diffusion Loss Volatility.</strong>
+        Diffusion loss showed non-monotonic behavior: 6.74 &rarr; 4.08 (step 30k, a new v2 best) &rarr; 4.70 (step 50k). The oscillation between 4.0&ndash;4.7 in the final 20k steps indicates training instability. v1&rsquo;s smoother 7.91 &rarr; 4.13 descent suggests &lambda;=1.0 provided a more stable gradient landscape.
+      </li>
+      <li>
+        <span class="obs-tag finding">Finding</span>
+        <strong>AR Perplexity Degraded but Recovered.</strong>
+        AR PPL peaked at 31.7 (step 30k) — worse than v1&rsquo;s 28.8 peak — then recovered to 29.65. The higher diffusion weight imposed a greater tax on the AR objective. Despite this, the final PPL remains well within the &lt;40 target and the recovery trend mirrors v1&rsquo;s behavior.
+      </li>
+      <li>
+        <span class="obs-tag positive">Positive</span>
+        <strong>Confidence Head Robust.</strong>
+        AUROC (0.863) and ECE (0.009) both slightly improved over v1 (0.854 / 0.010). The confidence head appears insensitive to the &lambda; rebalancing, maintaining strong calibration regardless of the objective weighting. This is encouraging for the escalation mechanism.
+      </li>
+      <li>
+        <span class="obs-tag finding">Finding</span>
+        <strong>Spot Resilience Validated at Scale.</strong>
+        v2 endured 31 spot reclamations across 15 instances and 3 availability zones — 10&times; more interruptions than v1 — without data loss. The bootstrap + S3 sync architecture handled all recoveries autonomously. Total cost stayed within budget at $31.44 (62% spot savings).
+      </li>
+    </ul>
+  </div>
+
+  <!-- Spot Instance Cost History -->
+  <div class="card">
+    <h2>Spot Instance Cost History</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Type</th>
+          <th>AZ</th>
+          <th>Steps</th>
+          <th class="num">Cost</th>
+          <th>Finalized</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>g5.2xlarge</td><td>us-east-1b</td><td>1 &ndash; 9,300</td><td class="num">$5.11</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>2</td><td>g5.2xlarge</td><td>us-east-1b</td><td>9,100 &ndash; 10,600</td><td class="num">$0.16</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>3</td><td>g5.2xlarge</td><td>us-east-1b</td><td>10,600 &ndash; 11,200</td><td class="num">$1.34</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>4</td><td>g5.xlarge</td><td>us-east-1b</td><td>11,300</td><td class="num">$0.00</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>5</td><td>g5.xlarge</td><td>us-east-1b</td><td>11,300</td><td class="num">$0.17</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>6</td><td>g5.2xlarge</td><td>us-east-1a</td><td>11,100 &ndash; 12,500</td><td class="num">$0.97</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>7</td><td>g5.2xlarge</td><td>us-east-1a</td><td>12,200 &ndash; 12,500</td><td class="num">$0.31</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>8</td><td>g5.2xlarge</td><td>us-east-1f</td><td>12,300 &ndash; 13,200</td><td class="num">$0.81</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>9</td><td>g5.xlarge</td><td>us-east-1f</td><td>13,200 &ndash; 14,500</td><td class="num">$1.11</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>10</td><td>g5.2xlarge</td><td>us-east-1f</td><td>14,100 &ndash; 21,900</td><td class="num">$4.39</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>11</td><td>g5.2xlarge</td><td>us-east-1b</td><td>21,000 &ndash; 24,100</td><td class="num">$2.12</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>12</td><td>g5.2xlarge</td><td>us-east-1a</td><td>24,000 &ndash; 28,500</td><td class="num">$2.54</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>13</td><td>g5.2xlarge</td><td>us-east-1b</td><td>28,600 &ndash; 41,000</td><td class="num">$7.23</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>14</td><td>g5.xlarge</td><td>us-east-1b</td><td>41,000</td><td class="num">$0.09</td><td style="color:var(--green)">Yes</td></tr>
+        <tr><td>15</td><td>g5.2xlarge</td><td>us-east-1b</td><td>41,000 &ndash; 50,000</td><td class="num">$5.10</td><td style="color:var(--green)">Yes</td></tr>
+      </tbody>
+    </table>
+    <div class="spot-total">
+      <span class="label">Total (15 sessions, 31 reclamations, 3 AZs)</span>
+      <span class="value">$31.44 (62% spot savings)</span>
+    </div>
+  </div>
+
+  <!-- Config -->
+  <div class="card">
+    <h2>Configuration</h2>
+    <div class="config-grid">
+      <div class="config-item">
+        <div class="c-label">Model</div>
+        <div class="c-value">GPT-2 Small (124M)</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">Config</div>
+        <div class="c-value">tiny.yaml</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">Total Steps</div>
+        <div class="c-value">50,000</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">Precision</div>
+        <div class="c-value">bfloat16</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">GPU</div>
+        <div class="c-value">NVIDIA A10G (24GB)</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">Instance</div>
+        <div class="c-value">g5.2xlarge / g5.xlarge (spot)</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">&lambda; AR / Diff</div>
+        <div class="c-value" style="color:var(--accent)">1.0 / 2.0</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">Checkpoints</div>
+        <div class="c-value">50 (every 1k steps)</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">Data</div>
+        <div class="c-value">OpenWebText</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">Tokenizer</div>
+        <div class="c-value">GPT-2 (50,257 vocab)</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">Duration</div>
+        <div class="c-value">~72 hours</div>
+      </div>
+      <div class="config-item">
+        <div class="c-label">Total Cost</div>
+        <div class="c-value" style="color:var(--green)">$31.44</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Dual-Process LM &middot; bitbanshee research &middot;
+    <a href="../">All Reports</a> &middot;
+    <a href="https://train.bitbanshee.com">Dashboard</a>
+  </div>
+
+</div>
+
+<script>
+// v2 data
+const labels = ['1k', '5k', '10k', '20k', '30k', '40k', '50k'];
+const v2_arPPL = [21.4, 25.6, 28.4, 30.9, 31.7, 30.2, 29.65];
+const v2_diffLoss = [6.74, 4.97, 4.37, 4.75, 4.08, 4.56, 4.70];
+const v2_s1Acc = [5.0, 18.0, 25.1, 21.3, 28.1, 23.2, 22.0];
+const v2_auroc = [0.557, 0.824, 0.850, 0.851, 0.864, 0.857, 0.863];
+const v2_ece = [0.002, 0.003, 0.004, 0.007, 0.023, 0.007, 0.009];
+
+// v1 data (for comparison)
+const v1_arPPL = [21.2, 24.3, 26.5, 28.8, 28.5, 27.4, 26.9];
+const v1_diffLoss = [6.86, 6.11, 5.41, 4.61, 4.33, 4.21, 4.13];
+const v1_s1Acc = [4.8, 9.3, 14.7, 22.3, 23.3, 27.0, 28.7];
+const v1_auroc = [0.559, 0.695, 0.791, 0.847, 0.860, 0.870, 0.854];
+
+const baseOpts = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: { labels: { color: '#888', font: { size: 11, family: 'monospace' } } },
+    tooltip: { titleFont: { family: 'monospace' }, bodyFont: { family: 'monospace' } }
+  },
+  scales: {
+    x: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1f2233' } },
+    y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1f2233' } }
+  }
+};
+
+function mkOpts(overrides) {
+  return JSON.parse(JSON.stringify({ ...baseOpts, ...overrides }));
+}
+
+function v1Style(label) {
+  return {
+    label: label,
+    borderColor: 'rgba(136,136,136,0.4)',
+    borderWidth: 1,
+    borderDash: [5, 5],
+    pointRadius: 2,
+    pointBackgroundColor: '#555',
+    tension: 0.3,
+    fill: false
+  };
+}
+
+// Chart 1: Diffusion Loss
+new Chart(document.getElementById('chart-loss'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      {
+        label: 'v2 Diff Loss',
+        data: v2_diffLoss,
+        borderColor: '#fb923c',
+        backgroundColor: 'rgba(251,146,60,0.1)',
+        fill: true,
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: '#fb923c',
+        tension: 0.3
+      },
+      { ...v1Style('v1 Diff Loss'), data: v1_diffLoss }
+    ]
+  },
+  options: (() => {
+    const o = mkOpts({});
+    o.plugins.title = { display: true, text: 'Diffusion Loss', color: '#888', font: { size: 13, family: 'monospace' } };
+    return o;
+  })()
+});
+
+// Chart 2: S1 Accuracy + AUROC
+new Chart(document.getElementById('chart-confidence'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      {
+        label: 'v2 S1 Acc (%)',
+        data: v2_s1Acc,
+        borderColor: '#34d399',
+        backgroundColor: 'rgba(52,211,153,0.1)',
+        fill: true,
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: '#34d399',
+        tension: 0.3,
+        yAxisID: 'y'
+      },
+      { ...v1Style('v1 S1 Acc (%)'), data: v1_s1Acc, yAxisID: 'y' },
+      {
+        label: 'v2 AUROC',
+        data: v2_auroc,
+        borderColor: '#a78bfa',
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: '#a78bfa',
+        tension: 0.3,
+        yAxisID: 'y1'
+      },
+      { ...v1Style('v1 AUROC'), data: v1_auroc, yAxisID: 'y1' }
+    ]
+  },
+  options: (() => {
+    const o = mkOpts({});
+    o.plugins.title = { display: true, text: 'Confidence Head', color: '#888', font: { size: 13, family: 'monospace' } };
+    o.scales.y = { ...o.scales.y, position: 'left', title: { display: true, text: 'S1 Acc %', color: '#555', font: { family: 'monospace' } } };
+    o.scales.y1 = { ...JSON.parse(JSON.stringify(o.scales.y)), position: 'right', title: { display: true, text: 'AUROC', color: '#555', font: { family: 'monospace' } }, grid: { drawOnChartArea: false } };
+    return o;
+  })()
+});
+
+// Chart 3: AR PPL
+new Chart(document.getElementById('chart-ppl'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      {
+        label: 'v2 AR PPL',
+        data: v2_arPPL,
+        borderColor: '#f87171',
+        backgroundColor: 'rgba(248,113,113,0.1)',
+        fill: true,
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: '#f87171',
+        tension: 0.3
+      },
+      { ...v1Style('v1 AR PPL'), data: v1_arPPL }
+    ]
+  },
+  options: (() => {
+    const o = mkOpts({});
+    o.plugins.title = { display: true, text: 'AR Perplexity', color: '#888', font: { size: 13, family: 'monospace' } };
+    return o;
+  })()
+});
+
+// Chart 4: ECE
+new Chart(document.getElementById('chart-ece'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'v2 ECE',
+      data: v2_ece,
+      borderColor: '#60a5fa',
+      backgroundColor: 'rgba(96,165,250,0.1)',
+      fill: true,
+      borderWidth: 2,
+      pointRadius: 4,
+      pointBackgroundColor: '#60a5fa',
+      tension: 0.3
+    }]
+  },
+  options: (() => {
+    const o = mkOpts({});
+    o.plugins.title = { display: true, text: 'Expected Calibration Error', color: '#888', font: { size: 13, family: 'monospace' } };
+    return o;
+  })()
+});
+</script>
+</body>
+</html>
