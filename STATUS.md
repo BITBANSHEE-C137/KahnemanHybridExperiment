@@ -1,6 +1,6 @@
 # Project Status — Dual-Process Language Model
 
-**Last updated:** 2026-03-05
+**Last updated:** 2026-03-07
 
 > See also: [README.md](README.md) for research narrative and results | [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for ops and deployment details
 
@@ -37,30 +37,35 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. Trained March 1–3,
 
 All 50 checkpoints saved to S3 (`step_1000.pt` through `step_50000.pt`, ~1.4 GiB each). Available on request.
 
-## v2 Training: IN PROGRESS
+## v2 Training: COMPLETE
 
-GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. λ_diff increased from 1.0 to 2.0 to rebalance gradient contribution toward diffusion. Training started March 4, 2026.
+GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. λ_diff increased from 1.0 to 2.0 to rebalance gradient contribution toward diffusion. Trained March 4–7, 2026 across 15 spot instances with 31 reclamation recoveries. Fleet capacity set to 0, all instances terminated.
 
-### Latest Metrics (Step 15,500)
+### Final Metrics (Step 50,000)
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| AR Perplexity | 31.05 | < 40 | **Met** |
-| Confidence AUROC | 0.852 | > 0.75 | **Met** |
-| Confidence ECE | 0.014 | < 0.05 | **Met** |
-| Diffusion Loss | 4.33 | < 4.0 | Improving |
-| S1 Token Accuracy | 26.1% | > 40% | Stalled at ~25-26% |
+| AR Perplexity | 29.65 | < 40 | **Met** — 32% improvement over v1 (43.86→29.65) |
+| Confidence AUROC | 0.863 | > 0.75 | **Met** |
+| Confidence ECE | 0.009 | < 0.05 | **Met** |
+| Diffusion Loss | 4.70 | < 4.0 | 83% — 17% over target |
+| S1 Token Accuracy | 22.0% | > 40% | 55% — regressed from v1 (28.7%) |
 
-**Trends:** AR perplexity degrading (+13% since 8k, still well within target). Diffusion loss improving. S1 accuracy plateaued. ECE regressing slightly but still well within target.
+**3 of 5 targets met.** AR perplexity improved significantly. Diffusion loss regressed vs v1 (4.13→4.70) despite λ_diff=2.0. S1 accuracy collapsed — the higher diffusion weight did not help and may have hurt.
 
-### Cost (v2 so far)
+### Cost Summary (v2)
 
 | Metric | Value |
 |--------|-------|
-| Total cost (v2) | $10.92 |
-| Spot instances used | 10 |
-| Reclamation recoveries | 6 |
+| Total cost (v2) | $31.44 |
+| Spot instances used | 15 |
+| Reclamation events | 31 |
+| Savings vs on-demand | 62% |
 | Budget cap | $50 |
+
+### Checkpoints
+
+All v2 checkpoints saved to S3 (`v2/step_48000.pt` through `v2/step_50000.pt`, ~1.4 GiB each). Full eval metrics for all 50 steps in `eval_metrics/v2/`.
 
 ## Infrastructure
 
@@ -69,8 +74,8 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. λ_diff increased fr
 | Component | Status | Details |
 |---|---|---|
 | S3 bucket | Active | `s3://ml-lab-004507070771/dual-system-research-data/` |
-| Instance | Spot fleet | g5.2xlarge / g6.xlarge, capacity=1 |
-| AMI | `ami-0f6e32b2ebf1c8a2d` | Clean (no secrets), launch template v19 |
+| Instance | Spot fleet | g5.2xlarge / g6.xlarge, capacity=0 (idle) |
+| AMI | `ami-0544093f9b5424470` | Post-v2 snapshot, launch template v20 |
 | EBS root volume | ~100GB | OS + Python 3.12 + ML stack |
 | Ephemeral NVMe | 419GB | `/opt/dlami/nvme` — runtime data |
 | EBS static data | Tagged `ml-lab-static-data` | Preprocessed data, one volume per AZ |
@@ -131,12 +136,13 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. λ_diff increased fr
 - [x] IAM role expanded — EBS attach/detach/describe permissions
 - [x] Cron env var propagation fixed — Telegram, Spot Token passed inline
 - [x] LAMBADA + WikiText-103 benchmarks complete (v1)
+- [x] Complete v2 training (50,000 steps) — v2 DONE
+- [x] Fleet shut down, AMI snapshotted (`ami-0544093f9b5424470`), launch template updated to v20
 
 ## Next Steps
 
 > See [README.md — Planned Work](README.md#planned-work) for the full research roadmap.
 
-- [ ] Complete v2 training (50,000 steps)
 - [ ] Run LAMBADA + WikiText-103 benchmarks on v2 final checkpoint
 - [ ] v1 vs v2 comparison — S1 accuracy, diffusion loss, AR PPL tradeoff
 - [ ] Confidence head analysis — escalation rates, S1 vs S2 quality per difficulty tier
