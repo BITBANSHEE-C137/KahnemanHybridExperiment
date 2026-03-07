@@ -268,7 +268,7 @@ def generate_sitrep(status, trajectory_rows, prev_metrics, prev_step, ledger=Non
 
     md = f"""# Sitrep — {now.strftime('%Y-%m-%d')} {header_time}
 
-## v2 Training — running, healthy, {pct:.0f}% complete
+## v3 Training — running, healthy, {pct:.0f}% complete
 
 - **Step {fmt_step(step)} / {max_steps:,}** ({pct:.1f}%)
 - GPU: {gpu['gpu_util']:.0f}% utilization, {gpu['vram_used_mb'] / 1024:.1f} / {gpu['vram_total_mb'] / 1024:.0f} GB VRAM, {gpu['temp_c']:.0f}°C
@@ -369,7 +369,7 @@ def generate_sitrep_via_claude(status, trajectory_rows, prev_metrics, prev_step,
 
 Write a concise markdown SITREP report (under 4000 chars). Structure:
 
-## v2 Training Status
+## v3 Training Status
 Progress, step count, GPU utilization, rate, ETA, spot cost.
 
 ## Eval Metrics & Trends

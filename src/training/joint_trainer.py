@@ -23,6 +23,8 @@ import numpy as np
 import torch
 import yaml
 
+import subprocess as _subprocess
+
 from src.model.dual_process_gpt2 import DualProcessGPT2
 from src.model.masking import create_mask
 from src.data.openwebtext import create_dataloader, create_eval_dataloader
@@ -56,6 +58,306 @@ def get_lr(step: int, warmup_steps: int, max_steps: int, max_lr: float, min_lr: 
         return min_lr
     progress = (step - warmup_steps) / (max_steps - warmup_steps)
     return min_lr + 0.5 * (max_lr - min_lr) * (1.0 + math.cos(math.pi * progress))
+
+
+def _log_gradient_norms(
+    model: DualProcessGPT2,
+    eval_dataloader,
+    config: dict,
+    scaler: torch.amp.GradScaler,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    dtype: torch.dtype,
+    step: int,
+    wandb_run,
+) -> None:
+    """Compute per-loss gradient norms at eval steps (separate forward/backward passes).
+
+    Args:
+        model: The dual-process model.
+        eval_dataloader: DataLoader for eval data.
+        config: Full config dict.
+        scaler: Gradient scaler for mixed precision.
+        optimizer: The optimizer (used for zero_grad).
+        device: Torch device.
+        dtype: Torch dtype for autocast.
+        step: Current training step.
+        wandb_run: W&B run object (or None).
+    """
+    train_cfg = config["training"]
+    mask_token_id = train_cfg["mask_token_id"]
+    min_mask_ratio = train_cfg["min_mask_ratio"]
+    max_mask_ratio = train_cfg["max_mask_ratio"]
+
+    # Get one batch from eval dataloader
+    try:
+        batch = next(iter(eval_dataloader)).to(device)
+    except StopIteration:
+        return
+
+    model.train()  # Need gradients
+
+    # AR gradient norm
+    optimizer.zero_grad()
+    with torch.autocast(device_type=device.type, dtype=dtype):
+        ar_loss_only = model.compute_ar_loss(batch, batch)
+    scaler.scale(ar_loss_only).backward()
+    scaler.unscale_(optimizer)
+    grad_norm_ar = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf')).item()
+
+    # Diffusion gradient norm
+    optimizer.zero_grad()
+    with torch.autocast(device_type=device.type, dtype=dtype):
+        masked_ids, mask_pos = create_mask(batch, mask_token_id, min_mask_ratio, max_mask_ratio)
+        diff_loss_only = model.compute_diffusion_loss(batch, masked_ids, mask_pos)
+    scaler.scale(diff_loss_only).backward()
+    scaler.unscale_(optimizer)
+    grad_norm_diff = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf')).item()
+
+    # Clean up
+    optimizer.zero_grad()
+
+    grad_ratio = grad_norm_diff / max(grad_norm_ar, 1e-8)
+    print(f"[grad] ar_norm: {grad_norm_ar:.2f} | diff_norm: {grad_norm_diff:.2f} | ratio: {grad_ratio:.2f}")
+    if wandb_run:
+        wandb_run.log({
+            "grad/grad_norm_ar": grad_norm_ar,
+            "grad/grad_norm_diff": grad_norm_diff,
+            "grad/grad_ratio": grad_ratio,
+        }, step=step)
+
+
+def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> None:
+    """Run 9-step post-training sequence: benchmarks, report, sync, shutdown.
+
+    Every step is wrapped in try/except so failures are non-fatal.
+    An explicit sub_env dict is passed to all subprocesses.
+
+    Args:
+        config: Full config dict.
+        checkpoint_dir: Path to checkpoint directory.
+        final_step: Final training step number.
+    """
+    project_dir = Path(os.environ.get("PROJECT_DIR", "/home/ubuntu/KahnemanHybridExperiment"))
+    data_dir = os.environ.get("DATA_DIR", "/opt/dlami/nvme/ml-lab")
+    s3_bucket = os.environ.get("S3_BUCKET", "ml-lab-004507070771/dual-system-research-data")
+    fleet_id = os.environ.get("FLEET_ID", "")
+    region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+    ckpt_dir_str = os.environ.get("CHECKPOINT_DIR", str(checkpoint_dir))
+
+    # Explicit env for all subprocesses — don't rely on inherited env
+    sub_env = {
+        **os.environ,
+        "PROJECT_DIR": str(project_dir),
+        "DATA_DIR": data_dir,
+        "S3_BUCKET": s3_bucket,
+        "AWS_DEFAULT_REGION": region,
+        "CHECKPOINT_DIR": ckpt_dir_str,
+    }
+
+    final_ckpt = checkpoint_dir / f"step_{final_step}.pt"
+
+    # Step 1/9: Benchmarks (LAMBADA + WikiText)
+    print(f"[post-training] 1/9 Running benchmarks on {final_ckpt}...")
+    try:
+        if final_ckpt.exists():
+            _subprocess.run(
+                ["python3", "-m", "scripts.benchmark",
+                 "--config", "configs/tiny.yaml",
+                 "--checkpoint", str(final_ckpt)],
+                cwd=str(project_dir), env=sub_env,
+                timeout=1800, check=True,
+            )
+            print("[post-training] 1/9 Benchmarks complete.")
+        else:
+            print(f"[post-training] 1/9 Checkpoint {final_ckpt} not found, skipping benchmarks.")
+    except Exception as e:
+        print(f"[post-training] 1/9 Benchmark failed (non-fatal): {e}")
+
+    # Step 2/9: Compare systems (escalation/speed/quality)
+    print("[post-training] 2/9 Running compare_systems analysis...")
+    try:
+        if final_ckpt.exists():
+            _subprocess.run(
+                ["python3", "-m", "scripts.compare_systems",
+                 "--config", "configs/tiny.yaml",
+                 "--checkpoint", str(final_ckpt)],
+                cwd=str(project_dir), env=sub_env,
+                timeout=1200, check=True,
+            )
+            print("[post-training] 2/9 Compare systems complete.")
+        else:
+            print("[post-training] 2/9 Skipped (no checkpoint).")
+    except Exception as e:
+        print(f"[post-training] 2/9 Compare systems failed (non-fatal): {e}")
+
+    # Step 3/9: Generate run report (HTML)
+    print("[post-training] 3/9 Generating run report...")
+    try:
+        _subprocess.run(
+            ["python3", "-m", "scripts.generate_run_report",
+             "--data-dir", data_dir,
+             "--config", "configs/tiny.yaml",
+             "--output-dir", str(project_dir / "infra" / "reports" / "v3"),
+             "--run-version", "v3"],
+            cwd=str(project_dir), env=sub_env,
+            timeout=120, check=True,
+        )
+        print("[post-training] 3/9 Report generated.")
+    except Exception as e:
+        print(f"[post-training] 3/9 Report generation failed (non-fatal): {e}")
+
+    # Step 4/9: Final auto-sitrep
+    print("[post-training] 4/9 Running final auto-sitrep...")
+    try:
+        _subprocess.run(
+            ["python3", "auto_sitrep.py"],
+            cwd=str(project_dir), env=sub_env,
+            timeout=120, check=True,
+        )
+        print("[post-training] 4/9 Auto-sitrep complete.")
+    except Exception as e:
+        print(f"[post-training] 4/9 Auto-sitrep failed (non-fatal): {e}")
+
+    # Step 5/9: Finalize cost ledger
+    print("[post-training] 5/9 Finalizing cost ledger...")
+    try:
+        _subprocess.run(
+            ["bash", str(project_dir / "cost-tracker.sh"), "finalize"],
+            cwd=str(project_dir), env=sub_env,
+            timeout=60,
+        )
+        print("[post-training] 5/9 Cost finalized.")
+    except Exception as e:
+        print(f"[post-training] 5/9 Cost finalize failed (non-fatal): {e}")
+
+    # Step 6/9: Explicit S3 sync (ALL artifacts)
+    print("[post-training] 6/9 Syncing all artifacts to S3...")
+    sync_pairs = [
+        (f"{data_dir}/checkpoints/v3/", f"s3://{s3_bucket}/checkpoints/v3/"),
+        (f"{data_dir}/eval_metrics/v3/", f"s3://{s3_bucket}/eval_metrics/v3/"),
+        (f"{data_dir}/benchmarks/", f"s3://{s3_bucket}/benchmarks/"),
+        (f"{data_dir}/logs/", f"s3://{s3_bucket}/logs/"),
+        (f"{data_dir}/cost/", f"s3://{s3_bucket}/cost/"),
+    ]
+    for local_path, s3_path in sync_pairs:
+        try:
+            if Path(local_path).exists():
+                _subprocess.run(
+                    ["aws", "s3", "sync", local_path, s3_path, "--region", region],
+                    env=sub_env, timeout=300, check=True, capture_output=True,
+                )
+                print(f"[post-training] 6/9 Synced {local_path}")
+            else:
+                print(f"[post-training] 6/9 Skipped {local_path} (not found)")
+        except Exception as e:
+            print(f"[post-training] 6/9 S3 sync failed for {local_path} (non-fatal): {e}")
+
+    # Step 7/9: Git commit + push (report + sitrep)
+    print("[post-training] 7/9 Git commit + push...")
+    try:
+        _subprocess.run(
+            ["git", "add", "infra/reports/v3/", "sitrep.md"],
+            cwd=str(project_dir), env=sub_env, timeout=30,
+        )
+        _subprocess.run(
+            ["git", "commit", "-m", f"v3 run report + sitrep (step {final_step})"],
+            cwd=str(project_dir), env=sub_env, timeout=30,
+        )
+        _subprocess.run(
+            ["git", "push"],
+            cwd=str(project_dir), env=sub_env, timeout=60,
+        )
+        print("[post-training] 7/9 Git push complete.")
+    except Exception as e:
+        print(f"[post-training] 7/9 Git commit/push failed (non-fatal): {e}")
+
+    # Step 8/9: Telegram notification (with benchmark summary)
+    print("[post-training] 8/9 Sending completion Telegram...")
+    _send_completion_telegram(final_step, data_dir)
+
+    # Step 9/9: Fleet zero
+    if fleet_id:
+        print(f"[post-training] 9/9 Zeroing fleet {fleet_id}...")
+        try:
+            _subprocess.run(
+                ["aws", "ec2", "modify-fleet",
+                 "--fleet-id", fleet_id,
+                 "--target-capacity-specification",
+                 "TotalTargetCapacity=0,SpotTargetCapacity=0",
+                 "--region", region],
+                env=sub_env, timeout=30,
+                check=True, capture_output=True,
+            )
+            print("[post-training] 9/9 Fleet zeroed. Instance will terminate.")
+        except Exception as e:
+            print(f"[post-training] 9/9 Fleet zero failed: {e}")
+    else:
+        print("[post-training] 9/9 No FLEET_ID set, skipping fleet shutdown.")
+
+
+def _send_completion_telegram(final_step: int, data_dir: str) -> None:
+    """Send training completion notification via Telegram with benchmark summary.
+
+    Args:
+        final_step: Final training step number.
+        data_dir: Path to data directory containing benchmarks/cost.
+    """
+    try:
+        import urllib.request
+        import urllib.parse
+        import glob as _glob
+        token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+        if not token or not chat_id:
+            return
+
+        # Load latest benchmark results
+        bench_summary = ""
+        bench_files = sorted(_glob.glob(f"{data_dir}/benchmarks/benchmark_step_*.json"))
+        if bench_files:
+            try:
+                with open(bench_files[-1]) as f:
+                    bench = json.load(f)
+                lambada_acc = bench.get("lambada", {}).get("accuracy", None)
+                wikitext_ppl = bench.get("wikitext", {}).get("perplexity", None)
+                if lambada_acc is not None:
+                    bench_summary += f"LAMBADA acc: {lambada_acc:.1%}\n"
+                if wikitext_ppl is not None:
+                    bench_summary += f"WikiText PPL: {wikitext_ppl:.2f}\n"
+            except Exception:
+                pass
+
+        # Load cost
+        cost_summary = ""
+        cost_file = f"{data_dir}/cost/cost_ledger.json"
+        try:
+            with open(cost_file) as f:
+                ledger = json.load(f)
+            total = sum(s.get("cost_usd", 0) for s in ledger.get("sessions", []))
+            cost_summary = f"Total cost: ${total:.2f}\n"
+        except Exception:
+            pass
+
+        report_url = "https://train.bitbanshee.com/reports/v3/"
+
+        msg = (
+            f"TRAINING COMPLETE\n"
+            f"Step {final_step:,} reached.\n"
+            f"{bench_summary}{cost_summary}"
+            f"Report: {report_url}\n"
+            f"Fleet shutdown initiated."
+        )
+        data = urllib.parse.urlencode({
+            "chat_id": chat_id, "text": msg, "parse_mode": "Markdown"
+        }).encode()
+        urllib.request.urlopen(
+            urllib.request.Request(
+                f"https://api.telegram.org/bot{token}/sendMessage", data=data
+            ), timeout=10
+        )
+    except Exception:
+        pass
 
 
 def find_latest_checkpoint(checkpoint_dir: Path) -> Path | None:
@@ -329,6 +631,13 @@ def train(
                 }, step=step)
             upload_metrics(eval_metrics, step)
 
+            # Gradient norm logging (separate forward/backward passes)
+            if config["training"].get("log_gradient_norms", False):
+                _log_gradient_norms(
+                    model, eval_dataloader, config, scaler, optimizer,
+                    device, dtype, step, wandb_run,
+                )
+
         # Checkpoint
         if step % checkpoint_every == 0:
             ckpt_path = checkpoint_dir / f"step_{step}.pt"
@@ -352,19 +661,6 @@ def train(
 
     print(f"Training complete. {step} steps in {time.time() - t0:.1f}s")
 
-    # Finalize cost tracking on normal completion
-    try:
-        import subprocess as _sub
-        project_dir = os.environ.get("PROJECT_DIR", "/home/ubuntu/KahnemanHybridExperiment")
-        _sub.run(
-            ["bash", os.path.join(project_dir, "cost-tracker.sh"), "finalize"],
-            timeout=30,
-            capture_output=True,
-        )
-        print("Cost tracker finalized")
-    except Exception as e:
-        print(f"Cost tracker finalize failed (non-fatal): {e}")
-
     # Save and upload training log
     try:
         log_path = log_dir / f"training_log_{int(time.time())}.json"
@@ -376,6 +672,9 @@ def train(
 
     if wandb_run:
         wandb_run.finish()
+
+    # Post-training: benchmarks, cost finalize, Telegram, fleet shutdown
+    _run_post_training(config, checkpoint_dir, step)
 
 
 def main() -> None:

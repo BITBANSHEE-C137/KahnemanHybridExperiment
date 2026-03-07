@@ -28,9 +28,10 @@ import threading
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 
 import yaml
-from flask import Flask, Response, jsonify, request, abort
+from flask import Flask, Response, jsonify, request, abort, send_from_directory
 
 # ── Configuration ────────────────────────────────────────────────────────────
 PROJECT_DIR = "/home/ubuntu/KahnemanHybridExperiment"
@@ -94,6 +95,7 @@ _monitor_state = {
     "last_stall_alert": 0,
     "last_auroc": None,
     "last_diff_loss": None,
+    "completion_alerted": False,
 }
 
 
@@ -107,6 +109,19 @@ def _monitor_training():
             status = build_status()
             now = _time.time()
             step = status.get("current_step", 0)
+
+            # --- Training completion detection ---
+            infra = status.get("infra", {})
+            if step > 0 and step >= status.get("max_steps", 50000):
+                if not _monitor_state["completion_alerted"]:
+                    _send_telegram_alert(
+                        f"TRAINING COMPLETE\n"
+                        f"Reached step {step:,} / {status.get('max_steps', 50000):,}\n"
+                        f"Trainer process {'running' if infra.get('trainer_running') else 'exited'}"
+                    )
+                    _monitor_state["completion_alerted"] = True
+                _time.sleep(60)
+                continue  # Skip stall detection when training is complete
 
             # --- Stall detection (no progress for 15 min) ---
             if step > 0:
@@ -163,7 +178,6 @@ def _monitor_training():
                 )
 
             # --- Crash detection: trainer PID gone ---
-            infra = status.get("infra", {})
             if not infra.get("trainer_running") and step > 0 and step < status.get("max_steps", 50000):
                 _send_telegram_alert(
                     f"TRAINING CRASH\n"
@@ -700,6 +714,11 @@ app = Flask(__name__)
 @app.route("/favicon.ico")
 def favicon():
     return app.send_static_file("favicon.ico")
+
+@app.route("/reports/<path:path>")
+def serve_report(path: str):
+    reports_dir = Path(__file__).parent / "infra" / "reports"
+    return send_from_directory(str(reports_dir), path)
 
 @app.route("/api/status")
 def api_status():
@@ -1548,14 +1567,14 @@ body::before {
       <div class="header-links">
         <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
-        <a href="/reports/v1/" target="_blank">Reports</a>
+        <a href="/reports/v3/" target="_blank">Reports</a>
         <a href="#" class="sitrep-badge" onclick="openSitrep();return false">SITREP</a>
       </div>
       <button class="header-hamburger" onclick="document.getElementById('header-menu').classList.toggle('open')">&#9776;</button>
       <div class="header-menu" id="header-menu">
         <a href="https://bitbanshee.com" target="_blank">Bitbanshee</a>
         <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank">GitHub</a>
-        <a href="/reports/v1/" target="_blank">Reports</a>
+        <a href="/reports/v3/" target="_blank">Reports</a>
         <a href="#" class="sitrep-badge" onclick="document.getElementById('header-menu').classList.remove('open');openSitrep();return false">SITREP</a>
       </div>
       <div class="meta">
@@ -1753,7 +1772,7 @@ body::before {
     <span>Dual-Process Language Model</span>
     <div class="footer-links">
       <a href="https://bitbanshee.com" target="_blank">bitbanshee.com</a>
-      <a href="/reports/v1/" target="_blank">Reports</a>
+      <a href="/reports/v3/" target="_blank">Reports</a>
     </div>
   </div>
 </div>

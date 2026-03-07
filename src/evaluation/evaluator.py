@@ -167,6 +167,18 @@ def evaluate(
         metrics["conf_ece"] = compute_calibration_error(all_conf, all_corr)
 
         metrics["conf_auroc"] = compute_auroc(all_conf, all_corr)
+
+        # Routing efficiency at confidence thresholds
+        if config["training"].get("log_routing_efficiency", False):
+            for tau in [0.5, 0.6, 0.7, 0.8, 0.9]:
+                accepted = all_conf >= tau
+                coverage = accepted.float().mean().item()
+                if accepted.sum() > 0:
+                    accuracy = all_corr[accepted].mean().item()
+                else:
+                    accuracy = 0.0
+                metrics[f"routing_tau_{tau:.1f}_coverage"] = coverage
+                metrics[f"routing_tau_{tau:.1f}_accuracy"] = accuracy
     else:
         metrics["conf_accuracy"] = 0.0
         metrics["conf_ece"] = 0.0

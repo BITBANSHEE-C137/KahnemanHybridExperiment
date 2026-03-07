@@ -8,7 +8,9 @@ Usage:
 """
 
 import argparse
+import json
 import math
+import os
 import time
 
 import torch
@@ -434,6 +436,34 @@ def main() -> None:
     print(f"  Done in {time.time() - t0:.1f}s")
 
     print_results(escalation, speed, quality, confidence, step)
+
+    # Save JSON output to $DATA_DIR/benchmarks/
+    try:
+        data_dir = os.environ.get("DATA_DIR", "/opt/dlami/nvme/ml-lab")
+        benchmarks_dir = os.path.join(data_dir, "benchmarks")
+        os.makedirs(benchmarks_dir, exist_ok=True)
+        timestamp = int(time.time())
+        out_path = os.path.join(benchmarks_dir, f"compare_step_{step}_{timestamp}.json")
+        result_dict = {
+            "step": step,
+            "timestamp": timestamp,
+            "escalation": {str(k): v for k, v in escalation.items()},
+            "speed": {
+                mode: {"mean": stats["mean"], "std": stats["std"]}
+                for mode, stats in speed.items()
+            },
+            "quality": {mode: ppl for mode, ppl in quality.items()},
+            "confidence": {
+                "ece": confidence["ece"],
+                "auroc": confidence["auroc"],
+                "mean_confidence": confidence["mean_confidence"],
+            },
+        }
+        with open(out_path, "w") as f:
+            json.dump(result_dict, f, indent=2, default=str)
+        print(f"Results saved to {out_path}")
+    except Exception as e:
+        print(f"Failed to save JSON results (non-fatal): {e}")
 
     if not args.no_wandb:
         log_to_wandb(escalation, speed, quality, confidence, step)
