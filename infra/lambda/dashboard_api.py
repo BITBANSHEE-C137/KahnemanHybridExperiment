@@ -47,12 +47,12 @@ FLEET_ID = os.environ.get("FLEET_ID", "fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9
 _CACHE_TTL_EVAL = 60   # eval metrics change rarely
 _CACHE_TTL_FAST = 30   # cost/sitrep may be updated more often
 
-# Static config summary (matches tiny.yaml used for v1 training)
+# Static config summary (matches tiny.yaml used for v3 training)
 CONFIG_SUMMARY = {
     "model": "gpt2",
-    "batch_size": 8,
-    "grad_accum": 4,
-    "lr": 3e-5,
+    "batch_size": 4,
+    "grad_accum": 8,
+    "lr": 3e-4,
     "warmup_steps": 2000,
     "max_steps": 50000,
     "checkpoint_every": 1000,

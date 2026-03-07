@@ -98,7 +98,7 @@ aws s3 cp /tmp/bootstrap_beacon.json "s3://$FALLBACK_BUCKET/bootstrap_beacon.jso
 # ── Step 0: Ephemeral NVMe setup ──
 step_start 0
 echo "Setting up ephemeral NVMe at $DATA_DIR..."
-sudo mkdir -p "$DATA_DIR"/{hf_cache,checkpoints,checkpoints/v2,logs,benchmarks,eval_metrics,preprocessed}
+sudo mkdir -p "$DATA_DIR"/{hf_cache,checkpoints,checkpoints/v2,checkpoints/v3,logs,benchmarks,eval_metrics,preprocessed}
 sudo chown -R ubuntu:ubuntu "$DATA_DIR"
 step_done 0
 
@@ -129,9 +129,9 @@ sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHE
 cat >> /home/ubuntu/.bashrc << BASHRC
 export GH_TOKEN="$GH_TOKEN"
 export HF_HOME=$DATA_DIR/hf_cache
-export CHECKPOINT_DIR=$DATA_DIR/checkpoints/v2
-export CHECKPOINT_S3_PREFIX=checkpoints/v2
-export EVAL_S3_PREFIX=eval_metrics/v2
+export CHECKPOINT_DIR=$DATA_DIR/checkpoints/v3
+export CHECKPOINT_S3_PREFIX=checkpoints/v3
+export EVAL_S3_PREFIX=eval_metrics/v3
 export WANDB_API_KEY="$WANDB_API_KEY"
 export HF_TOKEN="$HF_TOKEN"
 export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
@@ -162,13 +162,18 @@ step_done 3
 # ── Step 4: Restore prior artifacts from S3 ──
 step_start 4
 echo "Restoring prior artifacts from S3..."
-aws s3 sync "s3://$S3_BUCKET/checkpoints/v2/" "$DATA_DIR/checkpoints/v2/" --region "$REGION" --exclude "v2/*" || true
+# Restore v2 final checkpoint (needed for v2 benchmarks)
+aws s3 cp "s3://$S3_BUCKET/checkpoints/v2/step_50000.pt" "$DATA_DIR/checkpoints/v2/step_50000.pt" --region "$REGION" 2>/dev/null || true
+# Restore v3 checkpoints (for resume)
+aws s3 sync "s3://$S3_BUCKET/checkpoints/v3/" "$DATA_DIR/checkpoints/v3/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/logs/" "$DATA_DIR/logs/" --region "$REGION" || true
-aws s3 sync "s3://$S3_BUCKET/eval_metrics/v2/" "$DATA_DIR/eval_metrics/" --region "$REGION" || true
+aws s3 sync "s3://$S3_BUCKET/eval_metrics/v3/" "$DATA_DIR/eval_metrics/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/benchmarks/" "$DATA_DIR/benchmarks/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/wandb/" "$PROJECT/wandb/" --region "$REGION" || true
-echo "Restored checkpoints:"
-ls -lh "$DATA_DIR/checkpoints/v2/"*.pt 2>/dev/null || echo "  (none)"
+echo "Restored checkpoints (v3):"
+ls -lh "$DATA_DIR/checkpoints/v3/"*.pt 2>/dev/null || echo "  (none)"
+echo "v2 final checkpoint:"
+ls -lh "$DATA_DIR/checkpoints/v2/step_50000.pt" 2>/dev/null || echo "  (none)"
 step_done 4
 
 # ── Step 5: Sync pre-processed training data (prefer persistent EBS, fallback to S3) ──
@@ -275,7 +280,7 @@ step_start 8
 echo "Starting sync daemon..."
 sudo touch /var/log/artifact-sync.log
 sudo chown ubuntu:ubuntu /var/log/artifact-sync.log
-sudo -u ubuntu bash -c "cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' EVAL_S3_PREFIX='eval_metrics/v2' CHECKPOINT_S3_PREFIX='checkpoints/v2' nohup bash sync-checkpoints.sh >> /var/log/artifact-sync.log 2>&1 &"
+sudo -u ubuntu bash -c "cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' EVAL_S3_PREFIX='eval_metrics/v3' CHECKPOINT_S3_PREFIX='checkpoints/v3' nohup bash sync-checkpoints.sh >> /var/log/artifact-sync.log 2>&1 &"
 sleep 1
 pgrep -f sync-checkpoints.sh > /dev/null && echo "  sync daemon: RUNNING" || echo "  WARNING: sync daemon failed to start"
 step_done 8
@@ -321,6 +326,12 @@ server {
         proxy_set_header Connection "";
         proxy_http_version 1.1;
         proxy_read_timeout 86400s;
+    }
+
+    location /reports/ {
+        alias /home/ubuntu/KahnemanHybridExperiment/infra/reports/;
+        index index.html;
+        try_files $uri $uri/ =404;
     }
 }
 NGINX_CF
@@ -388,12 +399,29 @@ else
 fi
 step_done 16
 
-# ── Step 17: Launch training in tmux (fresh start for v2) ──
+# ── Run v2 benchmarks if v2 checkpoint exists and no v2 benchmark results yet ──
+V2_CKPT="$DATA_DIR/checkpoints/v2/step_50000.pt"
+if [ -f "$V2_CKPT" ]; then
+    V2_BENCH_EXISTS=$(ls "$DATA_DIR/benchmarks/"*step_50000* 2>/dev/null | head -1)
+    if [ -z "$V2_BENCH_EXISTS" ]; then
+        echo "Running v2 benchmarks on $V2_CKPT..."
+        sudo -u ubuntu bash -c "cd $PROJECT && \
+            CHECKPOINT_DIR='$DATA_DIR/checkpoints/v2' DATA_DIR='$DATA_DIR' \
+            WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' \
+            PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' \
+            python3 -m scripts.benchmark --config configs/tiny.yaml \
+            --checkpoint '$V2_CKPT'" || echo "WARNING: v2 benchmarks failed"
+    else
+        echo "v2 benchmark results already exist, skipping"
+    fi
+fi
+
+# ── Step 17: Launch training in tmux (v3) ──
 step_start 17
 echo "Launching training..."
 sudo -u ubuntu setsid tmux new-session -d -s training -c "$PROJECT"
-sudo -u ubuntu tmux send-keys -t training "export WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' CHECKPOINT_DIR='$DATA_DIR/checkpoints/v2' CHECKPOINT_S3_PREFIX='checkpoints/v2' EVAL_S3_PREFIX='eval_metrics/v2' DATA_DIR='$DATA_DIR' PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && python3 -m src.training.joint_trainer --config configs/tiny.yaml" Enter
-echo "  training: LAUNCHED in tmux (v2, resumes from latest checkpoint if available)"
+sudo -u ubuntu tmux send-keys -t training "export WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' CHECKPOINT_DIR='$DATA_DIR/checkpoints/v3' CHECKPOINT_S3_PREFIX='checkpoints/v3' EVAL_S3_PREFIX='eval_metrics/v3' DATA_DIR='$DATA_DIR' PROJECT_DIR='$PROJECT' S3_BUCKET='$S3_BUCKET' PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' && python3 -m src.training.joint_trainer --config configs/tiny.yaml" Enter
+echo "  training: LAUNCHED in tmux (v3, resumes from checkpoint if available)"
 step_done 17
 
 bootstrap_done
