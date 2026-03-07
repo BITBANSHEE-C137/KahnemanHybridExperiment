@@ -5,18 +5,29 @@ Serves dashboard data from S3 when the GPU EC2 instance is offline.
 Returns the same JSON shapes as the Flask dashboard (web_dashboard.py)
 so the frontend works identically against either backend.
 
+Also handles Telegram webhook for always-on bot commands (/status,
+/sitrep, /help, /start, /stop) even when the EC2 instance is down.
+
 Runtime: Python 3.12, 128MB, 10s timeout
 Trigger: API Gateway HTTP API
 """
 
+import base64
 import json
+import logging
+import os
 import time
 import re
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -26,16 +37,22 @@ BUCKET = "ml-lab-004507070771"
 PREFIX = "dual-system-research-data/"
 CORS_ORIGIN = "https://train.bitbanshee.com"
 
+# Telegram config (from Lambda environment variables)
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+FLEET_ID = os.environ.get("FLEET_ID", "fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a")
+
 # Cache TTLs (seconds) — Lambda containers are reused across invocations
 _CACHE_TTL_EVAL = 60   # eval metrics change rarely
 _CACHE_TTL_FAST = 30   # cost/sitrep may be updated more often
 
-# Static config summary (matches tiny.yaml)
+# Static config summary (matches tiny.yaml used for v1 training)
 CONFIG_SUMMARY = {
     "model": "gpt2",
-    "batch_size": 4,
-    "grad_accum": 8,
-    "lr": 3e-4,
+    "batch_size": 8,
+    "grad_accum": 4,
+    "lr": 3e-5,
     "warmup_steps": 2000,
     "max_steps": 50000,
     "checkpoint_every": 1000,
@@ -304,6 +321,187 @@ def _handle_spot_price() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Telegram helpers
+# ---------------------------------------------------------------------------
+
+def _send_telegram_reply(chat_id: str, text: str, parse_mode: str = "Markdown") -> None:
+    """Send a message via the Telegram Bot API using urllib (no requests dep)."""
+    if not TELEGRAM_BOT_TOKEN:
+        logger.warning("TELEGRAM_BOT_TOKEN not set, skipping reply")
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = json.dumps({
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=5)
+    except urllib.error.URLError as e:
+        logger.error("Telegram send failed: %s", e)
+
+
+def _telegram_status(chat_id: str) -> None:
+    """Handle /status — build a concise status message from S3 data."""
+    ledger = _read_s3_json(PREFIX + "cost/cost_ledger.json")
+    eval_keys = _list_eval_keys()
+
+    current_step = 0
+    latest_eval = None
+    if eval_keys:
+        best_key = max(eval_keys, key=_extract_step_number)
+        latest_eval = _read_s3_json(best_key, ttl=_CACHE_TTL_EVAL)
+        if latest_eval:
+            current_step = latest_eval.get("step", 0)
+
+    max_steps = CONFIG_SUMMARY["max_steps"]
+    progress_pct = round((current_step / max_steps) * 100, 1) if max_steps else 0.0
+
+    total_cost = ledger.get("total_cost", 0.0) if ledger else 0.0
+    total_sessions = len(ledger.get("sessions", [])) if ledger else 0
+
+    lines = [
+        "*ML Training Status* (Lambda)",
+        f"Step: `{current_step:,}` / `{max_steps:,}` ({progress_pct}%)",
+        f"Total cost: `${total_cost:.2f}` over {total_sessions} session(s)",
+    ]
+
+    if latest_eval:
+        ar = latest_eval.get("ar_loss")
+        diff = latest_eval.get("diff_loss")
+        ppl = latest_eval.get("perplexity")
+        if ar is not None:
+            lines.append(f"AR loss: `{ar:.3f}`")
+        if diff is not None:
+            lines.append(f"Diff loss: `{diff:.3f}`")
+        if ppl is not None:
+            lines.append(f"Perplexity: `{ppl:.1f}`")
+
+    lines.append(f"\n_Instance: offline (data from S3)_")
+    _send_telegram_reply(chat_id, "\n".join(lines))
+
+
+def _telegram_sitrep(chat_id: str) -> None:
+    """Handle /sitrep — send the situation report from S3."""
+    content, modified = _read_s3_text(PREFIX + "sitrep.md")
+    if not content:
+        _send_telegram_reply(chat_id, "_No sitrep available._")
+        return
+
+    # Telegram messages max 4096 chars — truncate if needed
+    if len(content) > 3800:
+        content = content[:3800] + "\n\n_(truncated)_"
+
+    header = f"*Sitrep* (updated {modified or 'unknown'})\n\n"
+    _send_telegram_reply(chat_id, header + content)
+
+
+def _telegram_help(chat_id: str) -> None:
+    """Handle /help — list available commands."""
+    text = (
+        "*Available commands:*\n"
+        "/status — Training progress, cost, latest eval\n"
+        "/sitrep — Situation report\n"
+        "/start — Launch training fleet (set capacity to 1)\n"
+        "/stop — Zero training fleet (terminate instance)\n"
+        "/help — This message"
+    )
+    _send_telegram_reply(chat_id, text)
+
+
+def _telegram_start(chat_id: str) -> None:
+    """Handle /start — set fleet target capacity to 1."""
+    try:
+        ec2 = boto3.client("ec2")
+        ec2.modify_fleet(
+            FleetId=FLEET_ID,
+            TargetCapacitySpecification={
+                "TotalTargetCapacity": 1,
+                "SpotTargetCapacity": 1,
+                "DefaultTargetCapacityType": "spot",
+            },
+        )
+        _send_telegram_reply(chat_id, "Fleet capacity set to 1. Instance launching...")
+    except Exception as e:
+        logger.error("Fleet start failed: %s", e)
+        _send_telegram_reply(chat_id, f"Failed to start fleet: `{e}`")
+
+
+def _telegram_stop(chat_id: str) -> None:
+    """Handle /stop — zero fleet capacity."""
+    try:
+        ec2 = boto3.client("ec2")
+        ec2.modify_fleet(
+            FleetId=FLEET_ID,
+            TargetCapacitySpecification={
+                "TotalTargetCapacity": 0,
+                "SpotTargetCapacity": 0,
+                "DefaultTargetCapacityType": "spot",
+            },
+        )
+        _send_telegram_reply(chat_id, "Fleet capacity set to 0.")
+    except Exception as e:
+        logger.error("Fleet stop failed: %s", e)
+        _send_telegram_reply(chat_id, f"Failed to stop fleet: `{e}`")
+
+
+_TELEGRAM_COMMANDS: dict[str, callable] = {
+    "/status": _telegram_status,
+    "/sitrep": _telegram_sitrep,
+    "/help": _telegram_help,
+    "/start": _telegram_start,
+    "/stop": _telegram_stop,
+}
+
+
+def _handle_telegram_webhook(event: dict) -> dict:
+    """POST /api/telegram/webhook — handle incoming Telegram updates."""
+    # Validate webhook secret via X-Telegram-Bot-Api-Secret-Token header
+    headers = event.get("headers", {})
+    secret_token = headers.get("x-telegram-bot-api-secret-token", "")
+    if TELEGRAM_WEBHOOK_SECRET and secret_token != TELEGRAM_WEBHOOK_SECRET:
+        logger.warning("Telegram webhook secret mismatch")
+        return _response(403, {"error": "forbidden"})
+
+    # Parse body (API Gateway may base64-encode it)
+    body_raw = event.get("body", "")
+    if event.get("isBase64Encoded"):
+        body_raw = base64.b64decode(body_raw).decode("utf-8")
+
+    try:
+        update = json.loads(body_raw)
+    except (json.JSONDecodeError, TypeError):
+        return _response(400, {"error": "invalid JSON"})
+
+    # Extract message text and chat_id
+    message = update.get("message", {})
+    text = (message.get("text") or "").strip()
+    chat_id = str(message.get("chat", {}).get("id", ""))
+
+    if not chat_id or not text:
+        return _response(200, {"ok": True})
+
+    # Authorize: only respond to our configured chat
+    if TELEGRAM_CHAT_ID and chat_id != TELEGRAM_CHAT_ID:
+        logger.warning("Telegram message from unauthorized chat: %s", chat_id)
+        return _response(200, {"ok": True})
+
+    # Extract command (strip @botname suffix if present)
+    command = text.split()[0].split("@")[0].lower()
+
+    handler_fn = _TELEGRAM_COMMANDS.get(command)
+    if handler_fn:
+        handler_fn(chat_id)
+    else:
+        _send_telegram_reply(chat_id, f"Unknown command: `{command}`\nTry /help")
+
+    return _response(200, {"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # Route table
 # ---------------------------------------------------------------------------
 
@@ -316,6 +514,7 @@ _ROUTES: dict[tuple[str, str], callable] = {
     ("GET", "/api/cost/total"):   _handle_cost_total,
     ("GET", "/stream"):           _handle_stream,
     ("POST", "/api/spot-price"):  _handle_spot_price,
+    # Telegram webhook needs the event for body/headers, handled specially below
 }
 
 
@@ -341,20 +540,20 @@ def handler(event: dict, context: Any) -> dict:
             "headers": {
                 "Access-Control-Allow-Origin": CORS_ORIGIN,
                 "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Headers": "Content-Type, X-Telegram-Bot-Api-Secret-Token",
                 "Access-Control-Max-Age": "86400",
             },
             "body": "",
         }
+
+    # Telegram webhook — needs full event for body/headers
+    if method == "POST" and path == "/api/telegram/webhook":
+        return _handle_telegram_webhook(event)
 
     # Match exact route
     route_handler = _ROUTES.get((method, path))
     if route_handler:
         return route_handler()
 
-    # Fallback: any unmatched GET /api/* returns 404
-    if method == "GET" and path.startswith("/api/"):
-        return _response(404, {"error": "not found"})
-
-    # Anything else
+    # Fallback: any unmatched /api/* returns 404
     return _response(404, {"error": "not found"})
