@@ -273,19 +273,16 @@ body::before {
       <div class="run-metric"><span>Recoveries</span><span>3 spot reclamations</span></div>
     </div>
     <div class="run-card" id="v2-card">
-      <h3>v2 Training <span class="run-tag in-progress" id="v2-tag">IN PROGRESS</span></h3>
-      <div class="progress-wrap">
-        <div class="progress-label">
-          <span class="step" id="v2-steps">-- / --</span>
-          <span class="pct" id="v2-pct">--%</span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill blue" id="v2-progress-fill" style="width:0%"></div></div>
-      </div>
-      <div class="run-metric"><span>Elapsed</span><span id="v2-elapsed">&mdash;</span></div>
-      <div class="run-metric"><span>ETA Remaining</span><span id="v2-eta">&mdash;</span></div>
-      <div class="run-metric"><span>Cost So Far</span><span id="v2-cost">&mdash;</span></div>
-      <div class="run-metric"><span>Instances</span><span id="v2-instances">&mdash;</span></div>
-      <div class="run-metric"><span>Recoveries</span><span id="v2-recoveries">&mdash;</span></div>
+      <h3>v2 &lambda;-Rebalanced <span class="run-tag complete" id="v2-tag">COMPLETE</span></h3>
+      <div class="run-metric"><span>Steps</span><span>50,000 / 50,000</span></div>
+      <div class="run-metric"><span>Duration</span><span>~72 hours (15 instances)</span></div>
+      <div class="run-metric"><span>Total Cost</span><span>$31.44</span></div>
+      <div class="run-metric"><span>Final AR PPL</span><span>29.65</span></div>
+      <div class="run-metric"><span>Final Diff Loss</span><span>4.70</span></div>
+      <div class="run-metric"><span>Conf AUROC</span><span>0.863</span></div>
+      <div class="run-metric"><span>S1 Accuracy</span><span>22.0%</span></div>
+      <div class="run-metric"><span>Dates</span><span>Mar 4&ndash;7, 2026</span></div>
+      <div class="run-metric"><span>Recoveries</span><span>31 spot reclamations</span></div>
       <div class="run-metric"><span>Config</span><span>&lambda;_diff 2.0, GPT-2 Small</span></div>
     </div>
   </div>
@@ -393,8 +390,8 @@ function renderNotice(state, beaconData) {
   if (state === 'idle') {
     area.innerHTML =
       '<div class="notice">' +
-        '<div class="notice-title">No training jobs are currently scheduled</div>' +
-        '<div class="notice-sub">Fleet capacity is at zero &mdash; start an instance to resume training</div>' +
+        '<div class="notice-title">All training runs complete</div>' +
+        '<div class="notice-sub">Fleet capacity is at zero &mdash; v1 and v2 finished. Set fleet capacity to 1 to start a new run.</div>' +
       '</div>';
   } else if (state === 'recovering') {
     area.innerHTML =
@@ -527,70 +524,6 @@ function updateBootstrapSteps(elapsed) {
   $('bs-progress-fill').style.width = pct + '%';
 }
 
-// --- v2 card ---
-
-function updateV2Card(apiData) {
-  if (!apiData) return;
-  var step = apiData.current_step || 0;
-  var max = apiData.max_steps || 50000;
-  var pct = apiData.progress_pct || (max > 0 ? (step / max * 100) : 0);
-
-  $('v2-steps').textContent = step.toLocaleString() + ' / ' + max.toLocaleString();
-  $('v2-pct').textContent = pct.toFixed(1) + '%';
-  $('v2-progress-fill').style.width = pct + '%';
-
-  var sessions = apiData.sessions_breakdown || [];
-  var totalHours = 0;
-  var totalSteps = 0;
-  var totalCost = 0;
-
-  for (var i = 0; i < sessions.length; i++) {
-    var s = sessions[i];
-    if (s.duration_hours != null) totalHours += s.duration_hours;
-    else if (s.duration_s != null) totalHours += s.duration_s / 3600;
-
-    if (s.steps != null) totalSteps += s.steps;
-    else if (s.steps_start != null && s.steps_end != null) totalSteps += (s.steps_end - s.steps_start);
-
-    if (s.cost != null) totalCost += s.cost;
-    else if (s.spot_cost != null) totalCost += s.spot_cost;
-  }
-
-  $('v2-elapsed').textContent = totalHours > 0 ? fmtDuration(totalHours) : '--';
-
-  var rate = totalHours > 0 && totalSteps > 0 ? totalSteps / totalHours : 0;
-  var remaining = max - step;
-  $('v2-eta').textContent = rate > 0 && remaining > 0 ? fmtDuration(remaining / rate) : '--';
-
-  $('v2-cost').textContent = totalCost > 0 ? '$' + totalCost.toFixed(2) : '--';
-  $('v2-instances').textContent = sessions.length > 0 ? sessions.length : '--';
-  $('v2-recoveries').textContent = sessions.length > 1
-    ? (sessions.length - 1) + ' spot reclamation' + (sessions.length - 1 > 1 ? 's' : '')
-    : sessions.length === 1 ? '0' : '--';
-
-  updateV2StatusTag(apiData);
-}
-
-function updateV2StatusTag(apiData) {
-  var tag = $('v2-tag');
-  if (!tag) return;
-  if (!apiData || !apiData.phase) {
-    tag.textContent = 'IN PROGRESS';
-    tag.className = 'run-tag in-progress';
-    return;
-  }
-  if (apiData.phase === 'complete') {
-    tag.textContent = 'COMPLETE';
-    tag.className = 'run-tag complete';
-  } else if (apiData.phase === 'offline' || apiData.phase === 'paused') {
-    tag.textContent = 'PAUSED';
-    tag.className = 'run-tag paused';
-  } else {
-    tag.textContent = 'IN PROGRESS';
-    tag.className = 'run-tag in-progress';
-  }
-}
-
 // --- Sessions table ---
 
 function updateSessions(data) {
@@ -692,7 +625,6 @@ async function poll() {
   }
 
   if (cachedApi) {
-    updateV2Card(cachedApi);
     updateSessions(cachedApi);
     if (cachedApi.timestamp) {
       $('last-updated').textContent = 'Last updated: ' + new Date(cachedApi.timestamp).toLocaleString();
