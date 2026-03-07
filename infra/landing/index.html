@@ -399,7 +399,7 @@ body::before {
       <div class="experiment-title">
         Dual-Process Language Model
         <span class="status-badge complete"><span class="status-dot"></span>v1 Complete</span>
-        <span class="status-badge"><span class="status-dot"></span>v2 Training</span>
+        <span class="status-badge complete"><span class="status-dot"></span>v2 Complete</span>
       </div>
       <div class="experiment-desc">
         Single Transformer operating in two cognitive modes &mdash; fast parallel generation via masked diffusion (System 1) and slow sequential reasoning via autoregressive decoding (System 2). A trained confidence head decides when to escalate.
@@ -414,36 +414,36 @@ body::before {
         <a class="arxiv-pill" href="https://arxiv.org/abs/2502.09992" target="_blank" rel="noopener">arXiv:2502.09992</a>
       </div>
       <div class="stats-row">
-        <span>50,000</span> steps &middot;
-        <span>$27.62</span> total cost &middot;
-        <span>4</span> spot instances &middot;
-        <span>63%</span> savings
+        <span>100,000</span> total steps (2 runs) &middot;
+        <span>$59.06</span> total cost &middot;
+        <span>19</span> spot instances &middot;
+        <span>62%</span> savings
       </div>
       <div class="metrics-row">
         <div class="metric-box rag-green">
           <div class="label">AR PPL</div>
-          <div class="value">26.9</div>
-          <div class="sub">target &lt;40</div>
+          <div class="value">29.65</div>
+          <div class="sub">v1: 26.9 &middot; &lt;40</div>
         </div>
         <div class="metric-box rag-green">
           <div class="label">AUROC</div>
-          <div class="value">0.854</div>
-          <div class="sub">target &gt;0.75</div>
+          <div class="value">0.863</div>
+          <div class="sub">v1: 0.854 &middot; &gt;0.75</div>
         </div>
         <div class="metric-box rag-green">
           <div class="label">ECE</div>
-          <div class="value">0.010</div>
-          <div class="sub">target &lt;0.05</div>
+          <div class="value">0.009</div>
+          <div class="sub">v1: 0.010 &middot; &lt;0.05</div>
         </div>
         <div class="metric-box rag-amber">
           <div class="label">Diff Loss</div>
-          <div class="value">4.13</div>
-          <div class="sub">target 4.0</div>
+          <div class="value">4.70</div>
+          <div class="sub">v1: 4.13 &middot; &lt;4.0</div>
         </div>
         <div class="metric-box rag-amber">
           <div class="label">S1 Accuracy</div>
-          <div class="value">28.7%</div>
-          <div class="sub">target 40%</div>
+          <div class="value">22.0%</div>
+          <div class="sub">v1: 28.7% &middot; &gt;40%</div>
         </div>
       </div>
       </div>
