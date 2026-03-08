@@ -1,4 +1,4 @@
-# CLAUDE.md — KahnemanHybridExperiment
+# CLAUDE.md  -  KahnemanHybridExperiment
 
 This file is the operational prompt for Claude Code sessions on this repo.
 Glenn is the architect and decision-maker. Claude Code is the implementer.
@@ -15,7 +15,7 @@ Same weights, different attention masks. A trained confidence head decides when 
 
 **Joint training objective:** `L = λ_ar · L_ar + λ_diff · L_diff + λ_conf · L_conf`
 
-**Inspired by:** Kahneman's *Thinking, Fast and Slow*. **Related work:** LLaDA (masked diffusion), Dual Language Models (Samuel & Charpentier 2025), speculative decoding (inverted — same model, two modes, learned gate).
+**Inspired by:** Kahneman's *Thinking, Fast and Slow*. **Related work:** LLaDA (masked diffusion), Dual Language Models (Samuel & Charpentier 2025), speculative decoding (inverted  -  same model, two modes, learned gate).
 
 ## Project State
 
@@ -41,7 +41,7 @@ Same weights, different attention masks. A trained confidence head decides when 
 |--------|-------|--------|--------|
 | AR Perplexity | 29.65 | < 40 | Met |
 | S1 Token Accuracy | 22.0% | > 40% | Regressed from v1 (28.7%) |
-| Diffusion Loss | 4.70 | < 4.0 | 83% — worse than v1 (4.13) |
+| Diffusion Loss | 4.70 | < 4.0 | 83%  -  worse than v1 (4.13) |
 | Confidence AUROC | 0.863 | > 0.75 | Met |
 | Confidence ECE | 0.009 | < 0.05 | Met |
 
@@ -80,7 +80,7 @@ KahnemanHybridExperiment/
 ├── update-dns.sh                     # Route53 DNS auto-update
 ├── update-spot-price.sh              # Spot price cron job
 ├── cost-tracker.sh                   # Session cost ledger
-├── CLAUDE.md                         # THIS FILE — Claude Code prompt
+├── CLAUDE.md                         # THIS FILE  -  Claude Code prompt
 ├── STATUS.md                         # Training progress + metrics history
 ├── INFRASTRUCTURE.md                 # AWS setup, bootstrap, networking
 └── README.md                         # Full research narrative + results
@@ -91,7 +91,7 @@ KahnemanHybridExperiment/
 ### Model (`src/model/dual_process_gpt2.py`)
 
 - `DualProcessGPT2` wraps `GPT2LMHeadModel` from HuggingFace
-- `_forward_transformer()` manually iterates over transformer blocks with a custom 4D attention mask. This is how System 1 gets bidirectional attention. **This is fragile across transformers versions — pinned to 5.2.0.**
+- `_forward_transformer()` manually iterates over transformer blocks with a custom 4D attention mask. This is how System 1 gets bidirectional attention. **This is fragile across transformers versions  -  pinned to 5.2.0.**
 - `forward_system1()` → bidirectional mask → logits + confidence + hidden
 - `forward_system2()` → HF built-in causal mask → logits only
 - `ConfidenceHead` is a 2-layer MLP (`Linear → GELU → Linear`) producing per-token logits
@@ -132,7 +132,7 @@ KahnemanHybridExperiment/
 - **Checkpoints:** `/opt/dlami/nvme/ml-lab/checkpoints/v3/` + S3
 - **Dashboard:** CloudFront → nginx → Flask :5000 at https://train.bitbanshee.com
 - **DNS:** `train.bitbanshee.com` (CloudFront ALIAS), `origin.train.bitbanshee.com` (EC2 A record)
-- **Secrets:** AWS Secrets Manager (7 secrets in `ml-lab/*` prefix — all fetched at boot, nothing baked)
+- **Secrets:** AWS Secrets Manager (7 secrets in `ml-lab/*` prefix  -  all fetched at boot, nothing baked)
 - **Notifications:** Telegram bot for spot reclaims, budget alerts, price ceiling, sitreps
 - **IAM:** `ml-lab-ec2-bootstrap` role (S3, Secrets Manager, EC2, Route53, EBS)
 - **Bootstrap:** `s3://.../deploy/bootstrap.sh` → pulled on every boot (18 autonomous steps)
@@ -141,13 +141,13 @@ KahnemanHybridExperiment/
 ### Secrets & Credentials
 
 The AMI contains no secrets. All credentials are fetched from AWS Secrets Manager at bootstrap Step 1:
-- `ml-lab/wandb-api-key` — W&B experiment tracking
-- `ml-lab/hf-token` — HuggingFace model downloads
-- `ml-lab/dashboard-spot-token` — Dashboard write API auth
-- `ml-lab/claude-api-key` — Claude API for sitrep generation
-- `ml-lab/telegram-bot-token` — Telegram notifications
-- `ml-lab/telegram-chat-id` — Telegram chat destination
-- `ml-lab/gh-token` — GitHub push access
+- `ml-lab/wandb-api-key`  -  W&B experiment tracking
+- `ml-lab/hf-token`  -  HuggingFace model downloads
+- `ml-lab/dashboard-spot-token`  -  Dashboard write API auth
+- `ml-lab/claude-api-key`  -  Claude API for sitrep generation
+- `ml-lab/telegram-bot-token`  -  Telegram notifications
+- `ml-lab/telegram-chat-id`  -  Telegram chat destination
+- `ml-lab/gh-token`  -  GitHub push access
 
 Secrets are written to `~/.bashrc` as exports. Cron jobs receive them inline (cron doesn't source `.bashrc`).
 
@@ -167,7 +167,7 @@ Both thresholds configurable via env vars (`MAX_BUDGET`, `MAX_SPOT_PRICE`).
 
 These are ordered by priority. Implement in this order.
 
-### 1. CRITICAL — Confidence Scoring Distribution Mismatch
+### 1. CRITICAL  -  Confidence Scoring Distribution Mismatch
 
 **File:** `src/inference/generator.py`, `generate_hybrid()`
 
@@ -191,7 +191,7 @@ In `generate_hybrid()`:
 - Log escalation rate at various thresholds [0.5, 0.6, 0.7, 0.8, 0.9] during eval
 - Compare escalation rates between v1 (broken signal) and v2 (correct signal)
 
-### 2. LOW — Dead Code in `forward_system2`
+### 2. LOW  -  Dead Code in `forward_system2`
 
 **File:** `src/model/dual_process_gpt2.py`, `forward_system2()`
 
@@ -205,7 +205,7 @@ def forward_system2(self, input_ids):
     return outputs.logits, None
 ```
 
-### 3. MEDIUM — Prompt-Conditioned System 1 Generation
+### 3. MEDIUM  -  Prompt-Conditioned System 1 Generation
 
 **File:** `src/inference/generator.py`, `generate_system1()`
 
@@ -217,7 +217,7 @@ def forward_system2(self, input_ids):
 - Rest of unmasking loop unchanged (only operates on `mask=True` positions)
 - Update `generate_hybrid()` to pass prompt if available
 
-### 4. MEDIUM — System 2 / Manual Loop Parity Test
+### 4. MEDIUM  -  System 2 / Manual Loop Parity Test
 
 **File:** `tests/test_model.py` (new test)
 
@@ -242,23 +242,23 @@ def test_system2_matches_manual_causal():
         f"Max diff: {(logits_hf - logits_manual).abs().max().item()}"
 ```
 
-### 5. LOW — Document Eval Split Provenance
+### 5. LOW  -  Document Eval Split Provenance
 
 **Files:** `src/data/openwebtext.py`, `scripts/lean_preprocess.py`
 
 **Task:** Add comments documenting how `openwebtext_eval.bin` was created and confirming non-overlap with `openwebtext_train.bin`. If overlap exists at chunk boundaries, document it.
 
-### 6. LOW — Terminology Cleanup
+### 6. LOW  -  Terminology Cleanup
 
 **Files:** `README.md`, `STATUS.md`, docstrings
 
-**Task:** Where "diffusion" appears without LLaDA framing, clarify as "iterative masked denoising/unmasking." The generation process is not a continuous diffusion process — it's discrete iterative unmasking with confidence-ordered revealing. The term "diffusion" is acceptable when referencing the loss/objective (following LLaDA convention) but the generation procedure should be described precisely.
+**Task:** Where "diffusion" appears without LLaDA framing, clarify as "iterative masked denoising/unmasking." The generation process is not a continuous diffusion process  -  it's discrete iterative unmasking with confidence-ordered revealing. The term "diffusion" is acceptable when referencing the loss/objective (following LLaDA convention) but the generation procedure should be described precisely.
 
 ## New Metrics (v3)
 
 Added to the eval loop for v3:
 
-- **Gradient norms**: Per-loss gradient norms (AR vs diffusion) logged at eval steps — reveals objective interference
+- **Gradient norms**: Per-loss gradient norms (AR vs diffusion) logged at eval steps  -  reveals objective interference
 - **Routing efficiency**: Coverage/accuracy curves at confidence thresholds [0.5, 0.6, 0.7, 0.8, 0.9]
 
 Still planned (post-v3):
@@ -271,9 +271,9 @@ Still planned (post-v3):
 
 v3 runs `configs/tiny.yaml` with `diff_loss_weight=1.3` (v1: 1.0, v2: 2.0). Same data, same 50k steps. Compare:
 
-- S1 token accuracy trajectory (v1: 28.7%, v2: 22.0% — can 1.3 recover?)
-- Diffusion loss trajectory (v1: 4.13, v2: 4.70 — can 1.3 reach <4.0?)
-- AR PPL trajectory (v1: 26.93, v2: 29.65 — less interference expected)
+- S1 token accuracy trajectory (v1: 28.7%, v2: 22.0%  -  can 1.3 recover?)
+- Diffusion loss trajectory (v1: 4.13, v2: 4.70  -  can 1.3 reach <4.0?)
+- AR PPL trajectory (v1: 26.93, v2: 29.65  -  less interference expected)
 - Gradient norm ratio over training (new diagnostic)
 - AUROC trajectory (should be similar across all runs)
 
@@ -286,7 +286,7 @@ Key question: is there a sweet spot for `diff_loss_weight` between 1.0 and 2.0?
 | Python | 3.12.10 | |
 | PyTorch | 2.6.0+cu124 | |
 | CUDA | 12.4 | driver 580.126.09 |
-| transformers | 5.2.0 | Pinned — manual block loop depends on internal API |
+| transformers | 5.2.0 | Pinned  -  manual block loop depends on internal API |
 | datasets | 4.6.0 | |
 | accelerate | 1.12.0 | |
 | wandb | 0.25.0 | |

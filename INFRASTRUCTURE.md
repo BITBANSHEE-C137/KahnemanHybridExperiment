@@ -19,17 +19,17 @@
 
 | Component | Details |
 |-----------|---------|
-| **Compute** | EC2 Fleet (g5.2xlarge / g6.xlarge) — NVIDIA A10G or L4 GPUs, `maintain` type |
+| **Compute** | EC2 Fleet (g5.2xlarge / g6.xlarge)  -  NVIDIA A10G or L4 GPUs, `maintain` type |
 | **Storage** | Instance NVMe for fast I/O, S3 for persistence (`s3://ml-lab-004507070771/dual-system-research-data/`) |
-| **Secrets** | AWS Secrets Manager — 7 secrets in `ml-lab/*` prefix (WANDB, HF, Telegram, Claude API, GitHub, dashboard spot token) |
+| **Secrets** | AWS Secrets Manager  -  7 secrets in `ml-lab/*` prefix (WANDB, HF, Telegram, Claude API, GitHub, dashboard spot token) |
 | **Tracking** | [Weights & Biases](https://wandb.ai) for real-time experiment logging |
 | **CDN/TLS** | CloudFront (`EGWW28IMM7U2T`) → ACM certificate → `train.bitbanshee.com` |
 | **DNS** | `train.bitbanshee.com` → CloudFront ALIAS; `origin.train.bitbanshee.com` → EC2 A record (bootstrap-managed) |
 | **Origin Policy** | `/api/*` and `/stream` behaviors use `AllViewerExceptHostHeader` origin request policy (API Gateway rejects forwarded Host header) |
-| **Failover** | Origin groups: `ec2-with-s3-fallback` (default), `api-with-lambda-fallback` (/api/\*, /stream) — automatic failover on 500/502/503/504 |
-| **Dashboard** | [train.bitbanshee.com](https://train.bitbanshee.com) — live web UI with training progress, GPU stats, loss curves, and cost tracking |
-| **Notifications** | Telegram Bot — training alerts, spot reclaims, budget warnings, sitrep delivery |
-| **IAM** | `ml-lab-ec2-bootstrap` role — S3, Secrets Manager, EC2 (fleet, EBS, describe), Route53 |
+| **Failover** | Origin groups: `ec2-with-s3-fallback` (default), `api-with-lambda-fallback` (/api/\*, /stream)  -  automatic failover on 500/502/503/504 |
+| **Dashboard** | [train.bitbanshee.com](https://train.bitbanshee.com)  -  live web UI with training progress, GPU stats, loss curves, and cost tracking |
+| **Notifications** | Telegram Bot  -  training alerts, spot reclaims, budget warnings, sitrep delivery |
+| **IAM** | `ml-lab-ec2-bootstrap` role  -  S3, Secrets Manager, EC2 (fleet, EBS, describe), Route53 |
 
 ### Architecture Diagram
 
@@ -126,7 +126,7 @@ graph TB
 
 Training runs on spot instances with four layers of protection:
 
-1. **S3 Sync Daemon** (`sync-checkpoints.sh`): Uploads checkpoints, logs, metrics, and preprocessed data to S3 every 60 seconds. The daemon runs under `set -uo pipefail` — if an individual `aws s3 sync` call fails (network issues, throttling), that cycle's output is logged but the daemon continues on the next 60-second interval. Training is not blocked by sync failures.
+1. **S3 Sync Daemon** (`sync-checkpoints.sh`): Uploads checkpoints, logs, metrics, and preprocessed data to S3 every 60 seconds. The daemon runs under `set -uo pipefail`  -  if an individual `aws s3 sync` call fails (network issues, throttling), that cycle's output is logged but the daemon continues on the next 60-second interval. Training is not blocked by sync failures.
 2. **SIGTERM Handler** (`SpotTerminationHandler` in `src/utils/s3_sync.py`): Catches the 2-minute termination warning and performs a final S3 sync before the instance dies.
 3. **Checkpoint Resume** (`find_latest_checkpoint`): On startup, checks both local disk and S3 for the latest checkpoint, downloads if needed, and resumes training from that step.
 4. **Telegram Notifications**: Spot reclaim events, budget alerts, and price ceiling hits are sent to Telegram for real-time awareness even when not watching the dashboard.
@@ -152,7 +152,7 @@ Training runs on spot instances with four layers of protection:
 | 12 | Install Flask | pip install (if missing) |
 | 13 | Start web dashboard | Flask on :5000, with Telegram env vars and `--telegram-webhook-secret` |
 | 14 | Setup spot price updater | Initial run + cron every 5 min (with SPOT_TOKEN env var) |
-| 15 | Setup cost tracker | `cost-tracker.sh init` — download ledger from S3, cron every 5 min with Telegram env vars |
+| 15 | Setup cost tracker | `cost-tracker.sh init`  -  download ledger from S3, cron every 5 min with Telegram env vars |
 | 16 | Setup auto-sitrep | Cron every 30 min with Telegram env vars |
 | 17 | Launch training | tmux session, auto-resumes from latest checkpoint (v3 paths) |
 
@@ -185,7 +185,7 @@ EC2 IMDS v2 ─────────────────── instance t
 nvidia-smi ──────────────────── GPU util, VRAM, temp, power
 ```
 
-### web_dashboard.py — Live Web Dashboard
+### web_dashboard.py  -  Live Web Dashboard
 
 ![ML Lab Dashboard](static/ml-lab-dashboard.png)
 
@@ -200,14 +200,14 @@ Single-file Flask application (1,800 lines) serving an inline HTML/CSS/JS dashbo
 
 **Key features:**
 - **Live metrics cards** (6 tiles: AR Loss, Diff Loss, Conf Acc, AUROC, S1 Acc, LR) with RAG color coding and sparklines
-- **Loss curves chart** — AR loss + diffusion loss over training steps, auto-refreshes on new data
-- **Eval metrics chart** — S1 token accuracy, AUROC, AR perplexity; filtered to current run only
-- **GPU gauges** — utilization, VRAM, temperature, power with color thresholds
-- **Instance & GPU card** — merged instance info, cost tracking, and GPU metrics in one card
-- **Spot cost tracking** — live spot pricing, accumulated cost, projected run total
-- **Bootstrap progress panel** — step-by-step instance boot status (auto-hides when complete)
-- **Infrastructure status** — trainer/sync daemon health, checkpoint list, next milestones
-- **Telegram integration** — spot reclaim notifications
+- **Loss curves chart**  -  AR loss + diffusion loss over training steps, auto-refreshes on new data
+- **Eval metrics chart**  -  S1 token accuracy, AUROC, AR perplexity; filtered to current run only
+- **GPU gauges**  -  utilization, VRAM, temperature, power with color thresholds
+- **Instance & GPU card**  -  merged instance info, cost tracking, and GPU metrics in one card
+- **Spot cost tracking**  -  live spot pricing, accumulated cost, projected run total
+- **Bootstrap progress panel**  -  step-by-step instance boot status (auto-hides when complete)
+- **Infrastructure status**  -  trainer/sync daemon health, checkpoint list, next milestones
+- **Telegram integration**  -  spot reclaim notifications
 
 **API endpoints:**
 
@@ -216,11 +216,11 @@ Single-file Flask application (1,800 lines) serving an inline HTML/CSS/JS dashbo
 | `GET /api/status` | Full status payload (training, eval, GPU, cost, infra, bootstrap) |
 | `GET /api/history` | Training step data for loss chart |
 | `GET /api/eval/history` | Merged eval JSONs + log-parsed eval lines |
-| `GET /stream` | SSE stream — pushes `/api/status` every 10s |
+| `GET /stream` | SSE stream  -  pushes `/api/status` every 10s |
 | `POST /api/spot-price` | Accepts spot price data from external updater (token-auth) |
 | `POST /api/telegram/webhook` | Telegram bot command handler (secret-token auth) |
 
-### monitor.sh — Terminal Dashboard
+### monitor.sh  -  Terminal Dashboard
 
 ![Terminal Dashboard](static/terminal-dashboard.png)
 
@@ -231,7 +231,7 @@ Bash script (430 lines) rendering a full-screen ANSI terminal dashboard. Designe
 ./monitor.sh 5      # 5s refresh
 ```
 
-### dashboard.py — Curses Job Manager TUI
+### dashboard.py  -  Curses Job Manager TUI
 
 Python curses application (880 lines) for interactive job management. Launches training, smoke tests, or pytest from a menu and monitors the running process with live output, GPU stats, and parsed metrics.
 
@@ -247,10 +247,10 @@ python dashboard.py --job test   # Launch pytest
 | Feature | web_dashboard.py | monitor.sh | dashboard.py |
 |---------|-----------------|------------|-------------|
 | Access | Browser (remote) | SSH terminal | SSH terminal |
-| Charts | Chart.js (loss + eval) | Sparklines (ANSI) | — |
-| RAG indicators | Color-coded metric cards | Color-coded gauges | — |
-| Cost tracking | Full (on-demand + spot) | Full | — |
-| Bootstrap status | Progress panel | — | — |
+| Charts | Chart.js (loss + eval) | Sparklines (ANSI) | - |
+| RAG indicators | Color-coded metric cards | Color-coded gauges | - |
+| Cost tracking | Full (on-demand + spot) | Full | - |
+| Bootstrap status | Progress panel | - | - |
 | Job control | View only | View only | Launch + monitor |
 | Dependencies | Flask, nginx, CloudFront | bash, bc, python3 | Python curses |
 
@@ -259,14 +259,14 @@ python dashboard.py --job test   # Launch pytest
 ### AMI Snapshots
 
 The training environment is baked into an AMI to avoid lengthy setup on each spot instance launch:
-- AMI: `ami-0544093f9b5424470` (`dual-system-v2-complete-20260307`, clean — no baked secrets, all secrets fetched at boot from Secrets Manager)
+- AMI: `ami-0544093f9b5424470` (`dual-system-v2-complete-20260307`, clean  -  no baked secrets, all secrets fetched at boot from Secrets Manager)
 - Launch template: `lt-06e111b12bd85396f`, v20
 - Pre-installed: Python 3.12, PyTorch 2.6, CUDA 12.4, full ML stack
 - Fleet ID: `fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a`
 
 ### Secrets Management
 
-All secrets are stored in AWS Secrets Manager and fetched at boot (bootstrap Step 1). The AMI contains no credentials — it's safe to share or snapshot.
+All secrets are stored in AWS Secrets Manager and fetched at boot (bootstrap Step 1). The AMI contains no credentials  -  it's safe to share or snapshot.
 
 | Secret ID | Purpose | Used by |
 |-----------|---------|---------|
@@ -337,7 +337,7 @@ A Telegram notification is sent before fleet shutdown, including the total cost 
 |-----------|---------|--------|-----------|
 | `MAX_SPOT_PRICE` | $0.75/hr | `update-spot-price.sh` | Every 5 min (cron) |
 
-The spot price updater queries `aws ec2 describe-spot-price-history` for the current instance type and AZ. If the current market price meets or exceeds `MAX_SPOT_PRICE`, the fleet is shut down before the next billing interval at the elevated rate. At the default ceiling of $0.75/hr (67% above typical g5.2xlarge spot of ~$0.45/hr, 38% below on-demand at $1.21/hr), the worst-case full-run cost is ~$41 — still below the $50 budget cap.
+The spot price updater queries `aws ec2 describe-spot-price-history` for the current instance type and AZ. If the current market price meets or exceeds `MAX_SPOT_PRICE`, the fleet is shut down before the next billing interval at the elevated rate. At the default ceiling of $0.75/hr (67% above typical g5.2xlarge spot of ~$0.45/hr, 38% below on-demand at $1.21/hr), the worst-case full-run cost is ~$41  -  still below the $50 budget cap.
 
 A Telegram notification is sent before fleet shutdown, including the current rate and ceiling.
 

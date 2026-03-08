@@ -8,7 +8,7 @@ Raw training data exported from this experiment for transparency and reproducibi
 |------|-------------|--------|
 | `eval_metrics.csv` | Checkpoint evaluation metrics (every 1,000 steps) | `eval_metrics/*.json` |
 | `training_steps.csv` | Step-level training losses and learning rate (every 100 steps) | W&B output logs |
-| `export_wandb.py` | Script to re-export full history from W&B API | — |
+| `export_wandb.py` | Script to re-export full history from W&B API |  -  |
 
 ## Eval Metrics Columns
 

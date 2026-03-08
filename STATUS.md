@@ -1,4 +1,4 @@
-# Project Status — Dual-Process Language Model
+# Project Status  -  Dual-Process Language Model
 
 **Last updated:** 2026-03-07 (v3 pre-flight)
 
@@ -6,7 +6,7 @@
 
 ## Live Dashboard
 
-**[train.bitbanshee.com](https://train.bitbanshee.com)** — training metrics, loss curves, and cost tracking. Served via CloudFront with S3 fallback when instances are down.
+**[train.bitbanshee.com](https://train.bitbanshee.com)**  -  training metrics, loss curves, and cost tracking. Served via CloudFront with S3 fallback when instances are down.
 
 ## v1 Training: COMPLETE
 
@@ -19,10 +19,10 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. Trained March 1–3,
 | AR Perplexity | 26.9 | < 40 | **Met** |
 | Confidence AUROC | 0.854 | > 0.75 | **Met** |
 | Confidence ECE | 0.010 | < 0.05 | **Met** |
-| Diffusion Loss | 4.13 | < 4.0 | 97% — narrowly missed |
-| S1 Token Accuracy | 28.7% | > 40% | 72% — not met |
+| Diffusion Loss | 4.13 | < 4.0 | 97%  -  narrowly missed |
+| S1 Token Accuracy | 28.7% | > 40% | 72%  -  not met |
 
-**3 of 5 targets met.** Diffusion loss and S1 accuracy within striking distance — planned λ rebalancing for v2.
+**3 of 5 targets met.** Diffusion loss and S1 accuracy within striking distance  -  planned λ rebalancing for v2.
 
 ### Cost Summary
 
@@ -45,13 +45,13 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. λ_diff increased fr
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| AR Perplexity | 29.65 | < 40 | **Met** — 32% improvement over v1 (43.86→29.65) |
+| AR Perplexity | 29.65 | < 40 | **Met**  -  32% improvement over v1 (43.86→29.65) |
 | Confidence AUROC | 0.863 | > 0.75 | **Met** |
 | Confidence ECE | 0.009 | < 0.05 | **Met** |
-| Diffusion Loss | 4.70 | < 4.0 | 83% — 17% over target |
-| S1 Token Accuracy | 22.0% | > 40% | 55% — regressed from v1 (28.7%) |
+| Diffusion Loss | 4.70 | < 4.0 | 83%  -  17% over target |
+| S1 Token Accuracy | 22.0% | > 40% | 55%  -  regressed from v1 (28.7%) |
 
-**3 of 5 targets met.** AR perplexity improved significantly. Diffusion loss regressed vs v1 (4.13→4.70) despite λ_diff=2.0. S1 accuracy collapsed — the higher diffusion weight did not help and may have hurt.
+**3 of 5 targets met.** AR perplexity improved significantly. Diffusion loss regressed vs v1 (4.13→4.70) despite λ_diff=2.0. S1 accuracy collapsed  -  the higher diffusion weight did not help and may have hurt.
 
 ### Cost Summary (v2)
 
@@ -76,8 +76,8 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` r
 | Parameter | v2 | v3 | Rationale |
 |-----------|----|----|-----------|
 | `diff_loss_weight` | 2.0 | 1.3 | v2's aggressive weighting hurt both S1 accuracy and diffusion loss |
-| `log_gradient_norms` | — | true | Per-loss gradient norm logging at eval steps |
-| `log_routing_efficiency` | — | true | Coverage/accuracy curves at confidence thresholds |
+| `log_gradient_norms` | - | true | Per-loss gradient norm logging at eval steps |
+| `log_routing_efficiency` | - | true | Coverage/accuracy curves at confidence thresholds |
 | Post-training | Manual | Automated | 9-step sequence: benchmarks, report, S3 sync, Telegram, fleet shutdown |
 
 ### Key Questions
@@ -91,11 +91,11 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` r
 - Checkpoints: `checkpoints/v3/` (S3), eval metrics: `eval_metrics/v3/`
 - Cost ledger: fresh (v2 archived to `cost_ledger_v2.json`)
 - AMI: `ami-0544093f9b5424470` (v2 snapshot, code updated via `git pull` on boot)
-- `--fresh_start` removed from bootstrap — spot recovery resumes from checkpoint
+- `--fresh_start` removed from bootstrap  -  spot recovery resumes from checkpoint
 
 ## Infrastructure
 
-> Full details in [INFRASTRUCTURE.md](INFRASTRUCTURE.md) — spot recovery, bootstrap, dashboards, cost analysis.
+> Full details in [INFRASTRUCTURE.md](INFRASTRUCTURE.md)  -  spot recovery, bootstrap, dashboards, cost analysis.
 
 | Component | Status | Details |
 |---|---|---|
@@ -103,7 +103,7 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` r
 | Instance | Spot fleet | g5.2xlarge / g6.xlarge, capacity=0 (idle) |
 | AMI | `ami-0544093f9b5424470` | Post-v2 snapshot, launch template v20 |
 | EBS root volume | ~100GB | OS + Python 3.12 + ML stack |
-| Ephemeral NVMe | 419GB | `/opt/dlami/nvme` — runtime data |
+| Ephemeral NVMe | 419GB | `/opt/dlami/nvme`  -  runtime data |
 | EBS static data | Tagged `ml-lab-static-data` | Preprocessed data, one volume per AZ |
 | Bootstrap | Ready | 18-step autonomous spot recovery |
 | Web dashboard | Active | [train.bitbanshee.com](https://train.bitbanshee.com) |
@@ -132,48 +132,48 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` r
 - [x] Deploy scripts updated with correct bucket paths
 - [x] Python 3.12 set as default `python3`
 - [x] Full ML stack installed to EBS
-- [x] GPU verified — L4/A10G detected, CUDA matmul confirmed
+- [x] GPU verified  -  L4/A10G detected, CUDA matmul confirmed
 - [x] requirements.txt created
 - [x] Project source code built (src/, configs/, tests/)
 - [x] AMI snapshot with current environment
 - [x] First smoke test on tiny config
 - [x] OpenWebText preprocessing (memmap shards)
 - [x] Full training launched on tiny config (GPT-2 Small, 50k steps)
-- [x] Web dashboard — live at [train.bitbanshee.com](https://train.bitbanshee.com)
+- [x] Web dashboard  -  live at [train.bitbanshee.com](https://train.bitbanshee.com)
 - [x] HTTPS + CloudFront + ACM TLS (auto-renewing)
-- [x] Dashboard hardened — token auth on write endpoints, SSE limits, security headers
+- [x] Dashboard hardened  -  token auth on write endpoints, SSE limits, security headers
 - [x] Route53 DNS auto-update on instance boot
-- [x] Fully autonomous bootstrap — all services start without manual intervention
+- [x] Fully autonomous bootstrap  -  all services start without manual intervention
 - [x] Checkpoint frequency increased to every 1,000 steps
 - [x] Local checkpoint cleanup (keep last 3, S3 has all)
 - [x] Spot price monitoring via cron + IMDSv2 auto-detection
 - [x] Bootstrap battle-tested across 4 spot recovery cycles
 - [x] CloudFront + ACM TLS (no more certbot/Let's Encrypt)
 - [x] S3 fallback page when instance is down
-- [x] Dashboard UX refresh — larger fonts, narrower layout, footer, S1 Acc tile
-- [x] Complete training run (50,000 steps) — v1 DONE
+- [x] Dashboard UX refresh  -  larger fonts, narrower layout, footer, S1 Acc tile
+- [x] Complete training run (50,000 steps)  -  v1 DONE
 - [x] v2 training launched with λ_diff=2.0 rebalancing
-- [x] Clean AMI — no baked secrets, all fetched from Secrets Manager at boot
-- [x] Telegram integration — spot reclaims, budget alerts, sitreps, price ceiling
-- [x] Cost controls — $50 budget cap + $0.75/hr spot ceiling with auto-shutdown
-- [x] Dashboard UX refresh — merged Instance & GPU card, reorganized Infrastructure card
-- [x] Cost projection formula — rate-based remaining time instead of linear extrapolation
+- [x] Clean AMI  -  no baked secrets, all fetched from Secrets Manager at boot
+- [x] Telegram integration  -  spot reclaims, budget alerts, sitreps, price ceiling
+- [x] Cost controls  -  $50 budget cap + $0.75/hr spot ceiling with auto-shutdown
+- [x] Dashboard UX refresh  -  merged Instance & GPU card, reorganized Infrastructure card
+- [x] Cost projection formula  -  rate-based remaining time instead of linear extrapolation
 - [x] Persistent EBS volumes for preprocessed static data
-- [x] IAM role expanded — EBS attach/detach/describe permissions
-- [x] Cron env var propagation fixed — Telegram, Spot Token passed inline
+- [x] IAM role expanded  -  EBS attach/detach/describe permissions
+- [x] Cron env var propagation fixed  -  Telegram, Spot Token passed inline
 - [x] LAMBADA + WikiText-103 benchmarks complete (v1)
-- [x] Complete v2 training (50,000 steps) — v2 DONE
+- [x] Complete v2 training (50,000 steps)  -  v2 DONE
 - [x] Fleet shut down, AMI snapshotted (`ami-0544093f9b5424470`), launch template updated to v20
 - [x] v3 pre-flight: removed `--fresh_start` from bootstrap, fixed Lambda CONFIG_SUMMARY, archived v2 cost ledger
 - [x] v3 prep: `diff_loss_weight` 2.0→1.3, gradient norm logging, routing efficiency metrics, automated post-training sequence
 
 ## Next Steps
 
-> See [README.md — Planned Work](README.md#planned-work) for the full research roadmap.
+> See [README.md  -  Planned Work](README.md#planned-work) for the full research roadmap.
 
 - [ ] Launch v3 training (fleet capacity → 1)
 - [ ] Monitor gradient norm ratio (AR vs diffusion) to validate `diff_loss_weight=1.3`
-- [ ] v1 vs v2 vs v3 comparison — S1 accuracy, diffusion loss, AR PPL tradeoff
-- [ ] Confidence head analysis — escalation rates, S1 vs S2 quality per difficulty tier
+- [ ] v1 vs v2 vs v3 comparison  -  S1 accuracy, diffusion loss, AR PPL tradeoff
+- [ ] Confidence head analysis  -  escalation rates, S1 vs S2 quality per difficulty tier
 - [ ] Implement confidence scoring fix (accumulate during unmasking, not post-hoc)
 - [ ] Scale to GPT-2 Medium (355M) tier

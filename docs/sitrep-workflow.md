@@ -1,6 +1,6 @@
 # Sitrep Workflow
 
-How the situation report pipeline works — from generation to delivery.
+How the situation report pipeline works  -  from generation to delivery.
 
 ## Overview
 
@@ -123,7 +123,7 @@ In `auto_sitrep.py`:
 ET = timezone(timedelta(hours=-4))
 ```
 
-This hardcodes UTC-4 (EDT), but Eastern Time switches between EDT (UTC-4) and EST (UTC-5) depending on daylight saving time. DST starts March 8, 2026 — so between November and March, the header timestamp is **off by 1 hour**.
+This hardcodes UTC-4 (EDT), but Eastern Time switches between EDT (UTC-4) and EST (UTC-5) depending on daylight saving time. DST starts March 8, 2026  -  so between November and March, the header timestamp is **off by 1 hour**.
 
 **Impact:** The sitrep header shows times like "3:30 PM ET / 19:30 UTC" but during EST months, it should show "2:30 PM ET / 19:30 UTC" (the UTC time is always correct).
 
@@ -146,7 +146,7 @@ ET = ZoneInfo("America/New_York")
 | Failure | Sitrep impact | Dashboard impact |
 |---------|---------------|------------------|
 | **EC2 down** | `auto_sitrep.py` stops running; sitrep goes stale | Lambda serves the last-synced version from S3; dashboard shows offline banner |
-| **auto_sitrep.py crash** | Sitrep stops updating | Dashboard still works — Flask serves stale `sitrep.md` from disk, Lambda serves stale copy from S3 |
+| **auto_sitrep.py crash** | Sitrep stops updating | Dashboard still works  -  Flask serves stale `sitrep.md` from disk, Lambda serves stale copy from S3 |
 | **sync-checkpoints.sh failure** | S3 copy goes stale | Lambda serves stale data; Flask still reads from disk normally |
 | **S3 unreachable** | No effect on generation | Lambda returns empty; Flask unaffected |
 | **Flask down, EC2 up** | `auto_sitrep.py` fails (can't fetch `/api/status`); exits with error | CloudFront fails over to Lambda for `/api/*` |
