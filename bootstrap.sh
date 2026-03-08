@@ -122,28 +122,19 @@ step_done 1
 # ── Step 2: Ubuntu user environment ──
 step_start 2
 echo "Configuring ubuntu user environment..."
-# Clean old env vars
-sudo -u ubuntu sed -i '/GH_TOKEN/d; /CLAUDE_CODE_OAUTH_TOKEN/d; /HF_HOME/d; /CHECKPOINT_DIR/d; /CHECKPOINT_S3_PREFIX/d; /WANDB_API_KEY/d; /HF_TOKEN/d; /HUGGING_FACE_HUB_TOKEN/d; /S3_BUCKET/d; /DATA_DIR/d; /AWS_DEFAULT_REGION/d; /PREPROCESSED_DATA_DIR/d; /SPOT_TOKEN/d; /PYTORCH_CUDA_ALLOC_CONF/d; /FLEET_ID/d; /MAX_BUDGET/d; /MAX_SPOT_PRICE/d; /CLAUDE_API_KEY/d; /TELEGRAM_BOT_TOKEN/d; /TELEGRAM_CHAT_ID/d; /TELEGRAM_WEBHOOK_SECRET/d' /home/ubuntu/.bashrc
+# Clean any leftover exports from previous boots (idempotent)
+sudo -u ubuntu sed -i '/^export GH_TOKEN/d; /^export CLAUDE_CODE_OAUTH_TOKEN/d; /^export CHECKPOINT_DIR/d; /^export CHECKPOINT_S3_PREFIX/d; /^export EVAL_S3_PREFIX/d; /^export WANDB_API_KEY/d; /^export HF_TOKEN/d; /^export HUGGING_FACE_HUB_TOKEN/d; /^export SPOT_TOKEN/d; /^export CLAUDE_API_KEY/d; /^export TELEGRAM_BOT_TOKEN/d; /^export TELEGRAM_CHAT_ID/d; /^export TELEGRAM_WEBHOOK_SECRET/d' /home/ubuntu/.bashrc
 
-# Inject env vars
+# Inject secrets + version-derived paths (infra constants come from /etc/ml-lab/infra.env)
 cat >> /home/ubuntu/.bashrc << BASHRC
 export GH_TOKEN="$GH_TOKEN"
-export HF_HOME=$DATA_DIR/hf_cache
 export CHECKPOINT_DIR=$DATA_DIR/checkpoints/v3
 export CHECKPOINT_S3_PREFIX=checkpoints/v3
 export EVAL_S3_PREFIX=eval_metrics/v3
 export WANDB_API_KEY="$WANDB_API_KEY"
 export HF_TOKEN="$HF_TOKEN"
 export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
-export S3_BUCKET="$S3_BUCKET"
-export DATA_DIR="$DATA_DIR"
-export AWS_DEFAULT_REGION="$REGION"
-export PREPROCESSED_DATA_DIR="$DATA_DIR/preprocessed"
 export SPOT_TOKEN="$SPOT_TOKEN"
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-export FLEET_ID="fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a"
-export MAX_BUDGET=50
-export MAX_SPOT_PRICE=0.75
 export CLAUDE_API_KEY="$CLAUDE_API_KEY"
 export TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
 export TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID"
