@@ -186,7 +186,7 @@ Key hyperparameters for the Tiny (GPT-2 Small) config (`configs/tiny.yaml`):
 
 ## Results
 
-**Status: v1 & v2 Complete, v3 Pre-flight**  -  GPT-2 Small (124M), 50,000 steps each. Dashboard at [train.bitbanshee.com](https://train.bitbanshee.com), reports at [train.bitbanshee.com/reports/v3/](https://train.bitbanshee.com/reports/v3/).
+**Status: v1 & v2 Complete, v3 Training**  -  GPT-2 Small (124M), 50,000 steps each. Dashboard at [train.bitbanshee.com](https://train.bitbanshee.com), reports at [train.bitbanshee.com/reports/](https://train.bitbanshee.com/reports/).
 
 > **Note (2026-03-01):** Eval metrics for steps 50–7,000 were re-evaluated from saved checkpoints after fixing a double-shift bug in the AR perplexity computation. The original evaluator manually shifted labels before passing them to `GPT2LMHeadModel.forward(labels=)`, which auto-shifts internally  -  resulting in the model predicting 2 tokens ahead. The bug inflated AR PPL by ~1000x (showing ~20,000 instead of ~22–25). Diffusion loss, S1 accuracy, confidence accuracy, ECE, and AUROC were unaffected. Steps 8,000+ were evaluated with the corrected code.
 
@@ -257,7 +257,7 @@ v2 trained March 4–7, 2026 across 15 spot instances with 31 reclamation recove
 
 ## Baselines & Ablations
 
-*v2 (`diff_loss_weight=2.0`) is the first completed ablation. v3 (`diff_loss_weight=1.3`) is in pre-flight. Remaining ablations planned for post-v3.*
+*v2 (`diff_loss_weight=2.0`) is the first completed ablation. v3 (`diff_loss_weight=1.3`) is training. Remaining ablations planned for post-v3.*
 
 ### Baselines
 
@@ -282,9 +282,9 @@ v2 trained March 4–7, 2026 across 15 spot instances with 31 reclamation recove
 
 ## Planned Work
 
-*v1 and v2 complete. v3 in pre-flight (2026-03-07). Remaining work:*
+*v1 and v2 complete. v3 training (launched 2026-03-08). Remaining work:*
 
-1. **v3 training (pre-flight)**  -  `diff_loss_weight=1.3` (between v1's 1.0 and v2's 2.0). New diagnostics: per-loss gradient norms and routing efficiency metrics at confidence thresholds. Automated 9-step post-training sequence (benchmarks, report, S3 sync, Telegram, fleet shutdown).
+1. **v3 training (in progress)**  -  `diff_loss_weight=1.3` (between v1's 1.0 and v2's 2.0). New diagnostics: per-loss gradient norms and routing efficiency metrics at confidence thresholds. Automated 9-step post-training sequence (benchmarks, report, S3 sync, Telegram, fleet shutdown). Running on clean AMI with infrastructure constants in `/etc/ml-lab/infra.env`, secrets fetched from Secrets Manager at boot.
 2. v1 vs v2 vs v3 comparison  -  S1 accuracy, diffusion loss, AR PPL tradeoff across `diff_loss_weight` values
 3. Confidence head analysis  -  escalation rates, System 1 vs System 2 quality per difficulty tier
 4. Implement confidence scoring fix (accumulate during unmasking loop, not post-hoc re-scoring)
@@ -398,7 +398,7 @@ KahnemanHybridExperiment/
 
 ## Infrastructure
 
-Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 checkpoint sync, and a live web dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Automated cost controls cap total spend at $50 per run (budget circuit breaker) and shut down the fleet if spot prices exceed $0.75/hr (price ceiling). A Telegram bot provides real-time alerts (spot reclaims, budget warnings) and on-demand commands (`/status`, `/sitrep`, `/start`, `/stop`, `/help`) delivered via webhook  -  always-on via Lambda even when EC2 is offline. v3 adds an automated 9-step post-training sequence (benchmarks, run report, S3 sync, git commit, Telegram notification, fleet shutdown). See **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** for the full AWS architecture diagram, spot recovery, cost controls, Telegram command interface, and deployment details.
+Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 checkpoint sync, and a live web dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Automated cost controls cap total spend at $50 per run (budget circuit breaker) and shut down the fleet if spot prices exceed $0.75/hr (price ceiling). A Telegram bot provides real-time alerts (spot reclaims, budget warnings) and on-demand commands (`/status`, `/sitrep`, `/start`, `/stop`, `/help`) delivered via webhook  -  always-on via Lambda even when EC2 is offline. Fleet control is fully managed via Telegram: `/start` scales the fleet to 1, `/stop` scales to 0. v3 runs on a clean AMI (`ami-0e52bd0d4640a3d73`) with infrastructure constants baked into `/etc/ml-lab/infra.env` and secrets fetched from Secrets Manager at boot  -  no credentials in the AMI. v3 adds an automated 9-step post-training sequence (benchmarks, run report, S3 sync, git commit, Telegram notification, fleet shutdown). See **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** for the full AWS architecture diagram, spot recovery, cost controls, Telegram command interface, and deployment details.
 
 ## References
 

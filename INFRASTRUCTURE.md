@@ -139,7 +139,7 @@ Training runs on spot instances with four layers of protection:
 |------|--------|-------|
 | 0 | NVMe ephemeral storage | Create data directories on fast local disk |
 | 1 | Fetch secrets | W&B, HF, Telegram, Claude API, GitHub, dashboard tokens from Secrets Manager |
-| 2 | Configure environment | `.bashrc` env vars, git credentials |
+| 2 | Configure environment | Secrets + version paths to `.bashrc`, git credentials (infra constants from `/etc/ml-lab/infra.env`) |
 | 3 | Pull latest code | `git pull --ff-only` |
 | 4 | Restore artifacts from S3 | Checkpoints, logs, eval metrics, benchmarks (~3 min) |
 | 5 | Attach EBS static data volume | Tagged `ml-lab-static-data`, contains preprocessed data. Falls back to S3 if unavailable |
@@ -259,10 +259,13 @@ python dashboard.py --job test   # Launch pytest
 ### AMI Snapshots
 
 The training environment is baked into an AMI to avoid lengthy setup on each spot instance launch:
-- AMI: `ami-0544093f9b5424470` (`dual-system-v2-complete-20260307`, clean  -  no baked secrets, all secrets fetched at boot from Secrets Manager)
-- Launch template: `lt-06e111b12bd85396f`, v20
+- AMI: `ami-0e52bd0d4640a3d73` (`ml-lab-clean-20260308`)
+- Launch template: `lt-06e111b12bd85396f`, v21
 - Pre-installed: Python 3.12, PyTorch 2.6, CUDA 12.4, full ML stack
 - Fleet ID: `fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a`
+- Infrastructure constants baked into `/etc/ml-lab/infra.env` (S3_BUCKET, DATA_DIR, REGION, FLEET_ID, etc.)
+- No secrets or version-specific vars in the AMI  -  all injected at boot by bootstrap.sh
+- Previous AMI: `ami-0544093f9b5424470` (`dual-system-v2-complete-20260307`, launch template v20)
 
 ### Secrets Management
 
@@ -279,19 +282,24 @@ All secrets are stored in AWS Secrets Manager and fetched at boot (bootstrap Ste
 | `ml-lab/gh-token` | GitHub push access | bootstrap.sh (.git-credentials) |
 | *(derived)* `TELEGRAM_WEBHOOK_SECRET` | Telegram webhook validation | Generated from bot token hash at boot (not stored in Secrets Manager) |
 
-Secrets are written to `~/.bashrc` as exports during bootstrap Step 2, and `.git-credentials` is created for GitHub push access.
+Secrets and version-derived paths are written to `~/.bashrc` as exports during bootstrap Step 2. Infrastructure constants (S3_BUCKET, DATA_DIR, REGION, etc.) are baked into the AMI at `/etc/ml-lab/infra.env` and sourced automatically via `.bashrc`. Git credentials (`.git-credentials`) are created for GitHub push access.
 
 ### Quick Start (Instance Management)
 
+**Via Telegram (preferred):**
+- `/start` — Launch fleet (set capacity to 1)
+- `/stop` — Zero fleet (terminate instance)
+
+**Via CLI:**
 ```bash
-# Start the fleet (launches a spot instance)
-aws ec2 modify-fleet --fleet-id fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a --target-capacity-specification TotalTargetCapacity=1,SpotTargetCapacity=1,DefaultTargetCapacityType=spot
+# Start the fleet
+aws ec2 modify-fleet --fleet-id fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a --target-capacity-specification TotalTargetCapacity=1
 
 # Stop the fleet
-aws ec2 modify-fleet --fleet-id fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a --target-capacity-specification TotalTargetCapacity=0,SpotTargetCapacity=0,DefaultTargetCapacityType=spot
+aws ec2 modify-fleet --fleet-id fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a --target-capacity-specification TotalTargetCapacity=0
 
 # SSH to instance
-ssh -i gpu-key.pem ubuntu@origin.train.bitbanshee.com
+ssh -i gpu-key.pem ubuntu@console.bitbanshee.com
 ```
 
 ## Cost Analysis

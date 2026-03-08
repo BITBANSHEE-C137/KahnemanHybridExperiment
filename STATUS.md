@@ -1,6 +1,6 @@
 # Project Status  -  Dual-Process Language Model
 
-**Last updated:** 2026-03-07 (v3 pre-flight)
+**Last updated:** 2026-03-08 (v3 training)
 
 > See also: [README.md](README.md) for research narrative and results | [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for ops and deployment details
 
@@ -67,9 +67,9 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. λ_diff increased fr
 
 All v2 checkpoints saved to S3 (`v2/step_48000.pt` through `v2/step_50000.pt`, ~1.4 GiB each). Full eval metrics for all 50 steps in `eval_metrics/v2/`.
 
-## v3 Training: PRE-FLIGHT
+## v3 Training: IN PROGRESS
 
-GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` reduced from 2.0 (v2) to 1.3, seeking better balance between AR and diffusion objectives. New diagnostics: per-loss gradient norm logging and routing efficiency metrics at confidence thresholds.
+GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` reduced from 2.0 (v2) to 1.3, seeking better balance between AR and diffusion objectives. New diagnostics: per-loss gradient norm logging and routing efficiency metrics at confidence thresholds. Launched 2026-03-08.
 
 ### Changes from v2
 
@@ -79,6 +79,7 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` r
 | `log_gradient_norms` | - | true | Per-loss gradient norm logging at eval steps |
 | `log_routing_efficiency` | - | true | Coverage/accuracy curves at confidence thresholds |
 | Post-training | Manual | Automated | 9-step sequence: benchmarks, report, S3 sync, Telegram, fleet shutdown |
+| AMI | `ami-0544093f9b5424470` (baked vars) | `ami-0e52bd0d4640a3d73` (clean) | Infra constants in `/etc/ml-lab/infra.env`, no secrets baked |
 
 ### Key Questions
 
@@ -90,8 +91,9 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` r
 
 - Checkpoints: `checkpoints/v3/` (S3), eval metrics: `eval_metrics/v3/`
 - Cost ledger: fresh (v2 archived to `cost_ledger_v2.json`)
-- AMI: `ami-0544093f9b5424470` (v2 snapshot, code updated via `git pull` on boot)
-- `--fresh_start` removed from bootstrap  -  spot recovery resumes from checkpoint
+- AMI: `ami-0e52bd0d4640a3d73` (clean  -  infra constants in `/etc/ml-lab/infra.env`, secrets from Secrets Manager)
+- Launch template: `lt-06e111b12bd85396f` v21
+- Spot recovery resumes from checkpoint automatically
 
 ## Infrastructure
 
@@ -100,8 +102,8 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` r
 | Component | Status | Details |
 |---|---|---|
 | S3 bucket | Active | `s3://ml-lab-004507070771/dual-system-research-data/` |
-| Instance | Spot fleet | g5.2xlarge / g6.xlarge, capacity=0 (idle) |
-| AMI | `ami-0544093f9b5424470` | Post-v2 snapshot, launch template v20 |
+| Instance | Spot fleet | g5.2xlarge / g6.xlarge, capacity=1 (v3 training) |
+| AMI | `ami-0e52bd0d4640a3d73` | Clean AMI, launch template v21 |
 | EBS root volume | ~100GB | OS + Python 3.12 + ML stack |
 | Ephemeral NVMe | 419GB | `/opt/dlami/nvme`  -  runtime data |
 | EBS static data | Tagged `ml-lab-static-data` | Preprocessed data, one volume per AZ |
@@ -166,12 +168,17 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` r
 - [x] Fleet shut down, AMI snapshotted (`ami-0544093f9b5424470`), launch template updated to v20
 - [x] v3 pre-flight: removed `--fresh_start` from bootstrap, fixed Lambda CONFIG_SUMMARY, archived v2 cost ledger
 - [x] v3 prep: `diff_loss_weight` 2.0→1.3, gradient norm logging, routing efficiency metrics, automated post-training sequence
+- [x] Clean AMI bake: `ami-0e52bd0d4640a3d73`  -  infra constants in `/etc/ml-lab/infra.env`, no baked secrets or version-specific vars
+- [x] Launch template updated to v21 with clean AMI
+- [x] Bootstrap simplified: only injects secrets + version-derived paths (infra from AMI)
+- [x] Lambda fleet commands fixed (`/start`, `/stop` work from Telegram)
+- [x] Lambda webhook secret fixed (env var mismatch)
+- [x] v3 training launched (2026-03-08)
 
 ## Next Steps
 
 > See [README.md  -  Planned Work](README.md#planned-work) for the full research roadmap.
 
-- [ ] Launch v3 training (fleet capacity → 1)
 - [ ] Monitor gradient norm ratio (AR vs diffusion) to validate `diff_loss_weight=1.3`
 - [ ] v1 vs v2 vs v3 comparison  -  S1 accuracy, diffusion loss, AR PPL tradeoff
 - [ ] Confidence head analysis  -  escalation rates, S1 vs S2 quality per difficulty tier
