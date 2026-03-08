@@ -853,6 +853,15 @@ def stream():
 SITREP_FILE = os.path.join(PROJECT_DIR, "sitrep.md")
 
 
+@app.route("/api/debug")
+def api_debug():
+    debug_file = os.path.join(DATA_DIR, "trainer_debug.log")
+    if not os.path.isfile(debug_file):
+        return jsonify({"content": "No debug log yet"})
+    with open(debug_file) as f:
+        return jsonify({"content": f.read()})
+
+
 @app.route("/api/sitrep")
 def api_sitrep():
     if not os.path.isfile(SITREP_FILE):

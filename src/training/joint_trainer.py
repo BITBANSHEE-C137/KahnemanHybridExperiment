@@ -463,17 +463,29 @@ def train(
     # Checkpoint dir (needed for resume logic below)
     checkpoint_dir = Path(os.environ.get("CHECKPOINT_DIR", train_cfg["checkpoint_dir"]))
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[debug] CHECKPOINT_DIR env={os.environ.get('CHECKPOINT_DIR', 'NOT SET')}")
-    print(f"[debug] checkpoint_dir resolved={checkpoint_dir}")
-    print(f"[debug] CHECKPOINT_S3_PREFIX={CHECKPOINT_S3_PREFIX}")
-    print(f"[debug] checkpoint_dir contents={list(checkpoint_dir.glob('step_*.pt'))}")
-    print(f"[debug] max_steps={train_cfg['max_steps']}, smoke_test={smoke_test}, fresh_start={fresh_start}")
+
+    # Debug: write checkpoint resolution info to a file for diagnostics
+    _debug_info = [
+        f"CHECKPOINT_DIR env={os.environ.get('CHECKPOINT_DIR', 'NOT SET')}",
+        f"checkpoint_dir resolved={checkpoint_dir}",
+        f"CHECKPOINT_S3_PREFIX={CHECKPOINT_S3_PREFIX}",
+        f"checkpoint_dir contents={list(checkpoint_dir.glob('step_*.pt'))}",
+        f"max_steps={train_cfg['max_steps']}, smoke_test={smoke_test}, fresh_start={fresh_start}",
+    ]
+    for _line in _debug_info:
+        print(f"[debug] {_line}", flush=True)
+    # Also write to a file the dashboard can read
+    _debug_path = DATA_DIR / "trainer_debug.log"
+    _debug_path.write_text("\n".join(_debug_info) + "\n")
 
     # Resume from checkpoint if available
     start_step = 0
     if not smoke_test and not fresh_start:
         latest_ckpt = find_latest_checkpoint(checkpoint_dir)
-        print(f"[debug] find_latest_checkpoint returned: {latest_ckpt}")
+        _resume_msg = f"find_latest_checkpoint returned: {latest_ckpt}"
+        print(f"[debug] {_resume_msg}", flush=True)
+        with open(_debug_path, "a") as _df:
+            _df.write(_resume_msg + "\n")
         if latest_ckpt is not None:
             print(f"[resume] Loading checkpoint: {latest_ckpt}")
             ckpt = torch.load(latest_ckpt, map_location=device, weights_only=False)
