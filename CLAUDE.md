@@ -22,23 +22,28 @@ Same weights, different attention masks. A trained confidence head decides when 
 ### Training Status
 
 **v1 Baseline: COMPLETE** (March 1–3, 2026)
-- GPT-2 Small (124M), 50k steps, OpenWebText
+- GPT-2 Small (124M), 50k steps, OpenWebText, `diff_loss_weight=1.0`
 - 3/5 targets met. See README.md for full results.
 
-**v2 Training: IN PROGRESS** (March 4+, 2026)
-- Same config (`configs/tiny.yaml`), λ_diff increased 1.0→2.0
-- Eval metrics stored in `eval_metrics/v2/` (S3), v1 archived in `eval_metrics_v1/`
-- Automated cost controls active: $50 budget cap, $0.75/hr spot ceiling
+**v2 Training: COMPLETE** (March 4–7, 2026)
+- Same config, `diff_loss_weight` increased 1.0→2.0
+- 3/5 targets met. AR PPL improved (29.65), but S1 accuracy regressed (22.0% vs v1's 28.7%)
+- Cost: $31.44 across 15 spot instances
 
-### v2 Metrics (Latest)
+**v3 Training: PRE-FLIGHT** (March 7, 2026)
+- `diff_loss_weight` reduced to 1.3 (between v1's 1.0 and v2's 2.0)
+- New: gradient norm logging, routing efficiency metrics, automated 9-step post-training
+- Checkpoints: `checkpoints/v3/`, eval: `eval_metrics/v3/`
+
+### v2 Final Metrics
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| AR Perplexity | 31.05 | < 40 | ✅ Met |
-| S1 Token Accuracy | 26.1% | > 40% | 🔶 Stalled |
-| Diffusion Loss | 4.33 | < 4.0 | 🔶 Improving |
-| Confidence AUROC | 0.852 | > 0.75 | ✅ Met |
-| Confidence ECE | 0.014 | < 0.05 | ✅ Met |
+| AR Perplexity | 29.65 | < 40 | Met |
+| S1 Token Accuracy | 22.0% | > 40% | Regressed from v1 (28.7%) |
+| Diffusion Loss | 4.70 | < 4.0 | 83% — worse than v1 (4.13) |
+| Confidence AUROC | 0.863 | > 0.75 | Met |
+| Confidence ECE | 0.009 | < 0.05 | Met |
 
 ## Repository Layout
 
@@ -62,7 +67,8 @@ KahnemanHybridExperiment/
 │       └── s3_sync.py                # S3 uploads, spot termination handler
 ├── scripts/
 │   ├── benchmark.py                  # LAMBADA + WikiText-103 eval
-│   ├── compare_systems.py            # S1 vs S2 analysis
+│   ├── compare_systems.py            # S1 vs S2 analysis (saves JSON to benchmarks/)
+│   ├── generate_run_report.py        # HTML run report generator
 │   ├── lean_preprocess.py            # Memory-efficient tokenization
 │   └── prepare_openwebtext.py        # Streaming data preprocessing
 ├── tests/                            # pytest suite (model, training, eval, data, inference)
@@ -118,12 +124,12 @@ KahnemanHybridExperiment/
 - **S3:** `s3://ml-lab-004507070771/dual-system-research-data/`
 - **Instance:** g5.2xlarge / g6.xlarge spot fleet (A10G / L4 GPU)
 - **Fleet:** `fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a`
-- **AMI:** `ami-0f6e32b2ebf1c8a2d` (clean — no secrets baked in)
-- **Launch template:** `lt-06e111b12bd85396f` v19
+- **AMI:** `ami-0544093f9b5424470` (`dual-system-v2-complete-20260307`, Python 3.12, PyTorch 2.6, CUDA 12.4)
+- **Launch template:** `lt-06e111b12bd85396f` v20
 - **Volumes:** ~100GB EBS root + NVMe ephemeral at `/opt/dlami/nvme`
 - **EBS static data:** Tagged `ml-lab-static-data` volumes for preprocessed data (one per AZ)
 - **Data:** Preprocessed OpenWebText at `/opt/dlami/nvme/ml-lab/preprocessed/`
-- **Checkpoints:** `/opt/dlami/nvme/ml-lab/checkpoints/v2/` + S3
+- **Checkpoints:** `/opt/dlami/nvme/ml-lab/checkpoints/v3/` + S3
 - **Dashboard:** CloudFront → nginx → Flask :5000 at https://train.bitbanshee.com
 - **DNS:** `train.bitbanshee.com` (CloudFront ALIAS), `origin.train.bitbanshee.com` (EC2 A record)
 - **Secrets:** AWS Secrets Manager (7 secrets in `ml-lab/*` prefix — all fetched at boot, nothing baked)
@@ -157,7 +163,7 @@ Two automated circuit breakers:
 
 Both thresholds configurable via env vars (`MAX_BUDGET`, `MAX_SPOT_PRICE`).
 
-## Known Issues & v2 Fix Queue
+## Known Issues & Fix Queue
 
 These are ordered by priority. Implement in this order.
 
@@ -248,25 +254,30 @@ def test_system2_matches_manual_causal():
 
 **Task:** Where "diffusion" appears without LLaDA framing, clarify as "iterative masked denoising/unmasking." The generation process is not a continuous diffusion process — it's discrete iterative unmasking with confidence-ordered revealing. The term "diffusion" is acceptable when referencing the loss/objective (following LLaDA convention) but the generation procedure should be described precisely.
 
-## v2 New Metrics to Add
+## New Metrics (v3)
 
-After implementing fixes 1-4, add these to the eval loop and dashboard:
+Added to the eval loop for v3:
 
-- Hybrid escalation rate at thresholds [0.5, 0.6, 0.7, 0.8, 0.9]
+- **Gradient norms**: Per-loss gradient norms (AR vs diffusion) logged at eval steps — reveals objective interference
+- **Routing efficiency**: Coverage/accuracy curves at confidence thresholds [0.5, 0.6, 0.7, 0.8, 0.9]
+
+Still planned (post-v3):
+
+- Hybrid escalation rate (requires fix #1 above)
 - Generation confidence distribution (histogram of mean confidence per sequence)
-- Tokens saved by S1 (when hybrid doesn't escalate)
 - Latency/throughput comparison (pure AR vs S1 vs hybrid)
 
-## v2 Comparison Plan
+## v3 Comparison Plan
 
-v2 runs identical `configs/tiny.yaml`, same data, same 50k steps. Only changes are the fixes above. Compare:
+v3 runs `configs/tiny.yaml` with `diff_loss_weight=1.3` (v1: 1.0, v2: 2.0). Same data, same 50k steps. Compare:
 
-- AUROC trajectory (should be similar — training-time signal was correct)
-- Hybrid escalation rate (new metric, not available in v1)
-- AR PPL trajectory (should be identical — fixes don't touch training)
-- S1 token accuracy trajectory (should be identical)
+- S1 token accuracy trajectory (v1: 28.7%, v2: 22.0% — can 1.3 recover?)
+- Diffusion loss trajectory (v1: 4.13, v2: 4.70 — can 1.3 reach <4.0?)
+- AR PPL trajectory (v1: 26.93, v2: 29.65 — less interference expected)
+- Gradient norm ratio over training (new diagnostic)
+- AUROC trajectory (should be similar across all runs)
 
-Key question: does fixing the confidence signal change anything about training, or was only inference affected?
+Key question: is there a sweet spot for `diff_loss_weight` between 1.0 and 2.0?
 
 ## Environment
 

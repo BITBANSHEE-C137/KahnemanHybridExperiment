@@ -154,8 +154,7 @@ Training runs on spot instances with four layers of protection:
 | 14 | Setup spot price updater | Initial run + cron every 5 min (with SPOT_TOKEN env var) |
 | 15 | Setup cost tracker | `cost-tracker.sh init` — download ledger from S3, cron every 5 min with Telegram env vars |
 | 16 | Setup auto-sitrep | Cron every 30 min with Telegram env vars |
-| 17 | Register Telegram webhook | `setWebhook` API with secret token, `drop_pending_updates=true` |
-| 18 | Launch training | tmux session, auto-resumes from latest checkpoint |
+| 17 | Launch training | tmux session, auto-resumes from latest checkpoint (v3 paths) |
 
 ## Checkpoint Management
 
@@ -260,9 +259,9 @@ python dashboard.py --job test   # Launch pytest
 ### AMI Snapshots
 
 The training environment is baked into an AMI to avoid lengthy setup on each spot instance launch:
-- AMI: `ami-0f6e32b2ebf1c8a2d` (clean — no baked secrets, all secrets fetched at boot from Secrets Manager)
-- Launch template: `lt-06e111b12bd85396f`, v19
-- Pre-installed: Python 3.12, PyTorch 2.6, CUDA 12.8, full ML stack
+- AMI: `ami-0544093f9b5424470` (`dual-system-v2-complete-20260307`, clean — no baked secrets, all secrets fetched at boot from Secrets Manager)
+- Launch template: `lt-06e111b12bd85396f`, v20
+- Pre-installed: Python 3.12, PyTorch 2.6, CUDA 12.4, full ML stack
 - Fleet ID: `fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a`
 
 ### Secrets Management
@@ -313,6 +312,8 @@ Spot pricing varies by instance type and availability zone. The `update-spot-pri
 - g5.2xlarge spot: ~$12 per complete run (~$24 with spot overhead across multiple allocations)
 
 **Actual v1 cost**: $27.62 across 4 spot instances, 3 reclamation recoveries. Spot overhead approximately doubled pure compute cost (consistent with projection). Training completed at step 50,000 on 2026-03-03.
+
+**Actual v2 cost**: $31.44 across 15 spot instances, 31 reclamation recoveries. Higher instance count due to increased spot market volatility during the training period (March 4–7). Training completed at step 50,000 on 2026-03-07.
 
 S3 storage: negligible (~$0.02/month for checkpoints and logs)
 

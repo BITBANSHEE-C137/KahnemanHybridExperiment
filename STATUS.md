@@ -1,6 +1,6 @@
 # Project Status — Dual-Process Language Model
 
-**Last updated:** 2026-03-07
+**Last updated:** 2026-03-07 (v3 pre-flight)
 
 > See also: [README.md](README.md) for research narrative and results | [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for ops and deployment details
 
@@ -66,6 +66,32 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. λ_diff increased fr
 ### Checkpoints
 
 All v2 checkpoints saved to S3 (`v2/step_48000.pt` through `v2/step_50000.pt`, ~1.4 GiB each). Full eval metrics for all 50 steps in `eval_metrics/v2/`.
+
+## v3 Training: PRE-FLIGHT
+
+GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` reduced from 2.0 (v2) to 1.3, seeking better balance between AR and diffusion objectives. New diagnostics: per-loss gradient norm logging and routing efficiency metrics at confidence thresholds.
+
+### Changes from v2
+
+| Parameter | v2 | v3 | Rationale |
+|-----------|----|----|-----------|
+| `diff_loss_weight` | 2.0 | 1.3 | v2's aggressive weighting hurt both S1 accuracy and diffusion loss |
+| `log_gradient_norms` | — | true | Per-loss gradient norm logging at eval steps |
+| `log_routing_efficiency` | — | true | Coverage/accuracy curves at confidence thresholds |
+| Post-training | Manual | Automated | 9-step sequence: benchmarks, report, S3 sync, Telegram, fleet shutdown |
+
+### Key Questions
+
+- Does `diff_loss_weight=1.3` (between v1's 1.0 and v2's 2.0) find a better tradeoff?
+- Can S1 accuracy recover from v2's regression (22.0%) toward v1's 28.7%?
+- Do gradient norms reveal the objective interference mechanism?
+
+### Infrastructure
+
+- Checkpoints: `checkpoints/v3/` (S3), eval metrics: `eval_metrics/v3/`
+- Cost ledger: fresh (v2 archived to `cost_ledger_v2.json`)
+- AMI: `ami-0544093f9b5424470` (v2 snapshot, code updated via `git pull` on boot)
+- `--fresh_start` removed from bootstrap — spot recovery resumes from checkpoint
 
 ## Infrastructure
 
@@ -138,13 +164,16 @@ All v2 checkpoints saved to S3 (`v2/step_48000.pt` through `v2/step_50000.pt`, ~
 - [x] LAMBADA + WikiText-103 benchmarks complete (v1)
 - [x] Complete v2 training (50,000 steps) — v2 DONE
 - [x] Fleet shut down, AMI snapshotted (`ami-0544093f9b5424470`), launch template updated to v20
+- [x] v3 pre-flight: removed `--fresh_start` from bootstrap, fixed Lambda CONFIG_SUMMARY, archived v2 cost ledger
+- [x] v3 prep: `diff_loss_weight` 2.0→1.3, gradient norm logging, routing efficiency metrics, automated post-training sequence
 
 ## Next Steps
 
 > See [README.md — Planned Work](README.md#planned-work) for the full research roadmap.
 
-- [ ] Run LAMBADA + WikiText-103 benchmarks on v2 final checkpoint
-- [ ] v1 vs v2 comparison — S1 accuracy, diffusion loss, AR PPL tradeoff
+- [ ] Launch v3 training (fleet capacity → 1)
+- [ ] Monitor gradient norm ratio (AR vs diffusion) to validate `diff_loss_weight=1.3`
+- [ ] v1 vs v2 vs v3 comparison — S1 accuracy, diffusion loss, AR PPL tradeoff
 - [ ] Confidence head analysis — escalation rates, S1 vs S2 quality per difficulty tier
 - [ ] Implement confidence scoring fix (accumulate during unmasking, not post-hoc)
 - [ ] Scale to GPT-2 Medium (355M) tier

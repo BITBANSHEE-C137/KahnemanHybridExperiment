@@ -6,7 +6,7 @@
 
 ## Abstract
 
-We investigate whether a single Transformer can jointly learn autoregressive and masked diffusion objectives through shared weights, producing a dual-process language model inspired by Kahneman's System 1 / System 2 framework. The architecture uses a trained confidence head to route between fast parallel generation (System 1, iterative unmasking) and slow sequential generation (System 2, causal autoregressive), with the only architectural difference between modes being the attention mask. v1 training on GPT-2 Small (124M parameters, 50,000 steps on OpenWebText) is complete, achieving 3 of 5 success targets: confidence AUROC 0.854 (>0.75), AR perplexity 26.9 (<40), and calibration ECE 0.010 (<0.05). Two targets narrowly missed: diffusion loss 4.13 (target 4.0, 97% of goal) and System 1 token accuracy 28.7% (target 40%, 72% of goal). The confidence head reliably distinguishes correct from incorrect System 1 predictions, validating the core routing mechanism, while AR perplexity remains well below the pretrained GPT-2 Small baseline (26.9 vs 31.5) despite measurable objective interference from joint training. Total training cost: $27.62 across 4 spot instances.
+We investigate whether a single Transformer can jointly learn autoregressive and masked diffusion objectives through shared weights, producing a dual-process language model inspired by Kahneman's System 1 / System 2 framework. The architecture uses a trained confidence head to route between fast parallel generation (System 1, iterative unmasking) and slow sequential generation (System 2, causal autoregressive), with the only architectural difference between modes being the attention mask. Two training runs are complete on GPT-2 Small (124M parameters, 50,000 steps each on OpenWebText): v1 (`diff_loss_weight=1.0`) achieved 3 of 5 targets — confidence AUROC 0.854, AR perplexity 26.9, ECE 0.010 — with diffusion loss 4.13 (target 4.0) and S1 accuracy 28.7% (target 40%). v2 (`diff_loss_weight=2.0`) improved AR perplexity to 29.65 and AUROC to 0.863, but S1 accuracy regressed to 22.0% and diffusion loss worsened to 4.70, suggesting over-weighting the diffusion objective hurts rather than helps. v3 (`diff_loss_weight=1.3`) is in pre-flight, seeking the sweet spot between v1 and v2 with new gradient norm diagnostics. The confidence head reliably distinguishes correct from incorrect System 1 predictions across both runs, validating the core routing mechanism. Total training cost: $59.06 ($27.62 v1 + $31.44 v2) across 19 spot instances.
 
 ## Motivation
 
@@ -109,7 +109,7 @@ L = λ_ar · L_ar + λ_diff · L_diff + λ_conf · L_conf
 | Loss | Description | Default Weight |
 |------|-------------|----------------|
 | **L_ar** (AR) | Cross-entropy next-token prediction (System 2). Labels auto-shifted by HuggingFace internally. | 1.0 |
-| **L_diff** (Diffusion) | Cross-entropy on masked positions only (System 1). | 1.0 |
+| **L_diff** (Diffusion) | Cross-entropy on masked positions only (System 1). | 1.0 (v1), 2.0 (v2), 1.3 (v3) |
 | **L_conf** (Confidence) | Binary cross-entropy — trains confidence head to predict whether System 1 got each masked token correct. | 0.1 |
 
 ### Inference Modes
@@ -186,7 +186,7 @@ Key hyperparameters for the Tiny (GPT-2 Small) config (`configs/tiny.yaml`):
 
 ## Results
 
-**Status: v1 Complete** — GPT-2 Small (124M), 50,000 steps, March 1–3, 2026. Dashboard at [train.bitbanshee.com](https://train.bitbanshee.com), full report at [train.bitbanshee.com/reports/](https://train.bitbanshee.com/reports/).
+**Status: v1 & v2 Complete, v3 Pre-flight** — GPT-2 Small (124M), 50,000 steps each. Dashboard at [train.bitbanshee.com](https://train.bitbanshee.com), reports at [train.bitbanshee.com/reports/v3/](https://train.bitbanshee.com/reports/v3/).
 
 > **Note (2026-03-01):** Eval metrics for steps 50–7,000 were re-evaluated from saved checkpoints after fixing a double-shift bug in the AR perplexity computation. The original evaluator manually shifted labels before passing them to `GPT2LMHeadModel.forward(labels=)`, which auto-shifts internally — resulting in the model predicting 2 tokens ahead. The bug inflated AR PPL by ~1000x (showing ~20,000 instead of ~22–25). Diffusion loss, S1 accuracy, confidence accuracy, ECE, and AUROC were unaffected. Steps 8,000+ were evaluated with the corrected code.
 
@@ -233,6 +233,20 @@ Steps 50–7,000 from corrected re-evaluation (2026-03-01). Steps 8,000+ evaluat
 | LAMBADA Accuracy | — | > 30% | Pending — planned for post-v1 analysis |
 | Hybrid Escalation | — | Measurable improvement | Pending — planned for post-v1 analysis |
 
+### v2 Results (`diff_loss_weight=2.0`)
+
+v2 trained March 4–7, 2026 across 15 spot instances with 31 reclamation recoveries. Total cost: $31.44.
+
+| Metric | v1 Final (50k) | v2 Final (50k) | Target | v2 Status |
+|--------|----------------|----------------|--------|-----------|
+| AR Perplexity | 26.93 | 29.65 | < 40 | **Met** — slightly worse than v1 |
+| S1 Token Accuracy | 28.7% | 22.0% | > 40% | Regressed — 6.7pp worse than v1 |
+| Diffusion Loss | 4.13 | 4.70 | < 4.0 | Regressed — 14% worse than v1 |
+| Confidence AUROC | 0.854 | 0.863 | > 0.75 | **Met** — marginally improved |
+| Confidence ECE | 0.010 | 0.009 | < 0.05 | **Met** |
+
+**Key finding:** Doubling `diff_loss_weight` from 1.0 to 2.0 was counterproductive. Both diffusion loss and S1 accuracy worsened, suggesting the higher weight created gradient interference rather than helping the diffusion objective. v3 will test `diff_loss_weight=1.3` as a middle ground.
+
 ### Observations
 
 - **Confidence head validated as a reliable routing mechanism.** AUROC crossed the 0.75 target at step 8,000 and continued climbing to a peak of 0.874 at step 45,000, finishing at 0.854. The dual-process architecture's core hypothesis — that a learned confidence head can mediate between fast and slow modes — is confirmed. ECE remained consistently below 0.02, indicating well-calibrated confidence scores throughout training.
@@ -243,7 +257,7 @@ Steps 50–7,000 from corrected re-evaluation (2026-03-01). Steps 8,000+ evaluat
 
 ## Baselines & Ablations
 
-*Planned for post-v1 analysis phase. v2 training with different &lambda; balance is the first planned ablation.*
+*v2 (`diff_loss_weight=2.0`) is the first completed ablation. v3 (`diff_loss_weight=1.3`) is in pre-flight. Remaining ablations planned for post-v3.*
 
 ### Baselines
 
@@ -268,13 +282,14 @@ Steps 50–7,000 from corrected re-evaluation (2026-03-01). Steps 8,000+ evaluat
 
 ## Planned Work
 
-*v1 training complete (50,000 steps, 2026-03-03). Remaining work:*
+*v1 and v2 complete. v3 in pre-flight (2026-03-07). Remaining work:*
 
-1. Run LAMBADA and WikiText-103 benchmarks on final checkpoint (vs pretrained GPT-2 Small: LAMBADA ~36%, WikiText PPL ~31.5)
-2. Confidence head analysis — escalation rates, System 1 vs System 2 quality per difficulty tier
-3. **v2 training (in progress)** — &lambda;_diff increased from 1.0 to 2.0 to rebalance gradient contribution. Eval metrics stored in `eval_metrics/v2/` (S3) with v1 archived in `eval_metrics_v1/` (git). Automated cost controls active: budget cap $50, spot price ceiling $0.75/hr.
-4. Ablation experiments (loss weight sweep, confidence head depth, mask schedule) if compute budget permits
-5. Scale to GPT-2 Medium (355M) tier
+1. **v3 training (pre-flight)** — `diff_loss_weight=1.3` (between v1's 1.0 and v2's 2.0). New diagnostics: per-loss gradient norms and routing efficiency metrics at confidence thresholds. Automated 9-step post-training sequence (benchmarks, report, S3 sync, Telegram, fleet shutdown).
+2. v1 vs v2 vs v3 comparison — S1 accuracy, diffusion loss, AR PPL tradeoff across `diff_loss_weight` values
+3. Confidence head analysis — escalation rates, System 1 vs System 2 quality per difficulty tier
+4. Implement confidence scoring fix (accumulate during unmasking loop, not post-hoc re-scoring)
+5. Ablation experiments (confidence head depth, mask schedule) if compute budget permits
+6. Scale to GPT-2 Medium (355M) tier
 
 ## Negative Results & Lessons Learned
 
@@ -292,9 +307,13 @@ The evaluator, benchmark, and system comparison scripts all manually shifted lab
 
 S1 token accuracy grew rapidly in early training (3.7% &rarr; 20% over 15k steps) but acceleration slowed significantly after step 30k, gaining only 5.7% over the final 20k steps. The plateau coincides with diffusion loss oscillating in the 3.9–4.5 range rather than steadily declining. This suggests the current &lambda;=1.0 balance may not provide sufficient gradient signal for the diffusion objective to continue improving at this stage of training.
 
+### v2: Over-weighting Diffusion Made Things Worse
+
+v2 doubled `diff_loss_weight` from 1.0 to 2.0, hypothesizing the diffusion objective needed more gradient signal. The result was worse on both diffusion metrics: S1 accuracy dropped from 28.7% to 22.0%, and diffusion loss increased from 4.13 to 4.70. Meanwhile AR perplexity rose from 26.93 to 29.65. The aggressive weighting appeared to create more gradient interference rather than helping the diffusion objective converge. This motivates v3's conservative `diff_loss_weight=1.3` and the addition of gradient norm logging to directly observe the objective interference mechanism.
+
 ### Spot Instance Recovery
 
-Training across 4 spot instances with 3 reclamation recoveries required a fully autonomous bootstrap system (16 steps). Total cost: $27.62 (63% savings vs on-demand). Key failure modes encountered and fixed: `crontab -l` returning exit code 1 under `set -o pipefail`, `pip install flask` breaking due to blinker version conflicts, and empty spot price API results crashing the price updater. v2 added automated cost controls: a $50 budget circuit breaker (`cost-tracker.sh`) and a $0.75/hr spot price ceiling (`update-spot-price.sh`), both checked every 5 minutes via cron. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for full details.
+v1 trained across 4 spot instances with 3 reclamation recoveries ($27.62). v2 trained across 15 spot instances with 31 reclamation recoveries ($31.44). The fully autonomous bootstrap system (17 steps) handles all recovery without manual intervention. Key failure modes encountered and fixed during v1: `crontab -l` returning exit code 1 under `set -o pipefail`, `pip install flask` breaking due to blinker version conflicts, and empty spot price API results crashing the price updater. v2 added automated cost controls: a $50 budget circuit breaker (`cost-tracker.sh`) and a $0.75/hr spot price ceiling (`update-spot-price.sh`), both checked every 5 minutes via cron. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for full details.
 
 ## Reproducibility
 
@@ -346,7 +365,8 @@ KahnemanHybridExperiment/
 │   └── training_steps.csv           # Step-level training losses
 ├── scripts/
 │   ├── benchmark.py                 # LAMBADA + WikiText-103 evaluation
-│   ├── compare_systems.py           # System 1 vs 2 analysis
+│   ├── compare_systems.py           # System 1 vs 2 analysis (saves JSON to benchmarks/)
+│   ├── generate_run_report.py       # HTML run report generator
 │   ├── lean_preprocess.py           # Memory-efficient tokenization
 │   ├── prepare_openwebtext.py       # Streaming data preprocessing
 │   └── reeval_checkpoints.py        # Re-evaluation after double-shift fix
@@ -378,7 +398,7 @@ KahnemanHybridExperiment/
 
 ## Infrastructure
 
-Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 checkpoint sync, and a live web dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Automated cost controls cap total spend at $50 (budget circuit breaker) and shut down the fleet if spot prices exceed $0.75/hr (price ceiling). A Telegram bot provides real-time alerts (spot reclaims, budget warnings) and on-demand commands (`/status`, `/sitrep`, `/help`) delivered via webhook through the CloudFront → nginx → Flask chain. See **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** for the full AWS architecture diagram, spot recovery, cost controls, Telegram command interface, and deployment details.
+Training runs on AWS EC2 spot instances with fully autonomous bootstrap, S3 checkpoint sync, and a live web dashboard at [train.bitbanshee.com](https://train.bitbanshee.com). Automated cost controls cap total spend at $50 per run (budget circuit breaker) and shut down the fleet if spot prices exceed $0.75/hr (price ceiling). A Telegram bot provides real-time alerts (spot reclaims, budget warnings) and on-demand commands (`/status`, `/sitrep`, `/start`, `/stop`, `/help`) delivered via webhook — always-on via Lambda even when EC2 is offline. v3 adds an automated 9-step post-training sequence (benchmarks, run report, S3 sync, git commit, Telegram notification, fleet shutdown). See **[INFRASTRUCTURE.md](INFRASTRUCTURE.md)** for the full AWS architecture diagram, spot recovery, cost controls, Telegram command interface, and deployment details.
 
 ## References
 
