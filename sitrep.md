@@ -1,21 +1,20 @@
-# v3 Training SITREP
+# ML Ops SITREP - v3 Training
 
 ## v3 Training Status
-**STOPPED** - Step **0/50000** (0.0%). GPU idle at 19% VRAM utilization. Instance running but trainer appears stalled. Spot rate: **$0.46/hr** (62% savings vs on-demand). Current session cost: **$0.06**.
+**TRAINING NOT STARTED** - Step 0/50k (0.0%). GPU at **35% utilization** (A10G, 109W/300W, 34°C, 4.4GB/23GB VRAM). Training systems initialized but no forward passes logged. Current spot rate **$0.46/hr** (61.7% savings vs on-demand $1.21/hr). No ETA available.
 
 ## Eval Metrics & Trends
-| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE   |
-|-------|--------|-----------|---------|-------|-------|
-| 43000 | 29.96  | 3.93      | 29.2%   | 0.868 | 0.020 |
-| 44000 | 29.96  | **4.37**  | **25.4%** | 0.865 | 0.016 |
-| 45000 | 29.80  | 3.86      | 29.3%   | 0.875 | 0.016 |
-| 46000 | 29.74  | 4.15      | 26.2%   | 0.865 | **0.011** |
-| 47000 | 29.72  | **4.61**  | **22.7%** | **0.855** | 0.011 |
-| 48000 | 29.72  | **4.73**  | **21.9%** | 0.858 | 0.012 |
-| 49000 | 29.64  | 4.24      | 25.4%   | 0.865 | **0.010** |
-| 50000 | 29.65  | **4.70**  | **22.0%** | 0.863 | **0.009** |
+Training data shows **completed v3 run** (steps 43k-50k trajectory):
 
-**Trends:** AR PPL stable ~29.7. **Diffusion loss degrading** (3.93→4.70). **S1 accuracy declining** severely (29.2%→22.0%). AUROC volatile but **trending down** (0.868→0.863). ECE **improving** (0.020→0.009).
+| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
+|------|---------|-----------|--------|-------|-----|
+| 43000 | 29.96 | 3.93 | 0.292 | 0.868 | 0.020 |
+| 45000 | 29.80 | 3.86 | 0.293 | 0.875 | 0.016 |
+| 47000 | 29.72 | 4.61 | 0.227 | 0.855 | 0.011 |
+| 49000 | 29.64 | 4.24 | 0.254 | 0.865 | 0.010 |
+| 50000 | 29.65 | 4.70 | 0.220 | 0.863 | 0.009 |
+
+**Trends:** AR PPL stabilized ~29.7. Diffusion loss volatile (3.86→4.70). S1 accuracy **regressed severely** (29.2%→22.0%). ECE improving (halved). AUROC stable ~0.86.
 
 ## Target Scorecard
 | Target | Current | Status |
@@ -23,16 +22,16 @@
 | AR PPL < 40 | **29.65** | ✅ **MET** |
 | AUROC > 0.75 | **0.863** | ✅ **MET** |
 | ECE < 0.05 | **0.009** | ✅ **MET** |
-| Diff loss → 4.0 | **4.70** | ❌ **MISS** (+18%) |
-| S1 accuracy → 40% | **22.0%** | ❌ **MISS** (-45%) |
+| Diff Loss → 4.0 | **4.70** | ❌ **MISS** (+17.5%) |
+| S1 Accuracy → 40% | **22.0%** | ❌ **MISS** (-45%) |
 
-**3/5 targets met**. Diffusion and S1 performance **severely degraded**.
+**3/5 targets met.** Diffusion and S1 both significantly underperformed.
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26%, WikiText PPL 43.86, S1 loss 4.12. Current v3 AR PPL (**29.65**) beats v1 WikiText baseline. S1 token accuracy (**22.0%**) far below expected joint training performance.
+v1 final: LAMBADA 94.26%/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12. v3 shows **AR improvement** (29.65 vs 43.86 PPL) but **S1 catastrophic regression** (22% vs target 40%).
 
 ## Infrastructure
-2 spot sessions, **1 reclaim** after 9min (session 1). Current session: **7.4min** uptime. Total cost: **$0.10**. Spot pricing stable at $0.46/hr.
+2 spot sessions in us-east-1a. First instance reclaimed after 9min ($0.07). Current session: 7.9min uptime, $0.06 cost. **Total cost: $0.127.** No training interruptions on current instance.
 
 ## What's Next
-**CRITICAL:** Debug trainer stall - step count stuck at 0 despite running process. Investigate S1 accuracy collapse and diffusion loss regression. Consider checkpoint rollback to step 45000 before performance cliff.
+**CRITICAL:** Investigate S1 token accuracy collapse. Current training appears stalled at step 0 despite showing completed trajectory data. Verify trainer state and resume/restart as needed. Priority: diagnose S1 head degradation before continuing.
