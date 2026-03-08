@@ -1,41 +1,40 @@
 # v3 Training SITREP
-*2026-03-08 14:00 UTC*
 
 ## v3 Training Status
-**Step 1/50k** (0.0% complete). GPU at **100% util**, A10G running 208W/300W at 58°C. VRAM: 16.2GB/23GB used. Fresh restart from step 1000 checkpoint after spot reclaim. No meaningful rate/ETA yet - just started.
+**Step 400/50k** (0.8% complete) | **GPU: 100% util** A10G @ 202W/300W, 58°C | **Rate:** ~0.23 steps/s | **ETA:** ~60 hours | **Spot cost:** $0.46/hr (62% savings)
 
-**Spot cost**: $0.46/hr (62% savings vs $1.21 on-demand).
+⚠️ **CRITICAL**: Step count regressed from 1000 → 400. Possible checkpoint rollback or instance restart.
 
 ## Eval Metrics & Trends
-| Step | AR PPL | Diff Loss | S1 Acc | Conf AUROC | Conf ECE |
-|------|--------|-----------|--------|------------|----------|
-| 1000 | **21.29** | **6.75** | **4.98%** | **0.555** | **0.0038** |
+| Step | AR PPL | Diff Loss | S1 Acc | Conf AUROC | ECE |
+|------|--------|-----------|--------|------------|-----|
+| 1000 | **21.29** | **6.75** | **4.98%** | **0.555** | **0.004** |
+| 400  | ~24.0¹ | **7.00** | ~4.5%¹ | ~0.55¹ | ~0.004¹ |
 
-Single eval point available. AR PPL significantly better than v1 baseline (43.86→21.29). Diffusion loss higher than target but training just resumed.
+¹*Estimated from current AR loss 3.17*
+
+**Trends:** Diffusion loss **regressed +4%** from checkpoint. AR performance likely degraded with step rollback.
 
 ## Target Scorecard
-| Metric | Target | Current | Status |
-|--------|--------|---------|---------|
-| AR PPL | < 40 | **21.29** | ✅ **PASS** |
-| AUROC | > 0.75 | **0.555** | ❌ **MISS** |
-| ECE | < 0.05 | **0.0038** | ✅ **PASS** |
-| Diff Loss | → 4.0 | **6.75** | 🔄 **PROGRESS** |
-| S1 Accuracy | → 40% | **4.98%** | ❌ **EARLY** |
+| Target | Current | Status |
+|--------|---------|--------|
+| AR PPL < 40 | ~24.0 | ✅ **MET** |
+| AUROC > 0.75 | 0.555 | ❌ **MISS** (-26%) |
+| ECE < 0.05 | 0.004 | ✅ **MET** |
+| Diff loss → 4.0 | 7.00 | ❌ **MISS** (+75%) |
+| S1 acc → 40% | 4.98% | ❌ **MISS** (-88%) |
 
-**3/5 targets on track**. AR performance strong, confidence calibration excellent, but AUROC needs major improvement.
+**2/5 targets met.** Confidence and S1 performance significantly behind.
 
 ## v1 Benchmark Baseline
-v1 (step 50k): LAMBADA 94.26%/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12.
-Pretrained GPT-2: LAMBADA 95.08%, WikiText 29.07 PPL.
-
-**v3 showing strong AR improvement** (43.86→21.29 PPL) over v1, suggesting better joint training balance.
+v1@50k: LAMBADA 94.26% | WikiText PPL 43.86 | S1 loss 4.12  
+Current v3 AR PPL **45% better** than v1 WikiText baseline. Diffusion loss **70% higher** than v1 S1 target.
 
 ## Infrastructure
-**Spot reclaim event**: Previous session (i-0b467969d9fe6585b) ran steps 400-1000 for $3.11 before termination. Current session restarted cleanly from checkpoint.
-
-**Total spend**: $3.15 across 2 sessions. Current rate sustainable for full 50k steps (~$150 projected).
+**Current:** g5.2xlarge spot, 39min uptime, $0.26 session cost  
+**History:** 2 sessions, 1 completed (6h46m, $3.11), **1 spot reclaim**  
+**Total cost:** $3.38 vs $73.28 on-demand
 
 ## What's Next
-Monitor training stability post-restart. Key watch: diffusion loss convergence and confidence head development. Next eval at step 1500 will show recovery trajectory from spot interruption.
-
-**Critical**: AUROC development needs attention - currently random performance.
+**Immediate:** Investigate step regression - validate checkpoint integrity and resume logic. Monitor for additional spot interruptions.  
+**Post-recovery:** Focus on diffusion loss convergence and S1 token accuracy improvements.
