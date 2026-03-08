@@ -29,13 +29,13 @@ from src.model.dual_process_gpt2 import DualProcessGPT2
 from src.model.masking import create_mask
 from src.data.openwebtext import create_dataloader, create_eval_dataloader
 from src.evaluation.evaluator import evaluate
+import src.utils.s3_sync as s3_sync
 from src.utils.s3_sync import (
     upload_checkpoint,
     upload_metrics,
     upload_training_log,
     SpotTerminationHandler,
     DATA_DIR,
-    CHECKPOINT_S3_PREFIX,
 )
 
 
@@ -373,7 +373,7 @@ def find_latest_checkpoint(checkpoint_dir: Path) -> Path | None:
     region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
     try:
         result = _sp.run(
-            ["aws", "s3", "ls", f"s3://{s3_bucket}/{CHECKPOINT_S3_PREFIX}/", "--region", region],
+            ["aws", "s3", "ls", f"s3://{s3_bucket}/{s3_sync.CHECKPOINT_S3_PREFIX}/", "--region", region],
             capture_output=True, text=True, timeout=30,
         )
         s3_steps = set()
@@ -387,7 +387,7 @@ def find_latest_checkpoint(checkpoint_dir: Path) -> Path | None:
         missing = s3_steps - local_steps
         if missing:
             latest_missing = max(missing)
-            s3_key = f"s3://{s3_bucket}/{CHECKPOINT_S3_PREFIX}/step_{latest_missing}.pt"
+            s3_key = f"s3://{s3_bucket}/{s3_sync.CHECKPOINT_S3_PREFIX}/step_{latest_missing}.pt"
             local_dest = checkpoint_dir / f"step_{latest_missing}.pt"
             print(f"[resume] Downloading checkpoint step {latest_missing} from S3...")
             _sp.run(
@@ -468,7 +468,7 @@ def train(
     _debug_info = [
         f"CHECKPOINT_DIR env={os.environ.get('CHECKPOINT_DIR', 'NOT SET')}",
         f"checkpoint_dir resolved={checkpoint_dir}",
-        f"CHECKPOINT_S3_PREFIX={CHECKPOINT_S3_PREFIX}",
+        f"s3_sync.CHECKPOINT_S3_PREFIX={s3_sync.CHECKPOINT_S3_PREFIX}",
         f"checkpoint_dir contents={list(checkpoint_dir.glob('step_*.pt'))}",
         f"max_steps={train_cfg['max_steps']}, smoke_test={smoke_test}, fresh_start={fresh_start}",
     ]
