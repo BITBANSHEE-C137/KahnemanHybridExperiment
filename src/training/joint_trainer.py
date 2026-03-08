@@ -548,6 +548,11 @@ def train(
     step = start_step
     t0 = time.time()
 
+    _loop_msg = f"Training loop: start_step={start_step}, max_steps={max_steps}, will_run={start_step < max_steps}"
+    print(f"[debug] {_loop_msg}", flush=True)
+    with open(DATA_DIR / "trainer_debug.log", "a") as _df:
+        _df.write(_loop_msg + "\n")
+
     while step < max_steps:
         optimizer.zero_grad()
         total_ar_loss = 0.0
