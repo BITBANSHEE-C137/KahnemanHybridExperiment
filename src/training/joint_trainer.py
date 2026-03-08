@@ -97,13 +97,13 @@ def _log_gradient_norms(
 
     model.train()  # Need gradients
 
-    # AR gradient norm
+    # AR gradient norm (compute without scaler to avoid unscale_ conflicts)
     optimizer.zero_grad()
     with torch.autocast(device_type=device.type, dtype=dtype):
         ar_loss_only = model.compute_ar_loss(batch, batch)
     scaler.scale(ar_loss_only).backward()
-    scaler.unscale_(optimizer)
-    grad_norm_ar = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf')).item()
+    scale = scaler.get_scale()
+    grad_norm_ar = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf')).item() / scale
 
     # Diffusion gradient norm
     optimizer.zero_grad()
@@ -111,8 +111,7 @@ def _log_gradient_norms(
         masked_ids, mask_pos = create_mask(batch, mask_token_id, min_mask_ratio, max_mask_ratio)
         diff_loss_only = model.compute_diffusion_loss(batch, masked_ids, mask_pos)
     scaler.scale(diff_loss_only).backward()
-    scaler.unscale_(optimizer)
-    grad_norm_diff = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf')).item()
+    grad_norm_diff = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf')).item() / scale
 
     # Clean up
     optimizer.zero_grad()
