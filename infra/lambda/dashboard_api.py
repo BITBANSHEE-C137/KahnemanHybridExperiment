@@ -415,13 +415,11 @@ def _telegram_help(chat_id: str) -> None:
 def _telegram_start(chat_id: str) -> None:
     """Handle /start — set fleet target capacity to 1."""
     try:
-        ec2 = boto3.client("ec2")
+        ec2 = boto3.client("ec2", region_name="us-east-1")
         ec2.modify_fleet(
             FleetId=FLEET_ID,
             TargetCapacitySpecification={
                 "TotalTargetCapacity": 1,
-                "SpotTargetCapacity": 1,
-                "DefaultTargetCapacityType": "spot",
             },
         )
         _send_telegram_reply(chat_id, "Fleet capacity set to 1. Instance launching...")
@@ -433,13 +431,11 @@ def _telegram_start(chat_id: str) -> None:
 def _telegram_stop(chat_id: str) -> None:
     """Handle /stop — zero fleet capacity."""
     try:
-        ec2 = boto3.client("ec2")
+        ec2 = boto3.client("ec2", region_name="us-east-1")
         ec2.modify_fleet(
             FleetId=FLEET_ID,
             TargetCapacitySpecification={
                 "TotalTargetCapacity": 0,
-                "SpotTargetCapacity": 0,
-                "DefaultTargetCapacityType": "spot",
             },
         )
         _send_telegram_reply(chat_id, "Fleet capacity set to 0.")
