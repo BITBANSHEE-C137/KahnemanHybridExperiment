@@ -1,38 +1,42 @@
-# SITREP v3 Training Status
+# v3 Training SITREP
 
 ## v3 Training Status
-**Just started - Step 0/50K (0%)**. A10G idle at setup, 60W power draw, 2.1GB VRAM loaded. Trainer processes running, sync active. **ETA: Unknown** until first training steps complete. Current spot rate **$0.464/hr** (61.7% savings vs on-demand).
+**Step 1/50k (0.0% complete)** - Fresh start after spot reclaim  
+GPU: A10G @ **99% util**, 198W/300W, 54°C, 16.2GB/23GB VRAM  
+Rate: Too early to estimate | ETA: TBD  
+Spot cost: **$0.46/hr** (62% savings vs on-demand $1.21/hr)
 
 ## Eval Metrics & Trends
-| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
-|------|--------|-----------|---------|-------|-----|
-| 43k  | 29.96  | 3.93      | 29.2%   | 0.868 | 0.020 |
-| 44k  | 29.96  | **4.37**  | **25.4%** | 0.865 | 0.016 |
-| 45k  | 29.80  | 3.86      | 29.3%   | 0.875 | 0.016 |
-| 46k  | 29.74  | 4.15      | 26.2%   | 0.865 | **0.011** |
-| 47k  | 29.72  | **4.61**  | **22.7%** | **0.855** | 0.011 |
-| 48k  | 29.72  | **4.73**  | **21.9%** | 0.858 | 0.012 |
-| 49k  | 29.64  | 4.24      | 25.4%   | 0.865 | **0.010** |
-| 50k  | 29.65  | **4.70**  | **22.0%** | 0.863 | **0.009** |
+No eval checkpoints yet - training just started
 
-🔴 **Diffusion loss regressing** (3.93→4.70). S1 accuracy **declining trend** (29.2%→22.0%). AUROC **dropping** from peak 0.875. ECE improving but at cost of calibration accuracy.
+| Step | AR PPL | Diff Loss | S1 Acc | Conf AUROC | ECE |
+|------|--------|-----------|---------|------------|-----|
+| 1    | ~27.3  | 10.79     | N/A     | N/A        | N/A |
+
+**Initial losses look reasonable** - AR loss 3.315 (~27 PPL), diffusion loss high as expected
 
 ## Target Scorecard
 | Metric | Target | Current | Status |
 |--------|--------|---------|---------|
-| AR PPL | < 40   | **29.65** | ✅ |
-| AUROC  | > 0.75 | **0.863** | ✅ |
-| ECE    | < 0.05 | **0.009** | ✅ |
-| Diff Loss | → 4.0 | **4.70** | 🔴 |
-| S1 Accuracy | → 40% | **22.0%** | 🔴 |
-
-**3/5 targets met**. Diffusion and S1 performance deteriorating in final stretch.
+| AR PPL | < 40 | ~27.3 | ✅ **Already met** |
+| AUROC | > 0.75 | N/A | ⏳ Pending |
+| ECE | < 0.05 | N/A | ⏳ Pending |
+| Diff Loss | → 4.0 | 10.79 | 🔴 **Needs -6.8 reduction** |
+| S1 Accuracy | → 40% | N/A | ⏳ Pending |
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26% acc (PPL 1.46), WikiText PPL 43.86, S1 loss 4.12. Current v3 AR performance **superior** (29.65 vs 43.86 PPL). S1 token accuracy severely lagging baseline expectations.
+v1 final: LAMBADA 94.26%/1.46 PPL, WikiText 43.86 PPL, S1 loss 4.12  
+GPT-2 baseline: LAMBADA 95.08%, WikiText 29.07 PPL  
+**AR slightly regressed, S1 dropped 67% from joint training**
 
 ## Infrastructure
-Single g5.2xlarge spot (us-east-1a), **8min uptime**, $0.06 cost. No reclaims. Stable 61.7% savings rate. Instance fresh for v3 restart.
+**2 spot sessions**, 1 reclaim after 8min (session 1)  
+Current: 11min uptime, **$0.11 total cost**  
+Previous reclaim: i-0d24c88137ed1cf10 @ 04:41 UTC  
+Current stable: i-0dc653738fe50a9b2 since 04:48 UTC
 
 ## What's Next
-**Critical**: Investigate S1 accuracy collapse and diffusion instability in final 7K steps. Consider earlier checkpoint (45k) for deployment. Priority: S1 head analysis and potential learning rate adjustment for next training cycle.
+- **Monitor spot stability** - already 1 reclaim today
+- Wait for first eval checkpoint (~step 100-500)  
+- Establish training rate baseline
+- Compare initial convergence vs v1/v2 patterns
