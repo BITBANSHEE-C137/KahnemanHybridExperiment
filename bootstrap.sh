@@ -420,7 +420,7 @@ fi
 step_start 17
 echo "Launching training..."
 sudo -u ubuntu setsid tmux new-session -d -s training -c "$PROJECT"
-sudo -u ubuntu tmux send-keys -t training "export WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' CHECKPOINT_DIR='$DATA_DIR/checkpoints/v3' CHECKPOINT_S3_PREFIX='checkpoints/v3' EVAL_S3_PREFIX='eval_metrics/v3' DATA_DIR='$DATA_DIR' PROJECT_DIR='$PROJECT' S3_BUCKET='$S3_BUCKET' PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' && python3 -m src.training.joint_trainer --config configs/tiny.yaml" Enter
+sudo -u ubuntu tmux send-keys -t training "export WANDB_API_KEY='$WANDB_API_KEY' HF_TOKEN='$HF_TOKEN' PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed' CHECKPOINT_DIR='$DATA_DIR/checkpoints/v3' CHECKPOINT_S3_PREFIX='checkpoints/v3' EVAL_S3_PREFIX='eval_metrics/v3' DATA_DIR='$DATA_DIR' PROJECT_DIR='$PROJECT' S3_BUCKET='$S3_BUCKET' PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' && python3 -m src.training.joint_trainer --config configs/tiny.yaml --checkpoint_dir '$DATA_DIR/checkpoints/v3' --checkpoint_s3_prefix 'checkpoints/v3'" Enter
 echo "  training: LAUNCHED in tmux (v3, resumes from checkpoint if available)"
 step_done 17
 

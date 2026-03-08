@@ -707,10 +707,21 @@ def main() -> None:
     parser.add_argument("--max_steps", type=int, default=None, help="Override max training steps")
     parser.add_argument("--smoke_test", action="store_true", help="Run quick smoke test")
     parser.add_argument("--fresh_start", action="store_true", help="Ignore existing checkpoints, start from scratch")
+    parser.add_argument("--checkpoint_dir", type=str, default=None, help="Override checkpoint directory (bypasses env var and config)")
+    parser.add_argument("--checkpoint_s3_prefix", type=str, default=None, help="Override S3 checkpoint prefix (bypasses env var)")
     args = parser.parse_args()
 
     with open(args.config) as f:
         config = yaml.safe_load(f)
+
+    # CLI overrides for checkpoint paths (bypass AMI env vars)
+    if args.checkpoint_dir:
+        os.environ["CHECKPOINT_DIR"] = args.checkpoint_dir
+    if args.checkpoint_s3_prefix:
+        os.environ["CHECKPOINT_S3_PREFIX"] = args.checkpoint_s3_prefix
+        # Force reload since s3_sync module already read the env var at import time
+        import src.utils.s3_sync as _s3m
+        _s3m.CHECKPOINT_S3_PREFIX = args.checkpoint_s3_prefix
 
     train(config, smoke_test=args.smoke_test, max_steps_override=args.max_steps, fresh_start=args.fresh_start)
 
