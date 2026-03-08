@@ -1,30 +1,35 @@
+# ML Ops SITREP - v3 Training
+
 ## v3 Training Status
-**Step 2900/50000** (5.8% complete). GPU at **100% util**, 204W/300W, 59°C. Current rate ~400 steps/hr. **ETA: ~120 hours**. Running g5.2xlarge spot at **$0.46/hr** (62% savings vs on-demand). Total cost: **$4.76**.
+**Step 3300/50000 (6.6%)** | GPU: 100% util, 204W/300W, 60°C | **Rate: ~230 steps/hr** | ETA: ~8.5 days | Spot: **$0.46/hr** (62% savings vs on-demand)
 
 ## Eval Metrics & Trends
 | Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
 |------|--------|-----------|--------|-------|-----|
-| 1000 | 21.29  | 6.75     | 5.0%   | 0.557 | 0.0057 |
-| 2000 | **22.53** | **6.54** | **6.4%** | **0.613** | **0.0036** |
+| 1000 | 21.29  | 6.75      | 5.04%  | 0.557 | 0.006 |
+| 2000 | 22.53  | 6.54      | 6.44%  | 0.613 | 0.004 |
+| 3000 | **23.17** | **6.38** | **7.57%** | **0.638** | **0.010** |
 
-**Trends:** AR perplexity **regressing** (+1.24). Diffusion loss improving (-0.21). S1 accuracy climbing (+1.4pp). Confidence AUROC improving (+0.056), ECE improving (-0.002).
+**🔴 AR PPL regressing** (21.29→23.17), **🟢 diffusion loss improving** (-5.5%), **🟢 S1 accuracy climbing** (+50%), **🟢 AUROC trending up** (+14.5%), **🟡 ECE slightly degraded** but still excellent.
 
 ## Target Scorecard
 | Target | Current | Status |
 |--------|---------|--------|
-| AR PPL < 40 | **22.53** | ✅ **MET** |
-| AUROC > 0.75 | **0.613** | ❌ **MISS** (-0.137) |
-| ECE < 0.05 | **0.0036** | ✅ **MET** |
-| Diff loss → 4.0 | **6.54** | ❌ **MISS** (+2.54) |
-| S1 accuracy → 40% | **6.4%** | ❌ **MISS** (-33.6pp) |
+| AR PPL < 40 | **23.17** | ✅ **MET** |
+| AUROC > 0.75 | **0.638** | ❌ Need +17.8% |
+| ECE < 0.05 | **0.010** | ✅ **MET** |
+| Diff loss → 4.0 | **6.38** | ❌ Need -37% |
+| S1 accuracy → 40% | **7.57%** | ❌ Need +429% |
 
-**2/5 targets met.** Early in training but diffusion/S1 targets ambitious.
+**2/5 targets met**. Early stage but concerning AR regression vs improving diffusion.
 
 ## v1 Benchmark Baseline
-v1@50k: LAMBADA 94.26% (PPL 1.46), WikiText-103 PPL 43.86, S1 loss 4.12. Current v3 AR PPL (22.53) **significantly better** than v1 WikiText baseline (43.86) despite early training. S1 accuracy (6.4%) tracking behind v1 trajectory.
+v1 final: LAMBADA 94.26% acc, PPL 1.46 | WikiText PPL 43.86 | S1 loss 4.12  
+GPT-2 baseline: LAMBADA 95.08%, WikiText PPL 29.07  
+**Current v3 AR PPL (23.17) significantly better than v1 WikiText (43.86)**
 
 ## Infrastructure
-**2 spot sessions**, 1 reclaim at step 1000. Current instance up **3.7hrs**, stable. Previous session cost $3.11 (6.8hrs), current $1.64. **No recent interruptions**.
+**2 spot sessions**, **0 reclaims** | Total cost: **$4.99** | Current session: 4.2hr uptime | Checkpoints syncing normally | VRAM: 16.2/23GB (70%)
 
 ## What's Next
-Monitor AR perplexity regression - may indicate joint training interference. S1 accuracy climbing slowly but diffusion loss needs aggressive improvement. Next eval checkpoint at step 3000 critical for trend confirmation.
+Monitor AR regression trend - may indicate learning rate too aggressive. Expect S1 accuracy acceleration around 5k-10k steps. Planning confidence head ablation at 10k checkpoint.
