@@ -17,8 +17,8 @@ from pathlib import Path
 S3_BUCKET = os.environ.get("S3_BUCKET", "ml-lab-004507070771/dual-system-research-data")
 AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/opt/dlami/nvme/ml-lab"))
-CHECKPOINT_S3_PREFIX = os.environ.get("CHECKPOINT_S3_PREFIX", "checkpoints")
-EVAL_S3_PREFIX = os.environ.get("EVAL_S3_PREFIX", "eval_metrics")
+CHECKPOINT_S3_PREFIX = os.environ.get("CHECKPOINT_S3_PREFIX", "checkpoints/v3")
+EVAL_S3_PREFIX = os.environ.get("EVAL_S3_PREFIX", "eval_metrics/v3")
 
 
 def upload_file(local_path: str | Path, s3_key: str) -> bool:
