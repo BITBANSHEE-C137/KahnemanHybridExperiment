@@ -1754,7 +1754,7 @@ body::before {
         <div id="config-info" style="font-size: 14px;color:var(--dim);margin-top:2px">--</div>
       </div>
       <div>
-        <span style="font-size: 13px;color:var(--dim);text-transform:uppercase;letter-spacing:0.06em">Checkpoints: v2</span>
+        <span style="font-size: 13px;color:var(--dim);text-transform:uppercase;letter-spacing:0.06em">Checkpoints: v3</span>
         <div id="last-ckpt" style="font-size: 14px; margin: 3px 0 4px; color:var(--green)"></div>
         <div class="ckpt-list" id="ckpt-list">--</div>
       </div>
