@@ -368,55 +368,76 @@ Telegram bot integration provides real-time alerts for critical events. The bot 
 
 | Event | Source | Trigger |
 |-------|--------|---------|
-| Bootstrap complete | `bootstrap.sh` | Step 18 finishes successfully |
+| Bootstrap complete | `bootstrap.sh` | Step 17 finishes successfully |
 | Spot reclaim detected | `web_dashboard.py` | Instance lifecycle changes to `spot-terminated` (via IMDS) |
+| Training complete | `web_dashboard.py` | Step reaches `max_steps` |
+| Training complete (post-training) | `joint_trainer.py` | Post-training sequence sends benchmark summary + report link |
+| Trainer crash | `web_dashboard.py` | Trainer PID gone while step < max_steps |
 | Budget exceeded | `cost-tracker.sh` | `total_cost >= MAX_BUDGET` ($50 default) |
 | Spot price ceiling hit | `update-spot-price.sh` | `current_price >= MAX_SPOT_PRICE` ($0.75/hr default) |
 | Sitrep delivery | `auto_sitrep.py` | Every 30 min (includes formatted SITREP) |
 | Training milestone | `auto_sitrep.py` | Key step thresholds reached |
-| On-demand sitrep | `web_dashboard.py` → `auto_sitrep.py` | User sends `/sitrep` via Telegram |
-| On-demand status | `web_dashboard.py` | User sends `/status` via Telegram |
+| On-demand sitrep | `web_dashboard.py` / Lambda | User sends `/sitrep` via Telegram |
+| On-demand status | `web_dashboard.py` / Lambda | User sends `/status` via Telegram |
+| Fleet started | Lambda | User sends `/start` via Telegram |
+| Fleet stopped | Lambda | User sends `/stop` via Telegram |
 
 ### Implementation
 
-Outbound notifications use `send_telegram()` in `auto_sitrep.py` as the canonical implementation. Other scripts import or inline-call this function. Inbound commands are handled by the webhook route in `web_dashboard.py`, which validates the secret token header and dispatches to per-command handlers. Both use the Telegram Bot API with `sendMessage` / `sendPhoto` endpoints.
+Outbound notifications use `send_telegram()` in `auto_sitrep.py` as the canonical implementation. Other scripts import or inline-call this function. Inbound commands are handled by two backends: the webhook route in `web_dashboard.py` (EC2, live data) and the Lambda handler in `infra/lambda/dashboard_api.py` (always-on, S3-cached data). Both validate the secret token header and dispatch to per-command handlers. Both use the Telegram Bot API with `sendMessage` / `sendPhoto` endpoints.
 
-**Env var propagation:** Cron jobs don't inherit `.bashrc` (interactive shell guard). Bootstrap sets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` inline in each cron command. The dashboard process also receives these env vars explicitly at launch.
+**Env var propagation:** Cron jobs don't inherit `.bashrc` (interactive shell guard). Bootstrap sets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` inline in each cron command. The dashboard process also receives these env vars explicitly at launch. Lambda receives them via Lambda environment variables configured in the function settings.
 
 ## Telegram Command Interface
 
-On-demand commands via Telegram complement the scheduled notifications. The user sends a command from their phone; Telegram delivers it as a webhook POST to the Flask dashboard.
+On-demand commands via Telegram complement the scheduled notifications. The bot has two backends - an always-on Lambda handler and the Flask dashboard on EC2 - providing command access regardless of whether an instance is running.
 
-### Request Flow
+### Dual Backend Architecture
 
+The Telegram webhook routes through CloudFront to whichever backend is available:
+
+**When EC2 is running (training active):**
 ```
-Phone → Telegram API → CloudFront (/api/telegram/*) → nginx → Flask → handler
-                                                                    ↓
-                                                            Telegram API ← response
+Phone -> Telegram API -> CloudFront (/api/telegram/*) -> nginx -> Flask -> handler
+                                                                         |
+                                                                 Telegram API <- response
 ```
+Flask handles commands with live data (real-time GPU stats, training step, live cost). The `/api/telegram/*` behavior routes directly to `ec2-primary` (not an origin group) because CloudFront prohibits POST methods on behaviors using origin groups.
 
-**CloudFront note:** The `/api/telegram/*` behavior routes directly to `ec2-primary` (not an origin group) because CloudFront prohibits POST methods on behaviors using origin groups. The `AllViewerExceptHostHeader` origin request policy forwards the `X-Telegram-Bot-Api-Secret-Token` header for validation.
+**When EC2 is offline (fleet capacity 0):**
+```
+Phone -> Telegram API -> Lambda (always-on webhook handler) -> handler
+                                                               |
+                                                       Telegram API <- response
+```
+Lambda handles commands using S3-cached data (last-synced metrics, cost ledger, sitrep). The Lambda webhook is registered separately via the Telegram Bot API (not through CloudFront), so it works independently of CloudFront routing.
 
 ### Commands
 
-| Command | Response | Cooldown | Implementation |
-|---------|----------|----------|----------------|
-| `/status` | Inline text: step, GPU, metrics, cost, ETA | 15s | `build_status()` in web_dashboard.py |
-| `/sitrep` | Acknowledges, then delivers full sitrep + metrics image | 60s | Spawns `auto_sitrep.py --force-telegram` |
-| `/help` | Lists available commands | none | Static text reply |
+| Command | Description | EC2 (Flask) | Lambda (always-on) |
+|---------|-------------|-------------|---------------------|
+| `/status` | Training progress, GPU, metrics, cost, ETA | Live data, 15s cooldown | S3-cached data |
+| `/sitrep` | Full situation report | Spawns `auto_sitrep.py --force-telegram` with metrics image | Reads `sitrep.md` from S3 (text only, no image) |
+| `/start` | Launch fleet (set capacity to 1) | Not available | Calls `ec2.modify_fleet()` |
+| `/stop` | Zero fleet (terminate instance) | Not available | Calls `ec2.modify_fleet()` |
+| `/help` | List available commands | Static text | Static text |
+
+**Key distinction:** `/start` and `/stop` are only available via the Lambda handler because they are needed precisely when no EC2 instance is running. Lambda calls `ec2.modify_fleet()` directly via the AWS SDK to set `TotalTargetCapacity` to 1 or 0 respectively.
 
 ### Security
 
+Both backends apply the same security layers:
+
 | Layer | Mechanism |
 |-------|-----------|
-| **Secret token** | Telegram includes `X-Telegram-Bot-Api-Secret-Token` header; Flask validates against `TELEGRAM_WEBHOOK_SECRET` |
+| **Secret token** | Telegram includes `X-Telegram-Bot-Api-Secret-Token` header; both Flask and Lambda validate against `TELEGRAM_WEBHOOK_SECRET` |
 | **Chat ID filter** | Only responds to the configured `TELEGRAM_CHAT_ID`; other chats silently ignored (200 OK) |
-| **Rate limiting** | Per-command cooldowns prevent abuse (in-memory, resets on dashboard restart) |
-| **CloudFront** | TLS termination, DDoS protection, header forwarding via origin request policy |
+| **Rate limiting** | Per-command cooldowns (Flask: in-memory, resets on restart; Lambda: not rate-limited) |
+| **CloudFront** | TLS termination, DDoS protection, header forwarding via `AllViewerExceptHostHeader` origin request policy |
 
 ### Webhook Registration
 
-Registered automatically during bootstrap Step 16 via Telegram's `setWebhook` API:
+The webhook is registered automatically during bootstrap Step 16 via Telegram's `setWebhook` API:
 ```bash
 curl -sf "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
     -d "url=https://train.bitbanshee.com/api/telegram/webhook" \
@@ -427,10 +448,13 @@ curl -sf "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
 
 The webhook secret is generated deterministically from the bot token (`sha256sum`) during bootstrap Step 1, ensuring consistency across spot instance recoveries without storing an additional secret.
 
+**Always-on fallback:** When the EC2 instance goes down, CloudFront returns 5xx for `/api/telegram/*`. The Lambda webhook handler is registered as a separate Telegram webhook endpoint (via API Gateway) so that `/start`, `/stop`, `/status`, `/sitrep`, and `/help` remain available even with no running instance.
+
 ### Files
 
 | File | Role |
 |------|------|
-| `web_dashboard.py` | Webhook route, command handlers, rate limiter, `_send_telegram_reply()` |
+| `web_dashboard.py` | EC2 webhook route, command handlers (`/status`, `/sitrep`, `/help`), rate limiter, `_send_telegram_reply()` |
+| `infra/lambda/dashboard_api.py` | Lambda webhook handler, all 5 commands (`/status`, `/sitrep`, `/help`, `/start`, `/stop`), fleet management via EC2 API |
 | `auto_sitrep.py` | `--force-telegram` flag for on-demand sitrep generation with file lock |
 | `bootstrap.sh` | Webhook secret generation (Step 1), dashboard env var plumbing (Step 12), webhook registration (Step 16) |
