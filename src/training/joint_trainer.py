@@ -463,11 +463,17 @@ def train(
     # Checkpoint dir (needed for resume logic below)
     checkpoint_dir = Path(os.environ.get("CHECKPOINT_DIR", train_cfg["checkpoint_dir"]))
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[debug] CHECKPOINT_DIR env={os.environ.get('CHECKPOINT_DIR', 'NOT SET')}")
+    print(f"[debug] checkpoint_dir resolved={checkpoint_dir}")
+    print(f"[debug] CHECKPOINT_S3_PREFIX={CHECKPOINT_S3_PREFIX}")
+    print(f"[debug] checkpoint_dir contents={list(checkpoint_dir.glob('step_*.pt'))}")
+    print(f"[debug] max_steps={train_cfg['max_steps']}, smoke_test={smoke_test}, fresh_start={fresh_start}")
 
     # Resume from checkpoint if available
     start_step = 0
     if not smoke_test and not fresh_start:
         latest_ckpt = find_latest_checkpoint(checkpoint_dir)
+        print(f"[debug] find_latest_checkpoint returned: {latest_ckpt}")
         if latest_ckpt is not None:
             print(f"[resume] Loading checkpoint: {latest_ckpt}")
             ckpt = torch.load(latest_ckpt, map_location=device, weights_only=False)
