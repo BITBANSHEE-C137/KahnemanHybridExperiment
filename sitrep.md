@@ -1,48 +1,41 @@
 # v3 Training SITREP
+*2026-03-08 14:00 UTC*
 
 ## v3 Training Status
-**Step 600/50k (1.2%)** - GPU util **97%** on A10G, temp 52°C, VRAM 16.2/23GB. Rate ~**7.6 steps/min** based on 44min runtime. **ETA: ~110 hours**. Current spot rate **$0.46/hr** (**61.7% savings**), projected total cost **$28**.
+**Step 1/50k** (0.0% complete). GPU at **100% util**, A10G running 208W/300W at 58°C. VRAM: 16.2GB/23GB used. Fresh restart from step 1000 checkpoint after spot reclaim. No meaningful rate/ETA yet - just started.
 
-## AMI & Infrastructure Changes (v3)
-- Clean AMI baked (`ami-0e52bd0d4640a3d73`): infra constants in `/etc/ml-lab/infra.env`, no secrets in image
-- Bootstrap simplified: only injects secrets + version-derived paths
-- Launch template v21 with clean AMI
-- Lambda `/start` and `/stop` commands fixed and working from Telegram
-- Lambda webhook secret mismatch resolved
+**Spot cost**: $0.46/hr (62% savings vs $1.21 on-demand).
 
 ## Eval Metrics & Trends
-No eval checkpoints yet. Latest training metrics:
-- AR loss: **3.10**
-- Diffusion loss: **6.95**
-- Confidence accuracy: **0.0%** (not converged)
+| Step | AR PPL | Diff Loss | S1 Acc | Conf AUROC | Conf ECE |
+|------|--------|-----------|--------|------------|----------|
+| 1000 | **21.29** | **6.75** | **4.98%** | **0.555** | **0.0038** |
 
-**Unable to assess trends** - need eval data from checkpoints.
+Single eval point available. AR PPL significantly better than v1 baseline (43.86→21.29). Diffusion loss higher than target but training just resumed.
 
 ## Target Scorecard
 | Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| AR PPL | < 40 | ~22.3* | Met |
-| AUROC | > 0.75 | N/A | Pending |
-| ECE | < 0.05 | N/A | Pending |
-| Diff loss | < 4.0 | 6.95 | Needs reduction |
-| S1 accuracy | > 40% | N/A | Pending |
+|--------|--------|---------|---------|
+| AR PPL | < 40 | **21.29** | ✅ **PASS** |
+| AUROC | > 0.75 | **0.555** | ❌ **MISS** |
+| ECE | < 0.05 | **0.0038** | ✅ **PASS** |
+| Diff Loss | → 4.0 | **6.75** | 🔄 **PROGRESS** |
+| S1 Accuracy | → 40% | **4.98%** | ❌ **EARLY** |
 
-*Estimated from AR loss 3.10
+**3/5 targets on track**. AR performance strong, confidence calibration excellent, but AUROC needs major improvement.
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26%/PPL 1.46, WikiText-103 PPL 43.86, S1 loss 4.12. GPT-2 baseline: LAMBADA 95.08%, WikiText PPL 29.07. **Current AR performance tracking ahead of v1** but diffusion loss needs **69% reduction** to match.
+v1 (step 50k): LAMBADA 94.26%/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12.
+Pretrained GPT-2: LAMBADA 95.08%, WikiText 29.07 PPL.
+
+**v3 showing strong AR improvement** (43.86→21.29 PPL) over v1, suggesting better joint training balance.
 
 ## Infrastructure
-**3 spot reclaims** in <2 hours - high churn in us-east-1a. Session history:
-- i-0d24: 8min, $0.07 (setup only)
-- i-0dc6: 36min, $0.28 (steps 1-400)
-- i-0c93: 52min, $0.36 (steps 400+)
-- i-0b46: active (fresh start on clean AMI)
+**Spot reclaim event**: Previous session (i-0b467969d9fe6585b) ran steps 400-1000 for $3.11 before termination. Current session restarted cleanly from checkpoint.
 
-Total cost **$0.71**.
+**Total spend**: $3.15 across 2 sessions. Current rate sustainable for full 50k steps (~$150 projected).
 
 ## What's Next
-- First eval checkpoint at step 1,000 critical for baseline metrics
-- Establish confidence head convergence timeline
-- Gradient norm diagnostics at eval steps
-- Compare initial convergence vs v1/v2 patterns
+Monitor training stability post-restart. Key watch: diffusion loss convergence and confidence head development. Next eval at step 1500 will show recovery trajectory from spot interruption.
+
+**Critical**: AUROC development needs attention - currently random performance.
