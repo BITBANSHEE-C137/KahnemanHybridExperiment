@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/cloudflared tunnel --token-file /etc/cloudflared/tunnel-token run
+ExecStart=/usr/local/bin/cloudflared tunnel run --token-file /etc/cloudflared/tunnel-token
 Restart=always
 RestartSec=5
 LimitNOFILE=65535
