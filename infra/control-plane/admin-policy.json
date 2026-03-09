@@ -1,0 +1,37 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3FullAccess",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::ml-lab-004507070771",
+        "arn:aws:s3:::ml-lab-004507070771/*"
+      ]
+    },
+    {
+      "Sid": "EC2FullTagScoped",
+      "Effect": "Allow",
+      "Action": "ec2:*",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "ml-lab"
+        }
+      }
+    },
+    {
+      "Sid": "Route53ChangeRecords",
+      "Effect": "Allow",
+      "Action": "route53:ChangeResourceRecordSets",
+      "Resource": "arn:aws:route53:::hostedzone/Z03629483MIHQSCG59T8J"
+    },
+    {
+      "Sid": "IAMPassRole",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::004507070771:role/ml-lab-*"
+    }
+  ]
+}

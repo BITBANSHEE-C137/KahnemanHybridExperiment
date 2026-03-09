@@ -1,0 +1,16 @@
+[Unit]
+Description=Control Plane FastAPI
+After=network.target
+
+[Service]
+Type=simple
+User=claude-operator
+WorkingDirectory=/opt/control-plane
+ExecStart=/usr/bin/python3 -m uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+Environment=PYTHONPATH=/opt/control-plane
+EnvironmentFile=/home/claude-operator/.env
+
+[Install]
+WantedBy=multi-user.target
