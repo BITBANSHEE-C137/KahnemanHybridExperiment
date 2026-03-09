@@ -152,6 +152,8 @@ step_3_configure_environment() {
 step_4_install_nodejs_claude() {
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt-get install -y -qq nodejs
+    # Fix ownership before npm install (pre-step creates dirs as root)
+    chown -R "${OPERATOR_USER}:${OPERATOR_USER}" "/home/${OPERATOR_USER}/"
     su - "$OPERATOR_USER" -c "mkdir -p ~/.npm-global && npm config set prefix ~/.npm-global"
     su - "$OPERATOR_USER" -c "npm install -g @anthropic-ai/claude-code"
     echo "Claude Code installed"
@@ -198,6 +200,7 @@ step_7_install_rclone() {
 }
 
 step_8_install_python_deps() {
+    pip3 install --break-system-packages --ignore-installed typing-extensions
     pip3 install --break-system-packages \
         fastapi==0.115.6 \
         "uvicorn[standard]==0.34.0" \
