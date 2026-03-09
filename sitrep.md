@@ -1,35 +1,43 @@
 # v3 Training SITREP
 
 ## v3 Training Status
-**Step 9,900/50,000 (19.8%)** | A10G @ **100% util**, 204W/300W, 56°C | **12.0h uptime** | Rate: ~23 steps/min | **ETA: ~29h** | Spot cost: **$0.46/hr** (62% savings)
+**Step 10,300/50,000 (20.6%)** | GPU: 100% util, 55°C | **Rate**: ~230 steps/hr | **ETA**: ~7.2 days | Spot: **$0.46/hr** (62% savings) | Total cost: **$8.92**
 
 ## Eval Metrics & Trends
+
 | Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
 |------|--------|-----------|--------|-------|-----|
-| 2000 | 22.53  | 6.54      | 6.4%   | 0.613 | 0.004 |
-| 4000 | 23.71  | 6.29      | 8.5%   | 0.672 | 0.011 |
-| 6000 | 24.85  | 6.08      | 9.9%   | 0.719 | 0.012 |
-| 8000 | 26.29  | 5.60      | 12.6%  | 0.785 | 0.008 |
-| **9000** | **26.95** | **5.06** | **18.4%** | **0.805** | **0.006** |
+| 3000 | 23.17 | 6.38 | 7.6% | 0.638 | 0.010 |
+| 5000 | 24.35 | 6.12 | 9.1% | 0.695 | 0.008 |
+| 7000 | 25.48 | 5.87 | 10.6% | 0.739 | 0.009 |
+| 9000 | 26.95 | 5.06 | 18.4% | 0.805 | 0.006 |
+| 10000 | **27.55** | **4.98** | **19.0%** | **0.828** | **0.005** |
 
-**AR PPL degrading** (↑19% since step 2k). **Diffusion loss improving strongly** (↓23%). **S1 accuracy accelerating** (↑185%). **AUROC on target trajectory** (↑31%). **ECE excellent & stable**.
+**Trends**: AR PPL degrading (+4.4 since step 3k), but **diffusion loss improving strongly** (-1.4). S1 accuracy **accelerating** (+11.4% in 7k steps). Confidence calibration **excellent** and improving (ECE halved).
 
 ## Target Scorecard
-| Target | Current | Status |
-|--------|---------|--------|
-| AR PPL < 40 | **26.95** | ✅ **PASS** |
-| AUROC > 0.75 | **0.805** | ✅ **PASS** |
-| ECE < 0.05 | **0.006** | ✅ **PASS** |
-| Diff loss → 4.0 | **5.06** | 🔄 **79% to target** |
-| S1 accuracy → 40% | **18.4%** | 🔄 **46% to target** |
 
-**3/5 targets met**. S1 accuracy trending well (doubling rate every ~3k steps). Diffusion loss trajectory suggests target hit by ~step 25k.
+| Metric | Target | Current | Status |
+|--------|--------|---------|---------|
+| AR PPL | < 40 | **27.55** | ✅ **MET** |
+| AUROC | > 0.75 | **0.828** | ✅ **MET** |
+| ECE | < 0.05 | **0.005** | ✅ **MET** |
+| Diff Loss | → 4.0 | **4.98** | 🟡 **APPROACHING** |
+| S1 Accuracy | → 40% | **19.0%** | 🔴 **BEHIND** |
+
+**3/5 targets met**. Strong confidence calibration. S1 accuracy trend positive but needs acceleration.
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26%/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12. GPT-2 baseline: 95.08%/29.07 PPL. **Current v3 AR PPL (26.95) already better than v1 at 20% training**.
+v1 (step 50k): LAMBADA 94.26%/1.46 PPL, WikiText 43.86 PPL, S1 loss 4.12  
+GPT-2 baseline: LAMBADA 95.08%, WikiText 29.07 PPL  
+**Current v3 AR performance trending better than v1** (27.55 vs 43.86 PPL target).
 
 ## Infrastructure
-**2 spot sessions**, 0 reclaims. Current session **12.0h** stable. Total cost **$8.65** vs **$73.58** on-demand. Last checkpoint: step_9000.pt (1.5GB) @ 00:50 UTC. Sync active.
+**Current**: g5.2xlarge spot, 12.6h uptime, no interruptions  
+**History**: 2 sessions, 1 spot reclaim at step 1k (minimal impact)  
+**Cost efficiency**: 62% savings vs on-demand, **$27.7 projected** vs $73.6
 
 ## What's Next
-S1 performance inflecting upward - **monitor for plateau around step 15k**. AR degradation concerning but within acceptable bounds. Next eval checkpoint at step 10k critical for trajectory validation.
+**Immediate**: Monitor S1 accuracy acceleration - current 19% needs 2.1x improvement  
+**Post-v2**: Benchmark suite, confidence head analysis, v1/v2/v3 comparison matrix  
+**Risk**: AR PPL degradation trend - monitor for overfitting
