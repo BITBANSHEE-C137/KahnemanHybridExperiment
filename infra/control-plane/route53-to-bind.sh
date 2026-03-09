@@ -66,8 +66,8 @@ SKIPPED=0
 CONVERTED=0
 COPIED=0
 
-# Process each record set
-jq -c '.ResourceRecordSets[]' "$INPUT_FILE" | while IFS= read -r record; do
+# Process each record set (use process substitution to avoid subshell counter issue)
+while IFS= read -r record; do
   name=$(echo "$record" | jq -r '.Name')
   type=$(echo "$record" | jq -r '.Type')
   ttl=$(echo "$record" | jq -r '.TTL // 300')
@@ -107,7 +107,8 @@ jq -c '.ResourceRecordSets[]' "$INPUT_FILE" | while IFS= read -r record; do
       continue
     fi
 
-    echo "$record" | jq -r '.ResourceRecords[].Value' | while IFS= read -r value; do
+    # Read values into array to avoid nested pipe subshell
+    while IFS= read -r value; do
       case "$type" in
         TXT)
           # TXT values from Route53 are already quoted — pass through
@@ -134,12 +135,12 @@ jq -c '.ResourceRecordSets[]' "$INPUT_FILE" | while IFS= read -r record; do
           echo "${name}  ${ttl}  IN  ${type}  ${value}"
           ;;
       esac
-    done
+    done < <(echo "$record" | jq -r '.ResourceRecords[].Value')
     echo ""
 
     ((COPIED++)) || true
   fi
-done
+done < <(jq -c '.ResourceRecordSets[]' "$INPUT_FILE")
 
 echo "" >&2
 echo "── Summary ──────────────────────────────────────────────────────" >&2
