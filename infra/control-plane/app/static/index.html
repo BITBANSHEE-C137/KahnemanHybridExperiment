@@ -2919,13 +2919,12 @@ function tgLoadHistory() {
 }
 
 function tgPoll() {
-  quietFetch('/api/telegram/messages?limit=20').then(function(data) {
-    if (data && data.messages && data.messages.length > 0) {
-      // Add only new messages (by id)
+  quietFetch('/api/telegram/messages').then(function(data) {
+    if (data && data.new_messages && data.new_messages.length > 0) {
       var existingIds = {};
       tgMessages.forEach(function(m) { existingIds[m.id] = true; });
       var added = false;
-      data.messages.forEach(function(m) {
+      data.new_messages.forEach(function(m) {
         if (!existingIds[m.id]) {
           tgMessages.push(m);
           added = true;
@@ -2952,7 +2951,7 @@ function tgRender() {
 
   tgMessages.forEach(function(msg) {
     var div = document.createElement('div');
-    div.className = 'tg-msg ' + (msg.is_bot ? 'incoming' : 'outgoing');
+    div.className = 'tg-msg ' + (msg.is_bot ? 'outgoing' : 'incoming');
 
     var sender = document.createElement('div');
     sender.className = 'tg-sender';
@@ -3002,11 +3001,11 @@ function tgSend() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: text })
   }).then(function(data) {
-    // Add sent message to local list immediately
+    // Add sent message to local list immediately (bot sent it)
     tgMessages.push({
       id: data.message_id,
-      from: 'Bitbanshee',
-      is_bot: false,
+      from: 'Bitbanshee Bot',
+      is_bot: true,
       text: text,
       date: data.date || Math.floor(Date.now() / 1000),
       has_photo: false,
