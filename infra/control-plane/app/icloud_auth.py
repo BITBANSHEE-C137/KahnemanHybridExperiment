@@ -28,6 +28,8 @@ router = APIRouter(prefix="/api/icloud", tags=["icloud"])
 RCLONE_CONFIG = Path("/home/claude-operator/.config/rclone/rclone.conf")
 MOUNT_POINT = Path("/home/claude-operator/icloud")
 RCLONE_BIN = "/usr/bin/rclone"
+# Apple throttles/blocks requests based on user-agent; use a browser UA
+RCLONE_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +104,7 @@ def _read_pty(fd: int, timeout: float) -> bytes:
 
 
 def _start_rclone_auth() -> str:
-    """Fork ``rclone lsd icloud:`` with a pty, wait for the 2FA prompt.
+    """Fork ``rclone config reconnect icloud:`` with a pty, wait for 2FA.
 
     Returns the resulting auth state string.
     """
@@ -110,10 +112,11 @@ def _start_rclone_auth() -> str:
 
     pid, fd = pty.fork()
     if pid == 0:
-        # Child — exec rclone
+        # Child — exec rclone config reconnect with custom UA
         os.execvp(RCLONE_BIN, [
-            RCLONE_BIN, "lsd", "icloud:",
+            RCLONE_BIN, "config", "reconnect", "icloud:",
             "--config", str(RCLONE_CONFIG),
+            "--user-agent", RCLONE_UA,
         ])
         os._exit(1)
 
@@ -121,8 +124,8 @@ def _start_rclone_auth() -> str:
     _session.master_fd = fd
     _session.output = b""
 
-    # Read output for up to 20 s looking for a 2FA prompt
-    end = time.monotonic() + 20
+    # Read output for up to 30 s looking for a 2FA prompt or error
+    end = time.monotonic() + 30
     while time.monotonic() < end:
         remaining = end - time.monotonic()
         r, _, _ = select.select([fd], [], [], min(remaining, 0.5))
@@ -130,28 +133,54 @@ def _start_rclone_auth() -> str:
             try:
                 chunk = os.read(fd, 4096)
                 _session.output += chunk
+                logger.info("rclone pty: %s", chunk.decode(errors="replace").strip())
             except OSError:
                 break
 
             lower = _session.output.lower()
+            # Detect 2FA prompt (rclone asks for verification code)
             if b"code" in lower or b"2fa" in lower or b"verification" in lower:
                 _session.state = "awaiting_2fa"
                 return "awaiting_2fa"
+
+            # Detect known errors early
+            if b"error" in lower or b"fatal" in lower or b"failed" in lower:
+                # Drain a bit more output
+                time.sleep(1)
+                try:
+                    extra = os.read(fd, 4096)
+                    _session.output += extra
+                except OSError:
+                    pass
+                _session.state = "error"
+                return "error"
 
         # Check if child already exited (auth error / bad creds)
         try:
             wpid, status = os.waitpid(pid, os.WNOHANG)
             if wpid != 0:
+                # Drain remaining output
+                try:
+                    tail = _read_pty(fd, timeout=2)
+                    _session.output += tail
+                except Exception:
+                    pass
                 _session.state = "error"
                 return "error"
         except ChildProcessError:
             _session.state = "error"
             return "error"
 
-    # Timeout — Apple may still have sent 2FA push even if prompt text
-    # didn't match our keywords, so optimistically report awaiting_2fa.
-    _session.state = "awaiting_2fa"
-    return "awaiting_2fa"
+    # Timeout — no prompt detected, no error detected
+    # Check if process is still alive
+    try:
+        os.kill(pid, 0)
+        # Still alive — might be waiting for input
+        _session.state = "awaiting_2fa"
+        return "awaiting_2fa"
+    except OSError:
+        _session.state = "error"
+        return "error"
 
 
 def _submit_2fa_code(code: str) -> tuple[bool, str]:
