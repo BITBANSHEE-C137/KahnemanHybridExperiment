@@ -415,7 +415,7 @@ async def shell_ws_proxy(client: _FastAPIWebSocket) -> None:
     await client.accept(subprotocol="tty")
     try:
         async with _ws.connect(
-            "ws://127.0.0.1:7682/ws",
+            "ws://127.0.0.1:7682/shell/ws",
             subprotocols=["tty"],
             max_size=2**20,
         ) as backend:
