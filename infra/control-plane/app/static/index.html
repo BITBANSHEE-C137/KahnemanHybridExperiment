@@ -58,7 +58,7 @@ input { font-family: var(--font-ui); }
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
   height: var(--header-h);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 48px;
+  padding: 0 80px;
   background: rgba(15,17,23,0.85);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -100,10 +100,6 @@ input { font-family: var(--font-ui); }
   font-size: 12px; font-weight: 500;
   color: var(--dim);
 }
-.project-label .pl-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--green);
-}
 .project-label .pl-name { color: var(--text); font-weight: 600; }
 
 #header-right {
@@ -139,7 +135,7 @@ input { font-family: var(--font-ui); }
   left: 0; right: 0; bottom: 0;
   z-index: 10;
   display: flex;
-  padding: 24px 48px;
+  padding: 32px 80px;
   gap: 24px;
   flex-direction: column;
   overflow-y: auto;
@@ -149,8 +145,8 @@ input { font-family: var(--font-ui); }
 #row-1 {
   display: flex;
   gap: 24px;
-  flex: 1.2;
-  min-height: 340px;
+  flex: 2;
+  min-height: 680px;
 }
 #row-2 {
   display: flex;
@@ -935,7 +931,6 @@ body.terminal-maximized #terminal-card {
   </div>
   <div id="header-center">
     <div class="project-label">
-      <span class="pl-dot"></span>
       <span class="pl-name" id="proj-btn-name">ml-lab</span>
     </div>
   </div>
