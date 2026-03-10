@@ -59,20 +59,21 @@ input { font-family: var(--font-ui); }
   height: var(--header-h);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 160px;
-  background: url('https://bitbanshee.com/hero.png') center/cover no-repeat;
+  background: url('https://bitbanshee.com/hero.png') center 30%/cover no-repeat;
   border-bottom: 1px solid var(--glass-border);
+  overflow: hidden;
 }
 #header::before {
   content: '';
   position: absolute; inset: 0;
-  background: rgba(15,17,23,0.78);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  z-index: -1;
+  background: rgba(12,14,20,0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 #header-left {
   display: flex; align-items: center; gap: 16px;
   white-space: nowrap;
+  position: relative; z-index: 1;
 }
 .header-brand {
   display: flex; flex-direction: column; gap: 2px;
@@ -95,6 +96,7 @@ input { font-family: var(--font-ui); }
 .header-title .hl { color: var(--accent); }
 #header-center {
   display: flex; align-items: center; gap: 12px;
+  position: relative; z-index: 1;
 }
 .project-label {
   display: flex; align-items: center; gap: 8px;
@@ -110,6 +112,7 @@ input { font-family: var(--font-ui); }
 
 #header-right {
   display: flex; align-items: center; gap: 14px;
+  position: relative; z-index: 1;
 }
 #health-indicator {
   display: flex; align-items: center; gap: 6px;
