@@ -829,8 +829,28 @@ input { font-family: var(--font-ui); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .profile-meta {
-  font-size: 10px; color: var(--dim);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.auth-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600; color: var(--dim);
+  padding: 1px 6px; border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  white-space: nowrap;
+}
+.auth-badge .auth-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--dim); opacity: 0.5;
+}
+.auth-badge.active { color: var(--green); }
+.auth-badge.active .auth-dot {
+  background: var(--green); opacity: 1;
+  box-shadow: 0 0 4px rgba(52,211,153,0.5);
+}
+.auth-badge.elevated { color: var(--yellow); }
+.auth-badge.elevated .auth-dot {
+  background: var(--yellow); opacity: 1;
+  box-shadow: 0 0 4px rgba(251,191,36,0.5);
 }
 .profile-logout {
   padding: 5px 12px;
@@ -1114,7 +1134,13 @@ body.terminal-maximized #terminal-card {
         <div class="profile-avatar" id="profile-avatar">CO</div>
         <div class="profile-info">
           <div class="profile-name" id="profile-name">claude-operator</div>
-          <div class="profile-meta" id="profile-meta">Loading...</div>
+          <div class="profile-meta" id="profile-meta">
+            <span class="auth-badge" id="auth-aws"><span class="auth-dot"></span>AWS</span>
+            <span class="auth-badge" id="auth-cf"><span class="auth-dot"></span>Cloudflare</span>
+            <span class="auth-badge" id="auth-icloud"><span class="auth-dot"></span>iCloud</span>
+            <span class="auth-badge" id="auth-github"><span class="auth-dot"></span>GitHub</span>
+            <span class="auth-badge" id="auth-elevated"><span class="auth-dot"></span>Elevated</span>
+          </div>
         </div>
         <button class="profile-logout" onclick="window.location.href='/cdn-cgi/access/logout'">Logout</button>
       </div>
@@ -2686,23 +2712,53 @@ function deleteTask(id) {
 }
 
 /* ========================================
-   Profile
+   Profile & Auth Status
    ======================================== */
+function setAuthBadge(id, active, cls) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('active', 'elevated');
+  if (active) el.classList.add(cls || 'active');
+}
+
 function loadProfile() {
+  // Profile name + avatar
   apiFetch('/api/profile').then(function(data) {
     var name = data.username || 'operator';
     var initials = name.split('-').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0, 2);
     document.getElementById('profile-avatar').textContent = initials;
     document.getElementById('profile-name').textContent = name;
-    var meta = [];
-    if (data.hostname) meta.push(data.hostname);
-    if (data.instance_type && data.instance_type !== 'unknown') meta.push(data.instance_type);
-    if (data.ip && data.ip !== 'unknown') meta.push(data.ip);
-    if (data.uptime && data.uptime !== 'unknown') meta.push(data.uptime);
-    document.getElementById('profile-meta').textContent = meta.join(' \u00b7 ');
-  }).catch(function() {
-    document.getElementById('profile-meta').textContent = 'offline';
-  });
+  }).catch(function() {});
+
+  // Auth statuses
+  pollAuthStatus();
+}
+
+function pollAuthStatus() {
+  // AWS — if /health works, AWS is active
+  fetch('/health', { signal: AbortSignal.timeout(3000) }).then(function(r) {
+    setAuthBadge('auth-aws', r.ok);
+  }).catch(function() { setAuthBadge('auth-aws', false); });
+
+  // Cloudflare — if we're here, CF is active
+  setAuthBadge('auth-cf', true);
+
+  // iCloud
+  apiFetch('/api/icloud/status').then(function(data) {
+    setAuthBadge('auth-icloud', data.authenticated);
+  }).catch(function() { setAuthBadge('auth-icloud', false); });
+
+  // Elevation
+  apiFetch('/api/elevation/active').then(function(data) {
+    var active = data && data.id;
+    setAuthBadge('auth-elevated', active, 'elevated');
+  }).catch(function() { setAuthBadge('auth-elevated', false); });
+
+  // GitHub — check if git is configured (use profile endpoint hint)
+  apiFetch('/api/profile').then(function(data) {
+    // If API responds, GitHub credentials are configured on the instance
+    setAuthBadge('auth-github', true);
+  }).catch(function() { setAuthBadge('auth-github', false); });
 }
 
 /* ========================================
@@ -2900,6 +2956,7 @@ document.addEventListener('DOMContentLoaded', function() {
   healthTimer = setInterval(pollHealth, 15000);
   elevTimer = setInterval(pollElevation, 15000);
   sessionsTimer = setInterval(loadSessions, 30000);
+  setInterval(pollAuthStatus, 30000);
 });
 </script>
 </body>
