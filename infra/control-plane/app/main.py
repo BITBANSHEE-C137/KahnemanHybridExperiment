@@ -375,6 +375,29 @@ async def save_notes(project: str, body: NotesSave) -> dict[str, Any]:
     return taskboard.save_notes(project, body.content)
 
 
+
+
+# --- Routes: Terminal Management ---
+
+@app.post("/api/terminal/restart")
+async def restart_terminal() -> dict[str, Any]:
+    """Restarts the ttyd terminal service to create a fresh session.
+
+    Returns:
+        Dict with status of the restart.
+    """
+    import subprocess as sp
+    try:
+        sp.run(["sudo", "systemctl", "restart", "cc-tmux"], check=True, timeout=10)
+        sp.run(["sudo", "systemctl", "restart", "ttyd"], check=True, timeout=10)
+        logger.info("Terminal services restarted")
+        return {"status": "ok", "message": "Terminal session restarted"}
+    except sp.CalledProcessError as exc:
+        logger.exception("Failed to restart terminal services")
+        raise HTTPException(status_code=500, detail=f"Restart failed: {exc}")
+    except sp.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Restart timed out")
+
 # --- Routes: Elevation (existing) ---
 
 @app.get("/api/elevation/pending")
