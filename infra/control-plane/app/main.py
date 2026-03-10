@@ -21,6 +21,7 @@ from auth import CloudflareAuth
 from aws_discovery import AWSDiscovery
 from elevation import ElevationManager
 from filesystem import router as fs_router, set_elevation_manager
+from icloud_auth import router as icloud_router
 from notes import router as notes_router
 from tasks import router as tasks_router
 from claude_sessions import router as sessions_router
@@ -148,6 +149,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="ML Lab Control Plane", lifespan=lifespan)
 app.include_router(fs_router)
+app.include_router(icloud_router)
 app.include_router(notes_router)
 app.include_router(tasks_router)
 app.include_router(sessions_router)
