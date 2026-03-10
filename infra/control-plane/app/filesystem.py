@@ -353,7 +353,7 @@ async def s3_list(
     return {"bucket": bucket, "prefix": prefix, "entries": entries}
 
 
-@router.get("/s3/download")
+@router.get("/s3/download", response_model=None)
 async def s3_download(
     bucket: str = Query(...),
     key: str = Query(...),
