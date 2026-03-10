@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BitBanshee's Brain — ML Lab</title>
+<title>BitBanshee — ML Lab</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <style>
 /* ===== 1. Reset + Variables ===== */
@@ -68,12 +68,28 @@ input { font-family: var(--font-ui); }
   font-size: 15px; font-weight: 600; letter-spacing: -0.2px;
   white-space: nowrap;
 }
-#header-left .brain-icon { font-size: 18px; }
-#header-left .brand-brain {
-  background: linear-gradient(135deg, var(--accent), #a78bfa);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 0 6px rgba(96,165,250,0.4));
+#header-left .brand-logo {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(96,165,250,0.1);
+  border: 1px solid rgba(96,165,250,0.25);
+  border-radius: 4px;
+  padding: 2px 7px;
+  line-height: 1;
+}
+#header-left .brand-text {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+#header-left .brand-accent {
+  color: var(--accent);
 }
 #header-center { position: relative; }
 #project-btn {
@@ -155,13 +171,13 @@ input { font-family: var(--font-ui); }
   left: 0; right: 0; bottom: 0;
   z-index: 10;
   display: flex;
-  padding: 32px 40px;
-  gap: 16px;
+  padding: 64px 80px;
+  gap: 32px;
   flex-direction: column;
 }
 #cards-row {
   display: flex;
-  gap: 16px;
+  gap: 32px;
   flex: 1;
   min-height: 0;
 }
@@ -169,7 +185,7 @@ input { font-family: var(--font-ui); }
   flex: 40 0 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 32px;
   min-width: 0;
 }
 
@@ -609,7 +625,6 @@ body.terminal-maximized #cards-row {
 /* ===== 13. Mobile Responsive ===== */
 @media (max-width: 767px) {
   #header-left .brand-text { display: none; }
-  #header-left .brain-icon { display: none; }
   #cards-row {
     flex-direction: column;
   }
@@ -659,8 +674,8 @@ body.terminal-maximized #cards-row {
 <!-- Header -->
 <header id="header">
   <div id="header-left">
-    <span class="brain-icon">&#129504;</span>
-    <span class="brand-text">BitBanshee's <span class="brand-brain">Brain</span></span>
+    <span class="brand-logo">BB</span>
+    <span class="brand-text">bitbanshee<span class="brand-accent">.lab</span></span>
   </div>
   <div id="header-center">
     <button id="project-btn" onclick="toggleProjectDropdown()">
