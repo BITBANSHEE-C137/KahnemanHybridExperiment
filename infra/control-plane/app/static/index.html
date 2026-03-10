@@ -740,6 +740,51 @@ input { font-family: var(--font-ui); }
   outline: none; resize: none;
   line-height: 1.5;
 }
+.note-count {
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 400;
+}
+#notes-list {
+  border-bottom: 1px solid var(--glass-border);
+  max-height: 120px;
+  overflow-y: auto;
+}
+#notes-list:empty { display: none; }
+.note-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background var(--transition);
+}
+.note-item:last-child { border-bottom: none; }
+.note-item:hover { background: rgba(255,255,255,0.06); }
+.note-item.active { background: rgba(96,165,250,0.08); }
+.note-item-info { flex: 1; min-width: 0; }
+.note-title {
+  font-size: 12px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.note-snippet {
+  font-size: 11px; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px;
+}
+.note-delete {
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  display: none;
+  align-items: center; justify-content: center;
+  font-size: 11px; color: var(--dim);
+  background: rgba(255,255,255,0.06);
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+.note-item:hover .note-delete { display: flex; }
+.note-delete:hover { background: rgba(248,113,113,0.2); color: var(--red); }
 
 /* ===== 9. Tasks Row + Card (full width) ===== */
 #tasks-row {
@@ -1307,11 +1352,12 @@ body.terminal-maximized #terminal-card {
       <!-- Notes -->
       <div id="notes-card">
         <div class="card-header">
-          <div class="card-title"><span>Notes</span></div>
+          <div class="card-title"><span>Notes</span> <span class="note-count" id="note-count"></span></div>
           <div class="card-actions">
             <button class="card-btn" onclick="createNote()" title="New note">&#43;</button>
           </div>
         </div>
+        <div id="notes-list"></div>
         <div id="notes-body">
           <div class="note-editor" id="note-editor">
             <input class="note-editor-title" id="note-edit-title" placeholder="Title" onchange="saveCurrentNote()">
@@ -2776,8 +2822,36 @@ function loadNotes() {
 }
 
 function renderNotesList() {
-  // For the compact card, we show the editor directly
-  // The note list is accessible via card header dropdown in future
+  var list = document.getElementById('notes-list');
+  var countEl = document.getElementById('note-count');
+  if (!list) return;
+  if (countEl) countEl.textContent = notesData.length > 0 ? '(' + notesData.length + ')' : '';
+  list.innerHTML = '';
+  notesData.forEach(function(note) {
+    var item = document.createElement('div');
+    item.className = 'note-item' + (note.id === currentNoteId ? ' active' : '');
+    var info = document.createElement('div');
+    info.className = 'note-item-info';
+    info.onclick = function() { selectNote(note.id); };
+    var title = document.createElement('div');
+    title.className = 'note-title';
+    title.textContent = note.title || 'Untitled';
+    info.appendChild(title);
+    if (note.content) {
+      var snippet = document.createElement('div');
+      snippet.className = 'note-snippet';
+      snippet.textContent = note.content.substring(0, 60);
+      info.appendChild(snippet);
+    }
+    item.appendChild(info);
+    var del = document.createElement('button');
+    del.className = 'note-delete';
+    del.innerHTML = '&#x2715;';
+    del.title = 'Delete note';
+    del.onclick = function(e) { e.stopPropagation(); deleteNote(note.id); };
+    item.appendChild(del);
+    list.appendChild(item);
+  });
 }
 
 function selectNote(id) {
@@ -2788,6 +2862,7 @@ function selectNote(id) {
   editor.classList.add('active');
   document.getElementById('note-edit-title').value = note.title || '';
   document.getElementById('note-edit-content').value = note.content || '';
+  renderNotesList();
 }
 
 function createNote() {
@@ -2797,7 +2872,24 @@ function createNote() {
     body: JSON.stringify({ title: '', content: '' })
   }).then(function(data) {
     notesData.unshift(data.note);
+    renderNotesList();
     selectNote(data.note.id);
+    document.getElementById('note-edit-title').focus();
+  }).catch(function() {});
+}
+
+function deleteNote(id) {
+  apiFetch('/api/notes/' + id, { method: 'DELETE' }).then(function() {
+    notesData = notesData.filter(function(n) { return n.id !== id; });
+    if (currentNoteId === id) {
+      currentNoteId = null;
+      if (notesData.length > 0) {
+        selectNote(notesData[0].id);
+      } else {
+        document.getElementById('note-editor').classList.remove('active');
+      }
+    }
+    renderNotesList();
   }).catch(function() {});
 }
 
@@ -2808,6 +2900,10 @@ function saveCurrentNote() {
   noteSaveTimer = setTimeout(function() {
     var title = document.getElementById('note-edit-title').value;
     var content = document.getElementById('note-edit-content').value;
+    // Update local data too so list stays in sync
+    var note = notesData.find(function(n) { return n.id === currentNoteId; });
+    if (note) { note.title = title; note.content = content; }
+    renderNotesList();
     apiFetch('/api/notes/' + currentNoteId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
