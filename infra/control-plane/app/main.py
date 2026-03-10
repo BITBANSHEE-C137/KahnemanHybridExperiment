@@ -1,15 +1,16 @@
 """FastAPI application for the ML Lab Control Plane.
 
-Serves the control plane dashboard and API for lab status queries
-and privilege elevation management. Runs behind cloudflared and
-ttyd's WebSocket proxy on the GPU instance.
+Serves the control plane dashboard and API for lab status queries,
+multi-project AWS resource discovery, task management, and privilege
+elevation management. Runs behind cloudflared and ttyd's WebSocket
+proxy on the control plane instance.
 """
 
 import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -17,8 +18,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from auth import CloudflareAuth
+from aws_discovery import AWSDiscovery
 from elevation import ElevationManager
 from lab_status import LabStatus
+from taskboard import TaskBoard
 
 logger = logging.getLogger("control-plane")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -27,6 +30,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 auth: CloudflareAuth
 elevation: ElevationManager
 lab_status: LabStatus
+discovery: AWSDiscovery
+taskboard: TaskBoard
 _start_time: float
 
 
@@ -43,6 +48,41 @@ class ElevationRequest(BaseModel):
     action: str
     justification: str
     duration_minutes: int = 60
+
+
+class TaskCreate(BaseModel):
+    """Request body for creating a new task.
+
+    Attributes:
+        title: The task title.
+        description: Optional task description.
+    """
+    title: str
+    description: str = ""
+
+
+class TaskUpdate(BaseModel):
+    """Request body for updating a task.
+
+    Attributes:
+        title: New title (optional).
+        description: New description (optional).
+        status: New status: todo, in_progress, or done (optional).
+        position: New sort position (optional).
+    """
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    position: Optional[int] = None
+
+
+class NotesSave(BaseModel):
+    """Request body for saving project notes.
+
+    Attributes:
+        content: The notes content.
+    """
+    content: str
 
 
 # --- Background task ---
@@ -68,18 +108,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manages application startup and shutdown.
 
     On startup: initializes auth, elevation manager, lab status,
-    and starts the background expiry checker task.
+    AWS discovery, task board, and starts the background expiry checker.
     """
-    global auth, elevation, lab_status, _start_time
+    global auth, elevation, lab_status, discovery, taskboard, _start_time
 
     _start_time = time.time()
 
     auth = CloudflareAuth()
     elevation = ElevationManager()
     lab_status = LabStatus()
+    discovery = AWSDiscovery()
+    taskboard = TaskBoard()
 
     logger.info("ML Lab Control Plane starting up")
     logger.info("Elevation DB: %s", elevation.db_path)
+    logger.info("TaskBoard DB: %s", taskboard.db_path)
 
     task = asyncio.create_task(expiry_checker())
     logger.info("Background expiry checker started")
@@ -100,7 +143,7 @@ app = FastAPI(title="ML Lab Control Plane", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# --- Routes ---
+# --- Routes: Core ---
 
 @app.get("/")
 async def index() -> FileResponse:
@@ -122,6 +165,8 @@ async def health() -> dict[str, Any]:
     }
 
 
+# --- Routes: Lab Status (existing) ---
+
 @app.get("/api/lab/status")
 async def get_lab_status() -> dict[str, Any]:
     """Returns combined fleet, training, and cost status.
@@ -131,6 +176,201 @@ async def get_lab_status() -> dict[str, Any]:
     """
     return lab_status.get_full_status()
 
+
+# --- Routes: Multi-Project Discovery ---
+
+@app.get("/api/projects")
+async def get_projects() -> list[dict[str, Any]]:
+    """Returns all projects with resource counts.
+
+    Returns:
+        List of project summary dicts.
+    """
+    return discovery.get_all_projects_summary()
+
+
+@app.get("/api/projects/{name}/resources")
+async def get_project_resources(name: str) -> dict[str, Any]:
+    """Returns all resources for one project.
+
+    Args:
+        name: The project name.
+
+    Returns:
+        Dict with all resource types for the project.
+    """
+    return discovery.get_project_resources(name)
+
+
+@app.get("/api/resources/ec2")
+async def get_ec2_instances() -> list[dict[str, Any]]:
+    """Returns all EC2 instances across projects.
+
+    Returns:
+        List of instance dicts.
+    """
+    return discovery.get_ec2_instances()
+
+
+@app.get("/api/resources/lambda")
+async def get_lambda_functions() -> list[dict[str, Any]]:
+    """Returns all Lambda functions with 24h metrics.
+
+    Returns:
+        List of function dicts with invocation and error counts.
+    """
+    return discovery.get_lambda_functions()
+
+
+@app.get("/api/resources/s3")
+async def get_s3_buckets() -> list[dict[str, Any]]:
+    """Returns all S3 buckets with metadata.
+
+    Returns:
+        List of bucket dicts.
+    """
+    return discovery.get_s3_buckets()
+
+
+@app.get("/api/resources/cloudfront")
+async def get_cloudfront_distributions() -> list[dict[str, Any]]:
+    """Returns all CloudFront distributions.
+
+    Returns:
+        List of distribution dicts.
+    """
+    return discovery.get_cloudfront_distributions()
+
+
+@app.get("/api/resources/route53")
+async def get_route53_zones() -> list[dict[str, Any]]:
+    """Returns all Route53 zones.
+
+    Returns:
+        List of zone dicts.
+    """
+    return discovery.get_route53_zones()
+
+
+@app.get("/api/cost/summary")
+async def get_cost_summary() -> dict[str, Any]:
+    """Returns cost summary from CloudWatch billing metrics.
+
+    Returns:
+        Dict with month-to-date cost estimate.
+    """
+    return discovery.get_cost_summary()
+
+
+# --- Routes: Task Board ---
+
+@app.get("/api/tasks/{project}")
+async def get_tasks(project: str) -> dict[str, list[dict[str, Any]]]:
+    """Returns all tasks for a project, grouped by status.
+
+    Args:
+        project: The project name, or 'all' for all projects.
+
+    Returns:
+        Dict with 'todo', 'in_progress', 'done' task lists.
+    """
+    if project == "all":
+        return taskboard.list_all_tasks()
+    return taskboard.list_tasks(project)
+
+
+@app.post("/api/tasks/{project}")
+async def create_task(project: str, body: TaskCreate) -> dict[str, Any]:
+    """Creates a new task in TODO status.
+
+    Args:
+        project: The project name.
+        body: Task creation body with title and description.
+
+    Returns:
+        The created task dict.
+    """
+    return taskboard.create_task(
+        project=project, title=body.title, description=body.description
+    )
+
+
+@app.put("/api/tasks/{project}/{task_id}")
+async def update_task(project: str, task_id: str, body: TaskUpdate) -> dict[str, Any]:
+    """Updates a task's fields.
+
+    Args:
+        project: The project name (for URL consistency).
+        task_id: The task UUID.
+        body: Fields to update.
+
+    Returns:
+        The updated task dict.
+
+    Raises:
+        HTTPException: 404 if task not found, 400 if invalid status.
+    """
+    try:
+        return taskboard.update_task(
+            task_id=task_id,
+            title=body.title,
+            description=body.description,
+            status=body.status,
+            position=body.position,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/api/tasks/{project}/{task_id}")
+async def delete_task(project: str, task_id: str) -> dict[str, Any]:
+    """Deletes a task.
+
+    Args:
+        project: The project name (for URL consistency).
+        task_id: The task UUID.
+
+    Returns:
+        Dict with deletion status.
+
+    Raises:
+        HTTPException: 404 if task not found.
+    """
+    if not taskboard.delete_task(task_id):
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return {"deleted": True, "id": task_id}
+
+
+# --- Routes: Notes ---
+
+@app.get("/api/notes/{project}")
+async def get_notes(project: str) -> dict[str, Any]:
+    """Returns freeform notes for a project.
+
+    Args:
+        project: The project name.
+
+    Returns:
+        Dict with project, content, and updated_at.
+    """
+    return taskboard.get_notes(project)
+
+
+@app.post("/api/notes/{project}")
+async def save_notes(project: str, body: NotesSave) -> dict[str, Any]:
+    """Saves freeform notes for a project.
+
+    Args:
+        project: The project name.
+        body: Notes content.
+
+    Returns:
+        Dict with project, content, and updated_at.
+    """
+    return taskboard.save_notes(project, body.content)
+
+
+# --- Routes: Elevation (existing) ---
 
 @app.get("/api/elevation/pending")
 async def get_pending() -> list[dict[str, Any]]:
