@@ -2919,7 +2919,8 @@ function tgLoadHistory() {
 }
 
 function tgPoll() {
-  quietFetch('/api/telegram/messages').then(function(data) {
+  var lastId = tgMessages.length > 0 ? tgMessages[tgMessages.length - 1].id : 0;
+  quietFetch('/api/telegram/messages?after=' + lastId).then(function(data) {
     if (data && data.new_messages && data.new_messages.length > 0) {
       var existingIds = {};
       tgMessages.forEach(function(m) { existingIds[m.id] = true; });
