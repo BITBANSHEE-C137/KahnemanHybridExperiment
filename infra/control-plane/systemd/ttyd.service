@@ -1,11 +1,11 @@
 [Unit]
-Description=ttyd - Terminal over WebSocket
+Description=ttyd - Claude Code Terminal
 After=network.target
 
 [Service]
 Type=simple
 User=claude-operator
-ExecStart=/usr/local/bin/ttyd --port 7681 --interface lo --writable --base-path /terminal bash --login
+ExecStart=/usr/local/bin/ttyd --port 7681 --interface lo --writable --base-path /terminal /home/claude-operator/bin/claude-shell.sh
 Restart=always
 RestartSec=3
 
