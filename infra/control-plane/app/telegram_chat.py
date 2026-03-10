@@ -218,13 +218,16 @@ async def telegram_status() -> dict[str, Any]:
 
 
 @router.get("/messages")
-async def get_messages() -> dict[str, Any]:
-    """Poll for new messages and return any new ones since last check."""
+async def get_messages(after: int = 0) -> dict[str, Any]:
+    """Poll for new messages and return all new ones (including auto-replies).
+
+    Args:
+        after: Only return messages with id > after (client's last seen id).
+    """
     global _last_update_id
     _check_config()
     _load_store()
 
-    new_messages: list[dict] = []
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             params: dict[str, Any] = {
@@ -251,7 +254,6 @@ async def get_messages() -> dict[str, Any]:
                     continue
                 formatted = _format_update(msg)
                 _add_message(formatted)
-                new_messages.append(formatted)
 
                 # Auto-reply to commands from non-bot users
                 if not formatted["is_bot"] and formatted["text"].startswith("/"):
@@ -266,6 +268,8 @@ async def get_messages() -> dict[str, Any]:
         logger.exception("Failed to fetch Telegram messages")
         raise HTTPException(502, detail=f"Telegram fetch failed: {exc}")
 
+    # Return all messages newer than the client's last seen id
+    new_messages = [m for m in _messages if m["id"] > after]
     return {"new_messages": new_messages}
 
 
