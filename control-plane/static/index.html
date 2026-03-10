@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bitbanshee's AI Playground</title>
+<link rel="icon" href="https://bitbanshee.com/favicon.ico" type="image/x-icon">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <style>
 /* ===== 1. Reset + Variables ===== */
@@ -225,8 +226,11 @@ input { font-family: var(--font-ui); }
 }
 
 /* ===== 5b. Shell Card ===== */
+#shell-row {
+  flex-shrink: 0;
+}
 #shell-card {
-  flex: 1;
+  height: 200px;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -880,6 +884,7 @@ input { font-family: var(--font-ui); }
 /* ===== 12. Fullscreen / Maximized States ===== */
 body.terminal-maximized #right-col,
 body.terminal-maximized #bottom-row,
+body.terminal-maximized #shell-row,
 body.terminal-maximized #storage-row,
 body.terminal-maximized #elevation-card {
   display: none !important;
@@ -911,7 +916,7 @@ body.terminal-maximized #top-row {
     height: 30vh;
     gap: 12px;
   }
-  #shell-card { flex: 1; }
+  #shell-card { height: 30vh; }
   #sessions-card { flex: 1; }
   #bottom-row {
     height: auto;
@@ -1013,24 +1018,6 @@ body.terminal-maximized #top-row {
         </div>
       </div>
 
-      <!-- Shell Card -->
-      <div id="shell-card">
-        <div class="card-header">
-          <div class="card-title">
-            <span class="dot" id="shell-dot"></span>
-            <span>Shell</span>
-          </div>
-        </div>
-        <div id="shell-body">
-          <div id="shell-container"></div>
-          <div id="shell-overlay">
-            <div style="font-size:16px;font-weight:600">Session ended</div>
-            <div style="font-size:13px;color:var(--dim)">Shell connection was lost.</div>
-            <button id="shell-overlay-btn" onclick="restartShell()" style="padding:10px 24px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.3);border-radius:10px;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer">New Session</button>
-          </div>
-        </div>
-      </div>
-
     </div><!-- /right-col -->
   </div><!-- /top-row -->
 
@@ -1078,6 +1065,26 @@ body.terminal-maximized #top-row {
     </div>
 
   </div><!-- /bottom-row -->
+
+  <!-- Shell Row -->
+  <div id="shell-row">
+    <div id="shell-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="dot" id="shell-dot"></span>
+          <span>Shell</span>
+        </div>
+      </div>
+      <div id="shell-body">
+        <div id="shell-container"></div>
+        <div id="shell-overlay">
+          <div style="font-size:16px;font-weight:600">Session ended</div>
+          <div style="font-size:13px;color:var(--dim)">Shell connection was lost.</div>
+          <button id="shell-overlay-btn" onclick="restartShell()" style="padding:10px 24px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.3);border-radius:10px;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer">New Session</button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /shell-row -->
 
   <!-- Storage Row -->
   <div id="storage-row">
