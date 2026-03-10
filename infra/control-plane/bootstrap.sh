@@ -156,8 +156,15 @@ step_3_configure_environment() {
 }
 
 step_4_install_nodejs_claude() {
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y -qq nodejs
+    # Stop baked services from AMI so binaries can be updated
+    systemctl stop ttyd ttyd-shell controlplane-api cloudflared 2>/dev/null || true
+
+    if ! node --version 2>/dev/null | grep -q "v20"; then
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        apt-get install -y -qq nodejs
+    else
+        echo "Node.js already installed: $(node --version)"
+    fi
     # Fix ownership before npm install (pre-step creates dirs as root)
     chown -R "${OPERATOR_USER}:${OPERATOR_USER}" "/home/${OPERATOR_USER}/"
     su - "$OPERATOR_USER" -c "mkdir -p ~/.npm-global && npm config set prefix ~/.npm-global"
@@ -175,14 +182,22 @@ step_5_install_cloudflared() {
 
 step_6_install_ttyd() {
     local ttyd_version="1.7.7"
-    curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${ttyd_version}/ttyd.x86_64" \
-        -o /usr/local/bin/ttyd
-    chmod +x /usr/local/bin/ttyd
-    echo "ttyd ${ttyd_version} installed"
+    if [[ -x /usr/local/bin/ttyd ]]; then
+        echo "ttyd already installed, skipping download"
+    else
+        curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${ttyd_version}/ttyd.x86_64" \
+            -o /usr/local/bin/ttyd
+        chmod +x /usr/local/bin/ttyd
+    fi
+    echo "ttyd ${ttyd_version} ready"
 }
 
 step_7_install_rclone() {
-    curl -fsSL https://rclone.org/install.sh | bash
+    if command -v rclone &>/dev/null; then
+        echo "rclone already installed: $(rclone version --check 2>/dev/null | head -1 || rclone --version | head -1)"
+    else
+        curl -fsSL https://rclone.org/install.sh | bash
+    fi
 
     if [[ -z "${ICLOUD_APPLE_ID:-}" ]]; then
         echo "SKIP: iCloud credentials not set — deferring to v2"
