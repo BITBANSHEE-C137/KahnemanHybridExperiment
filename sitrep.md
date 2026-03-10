@@ -1,11 +1,7 @@
 # v3 Training SITREP
 
 ## v3 Training Status
-- **Step 24,200/50,000** (48.4% complete)
-- GPU: **100% utilization** on L4, 72W power, 81°C, 16.6GB VRAM used
-- Rate: ~400 steps per session (variable due to spot interruptions)
-- ETA: **~26k more steps** (~65 hours at current rate)
-- Spot cost: **$0.45/hr** (53.5% savings vs on-demand $0.98/hr)
+**Step 24,500/50,000 (49%)** | L4 GPU @ **100% util** | **$0.46/hr spot** (53% savings) | **1.07 hrs uptime** | ETA: ~26 hrs | **$20.21 projected**
 
 ## Eval Metrics & Trends
 
@@ -20,34 +16,25 @@
 | 23000 | 29.57  | 4.19      | 26.1%  | 0.861 | 0.006  |
 | 24000 | 29.53  | 4.31      | 25.2%  | 0.862 | 0.005  |
 
-**Trends:** AR PPL plateaued ~29. Diffusion loss hit **3.95 at step 22k** (best so far) but regressed. AUROC peaked at **0.876**. S1 accuracy volatile but trending up slightly.
+**Trends**: AR PPL stable ~29. **Diff loss volatile** (3.95→4.31). S1 accuracy **stagnant** ~25%. AUROC peaked at step 22000. **No clear convergence**.
 
 ## Target Scorecard
 
-| Target | Current | Status |
-|--------|---------|--------|
-| AR PPL < 40 | **29.5** | ✅ **Met** |
-| AUROC > 0.75 | **0.862** | ✅ **Met** |
-| ECE < 0.05 | **0.005** | ✅ **Met** |
-| Diff loss → 4.0 | **4.31** | ❌ Need 0.31↓ |
-| S1 accuracy → 40% | **25.2%** | ❌ Need 14.8%↑ |
+| Metric | Target | Current | Status |
+|--------|--------|---------|---------|
+| AR PPL | < 40   | **29.5** | ✅ |
+| AUROC  | > 0.75 | **0.862** | ✅ |
+| ECE    | < 0.05 | **0.005** | ✅ |
+| Diff Loss | → 4.0 | **4.31** | ❌ |
+| S1 Acc | → 40% | **25.2%** | ❌ |
 
-**3/5 targets met.** Diffusion loss tantalizingly close after hitting 3.95.
+**2/5 targets failing**. Diff loss regressing, S1 accuracy **15% below target**.
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26%, PPL 1.46; WikiText PPL 43.86; S1 loss 4.12  
-GPT-2 baseline: LAMBADA 95.08%, WikiText PPL 29.07  
-**Current v3 AR PPL (29.5) matches GPT-2 baseline**, suggesting minimal AR degradation from joint training.
+v1 final: LAMBADA 94.26%/1.46 PPL, WikiText 43.86 PPL, S1 loss 4.12. GPT-2 baseline: 95.08%/29.07 PPL. **v3 AR quality matches GPT-2 baseline** but S1 system underperforming vs v1.
 
 ## Infrastructure
-- **19 spot sessions** across g5/g6 instances, **$20.30 total cost**
-- Current: g6.2xlarge, us-east-1a, running 34min (stable)
-- Previous session: 6h runtime before spot reclaim
-- **Major instability Mar 9 17:00-22:00**: 8 spot reclaims in 5 hours
-- Cost efficiency: **53.5% savings** vs on-demand
+**19 spot sessions**, avg **$0.52/hr**. **Heavy churn** Mar 9 (12 reclaims in 4hrs). Current g6.2xlarge stable 1hr+. Total: **$20.49 spent**.
 
 ## What's Next
-- Monitor diffusion loss - need sustained <4.0 breakthrough
-- S1 accuracy remains stubborn - investigate confidence head dynamics
-- After v3: comprehensive v1/v2/v3 benchmark comparison, confidence calibration analysis
-- Consider instance type optimization to reduce spot volatility
+Monitor diff loss volatility. **S1 accuracy plateau concerning** - may need LR adjustment or architecture review. Next eval at 25k steps critical for trajectory assessment.
