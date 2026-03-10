@@ -87,6 +87,14 @@ input { font-family: var(--font-ui); }
   letter-spacing: -0.3px;
 }
 .header-title .hl { color: var(--accent); }
+.header-hero-img {
+  height: 48px;
+  width: auto;
+  border-radius: 10px;
+  object-fit: cover;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
 #header-center {
   display: flex; align-items: center; gap: 12px;
 }
@@ -1103,23 +1111,19 @@ body.terminal-maximized #terminal-card {
 <!-- Header -->
 <header id="header">
   <div id="header-left">
+    <img src="https://bitbanshee.com/hero.png" alt="" class="header-hero-img">
     <div class="header-brand">
       <span class="header-subtitle">bitbanshee.com</span>
       <span class="header-title">Bitbanshee's <span class="hl">AI Playground</span></span>
     </div>
   </div>
-  <div id="header-center">
-    <div class="project-label">
-      <span class="pl-name" id="proj-btn-name">ml-lab</span>
-    </div>
-  </div>
+  <div id="header-center"></div>
   <div id="header-right">
     <div id="health-indicator">
       <div id="health-dot"></div>
       <span id="health-text">ok</span>
     </div>
     <button class="header-btn" onclick="togglePageFullscreen()" title="Fullscreen">&#x26F6;</button>
-    <a class="header-btn" href="https://bitbanshee.com" target="_blank" rel="noopener" title="bitbanshee.com">&#8599;</a>
   </div>
 </header>
 
@@ -1278,8 +1282,6 @@ body.terminal-maximized #terminal-card {
       <span id="footer-uptime"></span>
     </div>
     <div class="footer-right">
-      <a href="https://bitbanshee.com" target="_blank">bitbanshee.com</a>
-      <span class="footer-dot"></span>
       <a href="https://github.com/BITBANSHEE-C137" target="_blank">GitHub</a>
     </div>
   </div>
@@ -1492,7 +1494,8 @@ function selectProject(id) {
   var proj = projects.find(function(p) { return p.id === id; });
   if (!proj) return;
   currentProject = id;
-  document.getElementById('proj-btn-name').textContent = proj.id;
+  var projEl = document.getElementById('proj-btn-name');
+  if (projEl) projEl.textContent = proj.id;
 
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(new Uint8Array([0x30, 0x03]));
@@ -2717,8 +2720,17 @@ function deleteTask(id) {
 function setAuthBadge(id, active, cls) {
   var el = document.getElementById(id);
   if (!el) return;
-  el.classList.remove('active', 'elevated');
-  if (active) el.classList.add(cls || 'active');
+  var dot = el.querySelector('.auth-dot');
+  if (active) {
+    var isElev = (cls === 'elevated');
+    var c = isElev ? '#fbbf24' : '#34d399';
+    var shadow = isElev ? '0 0 4px rgba(251,191,36,0.5)' : '0 0 4px rgba(52,211,153,0.5)';
+    el.style.color = c;
+    if (dot) { dot.style.background = c; dot.style.opacity = '1'; dot.style.boxShadow = shadow; }
+  } else {
+    el.style.color = '';
+    if (dot) { dot.style.background = ''; dot.style.opacity = ''; dot.style.boxShadow = ''; }
+  }
 }
 
 function loadProfile() {
