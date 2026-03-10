@@ -2450,11 +2450,19 @@ function icloudSignIn() {
     if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Sign-in failed'); });
     return r.json();
   }).then(function(data) {
-    document.getElementById('icloud-step-1').style.display = 'none';
-    document.getElementById('icloud-step-2').style.display = '';
-    document.getElementById('icloud-auth-title').textContent = 'Two-Factor Authentication';
-    document.getElementById('icloud-2fa-code').value = '';
-    document.getElementById('icloud-2fa-code').focus();
+    if (data.status === 'authenticated') {
+      // No 2FA needed — trusted session
+      closeICloudAuth();
+      openStorageModal('icloud');
+      showToast('iCloud Drive connected', 3000);
+    } else {
+      // 2FA required — Apple should push code to your devices
+      document.getElementById('icloud-step-1').style.display = 'none';
+      document.getElementById('icloud-step-2').style.display = '';
+      document.getElementById('icloud-auth-title').textContent = 'Two-Factor Authentication';
+      document.getElementById('icloud-2fa-code').value = '';
+      document.getElementById('icloud-2fa-code').focus();
+    }
   }).catch(function(err) {
     document.getElementById('icloud-error-1').textContent = err.message;
   }).finally(function() {
