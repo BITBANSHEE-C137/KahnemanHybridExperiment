@@ -59,10 +59,16 @@ input { font-family: var(--font-ui); }
   height: var(--header-h);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 160px;
-  background: rgba(15,17,23,0.85);
+  background: url('https://bitbanshee.com/hero.png') center/cover no-repeat;
+  border-bottom: 1px solid var(--glass-border);
+}
+#header::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(15,17,23,0.78);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-bottom: 1px solid var(--glass-border);
+  z-index: -1;
 }
 #header-left {
   display: flex; align-items: center; gap: 16px;
@@ -87,14 +93,6 @@ input { font-family: var(--font-ui); }
   letter-spacing: -0.3px;
 }
 .header-title .hl { color: var(--accent); }
-.header-hero-img {
-  height: 48px;
-  width: auto;
-  border-radius: 10px;
-  object-fit: cover;
-  opacity: 0.9;
-  flex-shrink: 0;
-}
 #header-center {
   display: flex; align-items: center; gap: 12px;
 }
@@ -1111,7 +1109,6 @@ body.terminal-maximized #terminal-card {
 <!-- Header -->
 <header id="header">
   <div id="header-left">
-    <img src="https://bitbanshee.com/hero.png" alt="" class="header-hero-img">
     <div class="header-brand">
       <span class="header-subtitle">bitbanshee.com</span>
       <span class="header-title">Bitbanshee's <span class="hl">AI Playground</span></span>
@@ -1700,10 +1697,10 @@ function toggleRC() {
   var btn = document.getElementById('rc-toggle');
   if (rcActive) {
     btn.classList.add('active');
-    sendTerminalInput('/rc on\n');
+    sendTerminalInput('/rc on\r');
   } else {
     btn.classList.remove('active');
-    sendTerminalInput('/rc off\n');
+    sendTerminalInput('/rc off\r');
   }
 }
 
