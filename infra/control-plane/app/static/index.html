@@ -59,8 +59,7 @@ input { font-family: var(--font-ui); }
   height: var(--header-h);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 160px;
-  background: url('https://bitbanshee.com/hero.png') center 30%/cover no-repeat;
-  border-bottom: 1px solid var(--glass-border);
+  background: url('https://bitbanshee.com/hero.png') center 25% / 600px auto no-repeat, var(--bg);
   overflow: hidden;
 }
 #header::before {
@@ -69,6 +68,12 @@ input { font-family: var(--font-ui); }
   background: rgba(12,14,20,0.45);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+}
+#header::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: var(--glass-border);
+  z-index: 2;
 }
 #header-left {
   display: flex; align-items: center; gap: 16px;
