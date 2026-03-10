@@ -1,460 +1,568 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>ML Lab Control Plane</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitbanshee's AI Playground</title>
+<meta name="description" content="AI experiments — building, training, monitoring, and theorizing about AI.">
+<meta property="og:title" content="Bitbanshee's AI Playground">
+<meta property="og:description" content="Building, training, monitoring, and theorizing about AI">
+<meta property="og:image" content="https://bitbanshee.com/hero.png">
+<meta property="og:url" content="https://bitbanshee.com">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2a2d3a;
+  --text: #e0e0e0;
+  --dim: #888;
+  --accent: #60a5fa;
+  --green: #34d399;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --orange: #fb923c;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { overflow-x: hidden; }
+body {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  background: var(--bg) url('/hero.png') center top / cover no-repeat fixed;
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.5;
+  overflow-x: hidden;
+  min-width: 0;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 23, 0.88);
+  z-index: 1;
+  pointer-events: none;
+}
+.hero-video {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+  transition: opacity 1s ease-out;
+}
+.container {
+  position: relative;
+  z-index: 2;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 12px;
+  overflow: hidden;
+}
 
-    html, body {
-      height: 100%; width: 100%;
-      background: #1a1a2e; color: #e0e0e0;
-      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, monospace;
-      font-size: 16px;
-      overflow: hidden;
-    }
+/* Header */
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 60px 14px 12px;
+  background: url('/hero.png') center -75px / cover no-repeat;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  gap: 4px;
+  position: relative;
+}
+.header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 17, 23, 0.65);
+  border-radius: inherit;
+}
+.header > * {
+  position: relative;
+  z-index: 1;
+}
+.header h1 { font-size: 22px; font-weight: 600; white-space: nowrap; }
+.header .subtitle {
+  font-size: 14px;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.header-sub {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  width: 100%;
+  justify-content: space-between;
+  position: relative;
+}
+.header-links { display: flex; gap: 8px; font-size: 13px; }
+.header-links a {
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  transition: border-color 0.2s, background 0.2s;
+}
+.header-links a:hover {
+  border-color: var(--accent);
+  background: rgba(232, 121, 84, 0.1);
+}
+.pulse {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 6px;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
 
-    #app {
-      display: flex; flex-direction: column;
-      height: 100vh; width: 100vw;
-    }
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  min-width: 0;
+  overflow: hidden;
+}
 
-    /* --- Status Bar --- */
-    #status-bar {
-      display: flex; align-items: center; justify-content: space-evenly;
-      background: #16213e; min-height: 40px; padding: 4px 8px;
-      flex-shrink: 0; gap: 8px; flex-wrap: wrap;
-    }
-    .status-item {
-      font-size: 14px; white-space: nowrap;
-    }
-    .status-item .label { color: #888; }
-    .status-item .value { font-weight: 600; }
-    .status-green  .value { color: #00c853; }
-    .status-yellow .value { color: #ffd600; }
-    .status-red    .value { color: #ff1744; }
+/* Grid */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
 
-    /* --- Elevation Panel --- */
-    #elevation-header {
-      display: flex; align-items: center; justify-content: space-between;
-      background: #0f3460; padding: 8px 12px; cursor: pointer;
-      flex-shrink: 0; user-select: none;
-      border-bottom: 1px solid #1a1a2e;
-    }
-    #elevation-header h2 { font-size: 16px; font-weight: 600; }
-    .badge {
-      background: #ff1744; color: #fff; border-radius: 10px;
-      padding: 2px 8px; font-size: 13px; font-weight: 700;
-      margin-left: 8px; display: none;
-    }
-    .badge.visible { display: inline-block; }
-    #elevation-body {
-      background: #0f3460; padding: 8px 12px; overflow-y: auto;
-      max-height: 150px; flex-shrink: 0;
-      border-bottom: 1px solid #1a1a2e;
-    }
-    #elevation-body.collapsed { display: none; }
+/* Experiment cards */
+.experiment-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+  background: rgba(52, 211, 153, 0.1);
+  padding: 2px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.status-badge.archive {
+  color: var(--dim);
+  background: rgba(136, 136, 136, 0.1);
+}
+.status-badge.archive .status-dot {
+  background: var(--dim);
+}
+.status-badge.complete { color: var(--accent); background: rgba(96, 165, 250, 0.1); }
+.status-badge.complete .status-dot { background: var(--accent); }
+.status-badge.offline { color: var(--orange); background: rgba(251, 146, 60, 0.1); }
+.status-badge.offline .status-dot { background: var(--orange); }
+.experiment-desc {
+  font-size: 14px;
+  color: var(--dim);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.experiment-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.experiment-links a {
+  color: var(--text);
+  text-decoration: none;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  font-size: 13px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.experiment-links a:hover {
+  border-color: var(--accent);
+  background: rgba(232, 121, 84, 0.1);
+}
+.arxiv-refs { display: flex; gap: 6px; flex-wrap: wrap; }
+.arxiv-pill {
+  font-size: 11px;
+  color: var(--dim);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s;
+}
+.arxiv-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
-    .elev-section-title { font-size: 13px; color: #888; margin: 4px 0 2px; text-transform: uppercase; }
+/* Card inner 2-column layout */
+.card-inner {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 16px;
+  align-items: start;
+}
+.card-thumb {
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: block;
+}
 
-    /* Request cards */
-    .request-card {
-      display: flex; align-items: center; justify-content: space-between;
-      background: #16213e; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;
-    }
-    .request-info { flex: 1; font-size: 14px; }
-    .request-info .role { color: #00d4ff; font-weight: 600; }
-    .request-actions { display: flex; gap: 8px; }
-    .btn {
-      min-width: 44px; min-height: 44px; border: none; border-radius: 6px;
-      font-size: 15px; font-weight: 700; cursor: pointer; padding: 6px 14px;
-      color: #fff;
-    }
-    .btn-approve { background: #00c853; }
-    .btn-deny    { background: #ff1744; }
-    .btn:active  { opacity: 0.7; }
+/* Coming soon card */
+.card-muted {
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+.card-muted p {
+  font-size: 15px;
+  color: var(--dim);
+  font-style: italic;
+}
 
-    /* Active session */
-    .active-session {
-      background: #16213e; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;
-      font-size: 14px;
-    }
-    .active-session .role { color: #00d4ff; font-weight: 600; }
-    .active-session .timer { color: #ffd600; font-weight: 600; }
+/* Stats row (inline summary) */
+.stats-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--dim);
+  margin: 10px 0 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.stats-row span { color: var(--text); font-weight: 600; }
 
-    /* History */
-    .history-entry { font-size: 13px; color: #999; padding: 2px 0; }
+/* Metric boxes */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+.metric-box {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px 8px;
+  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 3px solid transparent;
+}
+.metric-box.rag-green { border-left-color: var(--green); }
+.metric-box.rag-green .value { color: var(--green); }
+.metric-box.rag-amber { border-left-color: var(--yellow); }
+.metric-box.rag-amber .value { color: var(--yellow); }
+.metric-box .label {
+  font-size: 13px;
+  color: var(--dim);
+  margin-bottom: 3px;
+}
+.metric-box .value {
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.metric-box .sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
 
-    /* --- Terminal --- */
-    #terminal-container {
-      flex: 1; overflow: hidden; position: relative;
-    }
-    #terminal-container .xterm { height: 100%; }
+/* Footer */
+.footer {
+  margin-top: 16px;
+  padding: 20px 14px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 14px;
+  color: var(--dim);
+}
 
-    /* Full-screen toggle */
-    #fs-toggle {
-      position: fixed; bottom: 16px; right: 16px; z-index: 1000;
-      width: 48px; height: 48px; border-radius: 50%;
-      background: #00d4ff; color: #1a1a2e; border: none;
-      font-size: 22px; cursor: pointer; line-height: 1;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-    }
-    #fs-toggle:active { opacity: 0.7; }
+/* Hamburger menu */
+.header-hamburger {
+  display: none;
+  background: none;
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+}
+.header-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.header-menu.open { display: flex; }
+.header-menu a {
+  color: var(--text);
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.header-menu a:hover { background: var(--bg); }
 
-    body.fullscreen #status-bar,
-    body.fullscreen #elevation-header,
-    body.fullscreen #elevation-body { display: none !important; }
-    body.fullscreen #terminal-container { height: 100vh; }
-
-    /* --- Toast --- */
-    #toast {
-      position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-      background: #ff1744; color: #fff; padding: 8px 18px;
-      border-radius: 8px; font-size: 14px; z-index: 2000;
-      opacity: 0; pointer-events: none; transition: opacity 0.3s;
-    }
-    #toast.visible { opacity: 1; pointer-events: auto; }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-      #elevation-body { max-height: 200px; }
-      .status-item { font-size: 13px; }
-    }
-  </style>
+/* Responsive */
+@media (max-width: 900px) {
+  .metrics-row { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+}
+@media (max-width: 700px) {
+  .card-inner { grid-template-columns: 1fr; }
+  .hero-video { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-video { display: none; }
+}
+@media (max-width: 540px) {
+  .header-links { display: none; }
+  .header-hamburger { display: block; }
+  .header h1 { font-size: 17px; }
+  .metrics-row { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+}
+</style>
 </head>
 <body>
-  <div id="app">
-    <!-- Status Bar -->
-    <div id="status-bar">
-      <div class="status-item" id="si-fleet">
-        <span class="label">Fleet </span><span class="value">--</span>
-      </div>
-      <div class="status-item" id="si-instances">
-        <span class="label">Inst </span><span class="value">--</span>
-      </div>
-      <div class="status-item" id="si-step">
-        <span class="label">Step </span><span class="value">--</span>
-      </div>
-      <div class="status-item" id="si-cost">
-        <span class="label">Cost </span><span class="value">--</span>
-      </div>
-    </div>
+<video class="hero-video" autoplay muted playsinline poster="/hero.png">
+  <source src="/banshee-bg.mp4" type="video/mp4">
+</video>
+<div class="container">
 
-    <!-- Elevation Panel -->
-    <div id="elevation-header" onclick="toggleElevation()">
-      <h2>Elevation <span class="badge" id="pending-badge">0</span></h2>
-      <span id="elev-arrow">&#9660;</span>
+  <!-- Header (with subtitle merged from intro) -->
+  <div class="header">
+    <h1><span class="pulse"></span>Bitbanshee's AI Playground</h1>
+    <div class="subtitle">Building, training, monitoring, and theorizing about AI</div>
+    <div class="header-sub">
+      <div class="header-links">
+        <a href="https://github.com/BITBANSHEE-C137" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://linkedin.com/in/gwrowe" target="_blank" rel="noopener">LinkedIn</a>
+        <a href="https://siliconstrategy.ai" target="_blank" rel="noopener">siliconstrategy.ai</a>
+      </div>
+      <button class="header-hamburger" onclick="document.getElementById('header-menu').classList.toggle('open')">&#9776;</button>
+      <div class="header-menu" id="header-menu">
+        <a href="https://github.com/BITBANSHEE-C137" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://linkedin.com/in/gwrowe" target="_blank" rel="noopener">LinkedIn</a>
+        <a href="https://siliconstrategy.ai" target="_blank" rel="noopener">siliconstrategy.ai</a>
+      </div>
     </div>
-    <div id="elevation-body" class="collapsed">
-      <div class="elev-section-title">Pending</div>
-      <div id="pending-list"><span style="color:#666">None</span></div>
-      <div class="elev-section-title">Active</div>
-      <div id="active-session"><span style="color:#666">None</span></div>
-      <div class="elev-section-title">History</div>
-      <div id="elevation-history"><span style="color:#666">None</span></div>
-    </div>
-
-    <!-- Terminal -->
-    <div id="terminal-container"></div>
   </div>
 
-  <!-- Full-screen toggle -->
-  <button id="fs-toggle" onclick="toggleFullscreen()" title="Toggle fullscreen">&#x26F6;</button>
+  <!-- Grid (no section header) -->
+  <div class="grid">
 
-  <!-- Toast -->
-  <div id="toast"></div>
+    <!-- Dual-Process Model (with v1 results folded in) -->
+    <div class="card">
+      <div class="card-inner">
+      <img class="card-thumb" src="/dashboard.png" alt="ML Training Dashboard">
+      <div>
+      <div class="experiment-title">
+        Dual-Process Language Model
+        <span class="status-badge complete"><span class="status-dot"></span>v1 Complete</span>
+        <span class="status-badge"><span class="status-dot"></span>v2 Training</span>
+      </div>
+      <div class="experiment-desc">
+        Single Transformer operating in two cognitive modes &mdash; fast parallel generation via masked diffusion (System 1) and slow sequential reasoning via autoregressive decoding (System 2). A trained confidence head decides when to escalate.
+      </div>
+      <div class="experiment-links">
+        <a href="https://train.bitbanshee.com" target="_blank" rel="noopener">Dashboard &rarr;</a>
+        <a href="https://train.bitbanshee.com/reports/" target="_blank" rel="noopener">Reports &rarr;</a>
+        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank" rel="noopener">GitHub &rarr;</a>
+      </div>
+      <div class="arxiv-refs">
+        <a class="arxiv-pill" href="https://arxiv.org/abs/2512.14549" target="_blank" rel="noopener">arXiv:2512.14549</a>
+        <a class="arxiv-pill" href="https://arxiv.org/abs/2502.09992" target="_blank" rel="noopener">arXiv:2502.09992</a>
+      </div>
+      <div class="stats-row">
+        <span>50,000</span> steps &middot;
+        <span>$27.62</span> total cost &middot;
+        <span>4</span> spot instances &middot;
+        <span>63%</span> savings
+      </div>
+      <div class="metrics-row">
+        <div class="metric-box rag-green">
+          <div class="label">AR PPL</div>
+          <div class="value">26.9</div>
+          <div class="sub">target &lt;40</div>
+        </div>
+        <div class="metric-box rag-green">
+          <div class="label">AUROC</div>
+          <div class="value">0.854</div>
+          <div class="sub">target &gt;0.75</div>
+        </div>
+        <div class="metric-box rag-green">
+          <div class="label">ECE</div>
+          <div class="value">0.010</div>
+          <div class="sub">target &lt;0.05</div>
+        </div>
+        <div class="metric-box rag-amber">
+          <div class="label">Diff Loss</div>
+          <div class="value">4.13</div>
+          <div class="sub">target 4.0</div>
+        </div>
+        <div class="metric-box rag-amber">
+          <div class="label">S1 Accuracy</div>
+          <div class="value">28.7%</div>
+          <div class="sub">target 40%</div>
+        </div>
+      </div>
+      </div>
+      </div>
+    </div>
 
-  <script>
-    // =========================================================================
-    // Utility
-    // =========================================================================
-    function formatDuration(seconds) {
-      if (seconds < 0) seconds = 0;
-      const h = Math.floor(seconds / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      const s = Math.floor(seconds % 60);
-      if (h > 0) return h + 'h ' + m + 'm';
-      return m + 'm ' + s + 's';
-    }
+    <!-- The Observer -->
+    <div class="card">
+      <div class="card-inner">
+      <img class="card-thumb" src="/observer.png" alt="The Observer Dashboard">
+      <div>
+      <div class="experiment-title">
+        The Observer
+        <span class="status-badge"><span class="status-dot"></span>Collecting Data</span>
+      </div>
+      <div class="experiment-desc">
+        Read-only intelligence dashboard monitoring Moltbook, a social network of autonomous AI agents. Quad-model analysis engine (GPT-5-mini, Claude, Gemini, Grok) scores every post across four dimensions &mdash; OPSEC failures, deception patterns, sycophancy loops, and operator influence &mdash; with composite threat profiling, correlation detection, and human ground-truth calibration. Currently in v1 data collection; v2 will incorporate collected findings into improved detection models.
+      </div>
+      <div class="experiment-links">
+        <a href="https://the-observer.replit.app" target="_blank" rel="noopener">App &rarr;</a>
+        <a href="https://github.com/BITBANSHEE-C137/theobserver" target="_blank" rel="noopener">GitHub &rarr;</a>
+      </div>
+      </div>
+      </div>
+    </div>
 
-    function formatCost(dollars) {
-      return '$' + Number(dollars).toFixed(2);
-    }
+    <!-- Structured Memory Engine -->
+    <div class="card">
+      <div class="card-inner">
+      <img class="card-thumb" src="/sme.png" alt="Structured Memory Engine">
+      <div>
+      <div class="experiment-title">
+        Structured Memory Engine
+        <span class="status-badge archive"><span class="status-dot"></span>Archive</span>
+      </div>
+      <div class="experiment-desc">
+        Proof-of-concept for persistent, cross-session AI memory. Goes beyond standard RAG by treating conversation history as structured semantic memory &mdash; adaptive retrieval thresholds, dual-database sync (PGVector local + Pinecone cloud), and real-time memory visualization. Built with TypeScript, React, OpenAI GPT-4o, and text-embedding-3-small.
+      </div>
+      <div class="experiment-links">
+        <a href="https://github.com/BITBANSHEE-C137/StructuredMemoryEngine_replit" target="_blank" rel="noopener">GitHub &rarr;</a>
+      </div>
+      <div class="arxiv-refs">
+        <span class="arxiv-pill">ai</span>
+        <span class="arxiv-pill">context-engineering</span>
+        <span class="arxiv-pill">memory</span>
+      </div>
+      </div>
+      </div>
+    </div>
 
-    let toastTimer = null;
-    function showToast(msg, duration) {
-      duration = duration || 4000;
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.classList.add('visible');
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(function() { el.classList.remove('visible'); }, duration);
-    }
+    <!-- SENTINEL -->
+    <div class="card">
+      <div class="card-inner">
+      <img class="card-thumb" src="/sentinel.png" alt="SENTINEL Dashboard">
+      <div>
+      <div class="experiment-title">
+        SENTINEL
+        <span class="status-badge archive"><span class="status-dot"></span>Archive</span>
+        <span class="status-badge offline"><span class="status-dot"></span>Offline</span>
+      </div>
+      <div class="experiment-desc">
+        AI-powered analytics platform for radio scanner call recordings. Automated transcription via local Whisper models, multi-tier geocoding with RadioReference integration (11,680+ frequencies), LLM-driven sentiment analysis and incident correlation, and real-time mapping with Leaflet. Built with React, TypeScript, Node.js, and PostgreSQL.
+      </div>
+      <!-- No links — repo is private -->
+      <div class="arxiv-refs">
+        <span class="arxiv-pill">ai</span>
+        <span class="arxiv-pill">radio</span>
+        <span class="arxiv-pill">transcription</span>
+        <span class="arxiv-pill">geospatial</span>
+        <span class="arxiv-pill">analytics</span>
+      </div>
+      </div>
+      </div>
+    </div>
 
-    async function apiFetch(path, opts) {
-      opts = opts || {};
-      opts.credentials = 'include';
-      try {
-        const resp = await fetch(path, opts);
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        return await resp.json();
-      } catch (e) {
-        showToast('API error: ' + e.message);
-        return null;
-      }
-    }
 
-    // =========================================================================
-    // Terminal (xterm.js + ttyd WebSocket)
-    // =========================================================================
-    const term = new Terminal({
-      cursorBlink: true,
-      fontSize: 16,
-      fontFamily: "'Menlo', 'DejaVu Sans Mono', 'Consolas', monospace",
-      theme: {
-        background: '#1a1a2e',
-        foreground: '#e0e0e0',
-        cursor: '#00d4ff',
-        selectionBackground: '#264f78'
-      },
-      allowProposedApi: true
-    });
+    <!-- Dead Cat Society -->
+    <div class="card">
+      <div class="card-inner">
+      <img class="card-thumb" src="/deadcatsociety.png" alt="Dead Cat Society">
+      <div>
+      <div class="experiment-title">
+        Dead Cat Society
+        <span class="status-badge"><span class="status-dot"></span>In Development</span>
+      </div>
+      <div class="experiment-desc">
+        Despite the name, strictly about cats sleeping in ridiculous positions &mdash; not roadkill. Upload, vote, comment, and rank the family's most dramatically &ldquo;dead&rdquo; sleeping cats. Two-stage AI moderation pipeline (Rekognition for image safety, then Claude Vision + Claude Text for contextual review) screens every upload via SQS with minimal human oversight. Fully serverless on AWS with React 19, DynamoDB single-table design, CDK v2, Google OAuth, and Lambda@Edge SEO.
+      </div>
+      <div class="experiment-links">
+        <a href="https://deadcatsociety.com" target="_blank" rel="noopener">App &rarr;</a>
+      </div>
+      <div class="arxiv-refs">
+        <span class="arxiv-pill">serverless</span>
+        <span class="arxiv-pill">aws-cdk</span>
+        <span class="arxiv-pill">react</span>
+        <span class="arxiv-pill">ai-moderation</span>
+        <span class="arxiv-pill">dynamodb</span>
+      </div>
+      </div>
+      </div>
+    </div>
 
-    const fitAddon = new FitAddon.FitAddon();
-    const webLinksAddon = new WebLinksAddon.WebLinksAddon();
-    term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
+    <!-- Coming Soon -->
+    <div class="card card-muted">
+      <p>More experiments coming soon</p>
+    </div>
 
-    const termEl = document.getElementById('terminal-container');
-    term.open(termEl);
-    fitAddon.fit();
+  </div>
 
-    let ws = null;
-    let reconnectDelay = 1000;
-    const MAX_RECONNECT = 30000;
+  <!-- Footer (simple, no pill links) -->
+  <div class="footer">
+    Bitbanshee &middot; 2026
+  </div>
 
-    function connectTerminal() {
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const url = proto + '//' + window.location.host + '/terminal/ws';
-      ws = new WebSocket(url);
-      ws.binaryType = 'arraybuffer';
-
-      ws.onopen = function() {
-        reconnectDelay = 1000;
-        sendResize();
-      };
-
-      ws.onmessage = function(ev) {
-        const data = new Uint8Array(ev.data);
-        if (data.length < 1) return;
-        const msgType = data[0];
-        const payload = data.slice(1);
-        switch (msgType) {
-          case 0: // output
-            term.write(payload);
-            break;
-          case 1: // set window title
-            document.title = new TextDecoder().decode(payload) || 'ML Lab Control Plane';
-            break;
-          case 2: // preferences (ignore)
-            break;
-        }
-      };
-
-      ws.onclose = function() {
-        scheduleReconnect();
-      };
-
-      ws.onerror = function() {
-        if (ws) ws.close();
-      };
-    }
-
-    function scheduleReconnect() {
-      setTimeout(function() {
-        connectTerminal();
-        reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT);
-      }, reconnectDelay);
-    }
-
-    function sendResize() {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      const msg = '1' + JSON.stringify({ columns: term.cols, rows: term.rows });
-      ws.send(new TextEncoder().encode(msg));
-    }
-
-    term.onData(function(data) {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      const buf = new Uint8Array(data.length + 1);
-      buf[0] = 0; // input type
-      const encoded = new TextEncoder().encode(data);
-      buf.set(encoded, 1);
-      ws.send(buf);
-    });
-
-    term.onResize(function() {
-      sendResize();
-    });
-
-    window.addEventListener('resize', function() {
-      fitAddon.fit();
-    });
-
-    connectTerminal();
-
-    // =========================================================================
-    // Elevation Panel
-    // =========================================================================
-    let elevationOpen = false;
-
-    function toggleElevation() {
-      elevationOpen = !elevationOpen;
-      const body = document.getElementById('elevation-body');
-      const arrow = document.getElementById('elev-arrow');
-      if (elevationOpen) {
-        body.classList.remove('collapsed');
-        arrow.innerHTML = '&#9650;';
-      } else {
-        body.classList.add('collapsed');
-        arrow.innerHTML = '&#9660;';
-      }
-      setTimeout(function() { fitAddon.fit(); }, 50);
-    }
-
-    async function pollPending() {
-      const data = await apiFetch('/api/elevation/pending');
-      const listEl = document.getElementById('pending-list');
-      const badge = document.getElementById('pending-badge');
-      if (!data || !Array.isArray(data) || data.length === 0) {
-        listEl.innerHTML = '<span style="color:#666">None</span>';
-        badge.textContent = '0';
-        badge.classList.remove('visible');
-        return;
-      }
-      badge.textContent = data.length;
-      badge.classList.add('visible');
-      listEl.innerHTML = data.map(function(r) {
-        return '<div class="request-card">'
-          + '<div class="request-info">'
-          + '<span class="role">' + escHtml(r.action || '') + '</span> &mdash; '
-          + escHtml(r.justification || 'No reason')
-          + ' <span style="color:#666">(' + r.duration_minutes + 'm)</span>'
-          + '</div>'
-          + '<div class="request-actions">'
-          + '<button class="btn btn-approve" onclick="approveElev(\'' + r.id + '\')">Approve</button>'
-          + '<button class="btn btn-deny" onclick="denyElev(\'' + r.id + '\')">Deny</button>'
-          + '</div></div>';
-      }).join('');
-    }
-
-    async function pollActive() {
-      const data = await apiFetch('/api/elevation/active');
-      const el = document.getElementById('active-session');
-      if (!data || !data.id) {
-        el.innerHTML = '<span style="color:#666">None</span>';
-        return;
-      }
-      const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() / 1000 : 0;
-      const remaining = Math.max(0, expiresAt - Date.now() / 1000);
-      el.innerHTML = '<div class="active-session">'
-        + '<span class="role">LabAdminRole</span>'
-        + ' &mdash; <strong>' + escHtml(data.action || '') + '</strong>'
-        + ' &mdash; approved by <strong>' + escHtml(data.decided_by || '?') + '</strong>'
-        + ' &mdash; <span class="timer">' + formatDuration(remaining) + ' left</span>'
-        + '</div>';
-    }
-
-    async function approveElev(id) {
-      const res = await apiFetch('/api/elevation/approve/' + id, { method: 'POST' });
-      if (res) {
-        showToast('Approved', 2000);
-        pollPending();
-        pollActive();
-      }
-    }
-
-    async function denyElev(id) {
-      const res = await apiFetch('/api/elevation/deny/' + id, { method: 'POST' });
-      if (res) {
-        showToast('Denied', 2000);
-        pollPending();
-      }
-    }
-
-    function escHtml(s) {
-      const d = document.createElement('div');
-      d.textContent = s;
-      return d.innerHTML;
-    }
-
-    // Active session countdown (every 1s)
-    setInterval(pollActive, 1000);
-    // Pending poll (every 10s)
-    setInterval(pollPending, 10000);
-    // Initial fetch
-    pollPending();
-    pollActive();
-
-    // =========================================================================
-    // Lab Status Bar
-    // =========================================================================
-    async function pollLabStatus() {
-      const data = await apiFetch('/api/lab/status');
-      if (!data) return;
-
-      const fleetEl = document.getElementById('si-fleet');
-      const instEl  = document.getElementById('si-instances');
-      const stepEl  = document.getElementById('si-step');
-      const costEl  = document.getElementById('si-cost');
-
-      // Fleet state
-      const fleet = data.fleet || {};
-      const training = data.training || {};
-      const cost = data.cost || {};
-
-      const state = (fleet.state || '--').toLowerCase();
-      fleetEl.querySelector('.value').textContent = fleet.state || '--';
-      fleetEl.className = 'status-item';
-      const instCount = fleet.instances ? fleet.instances.length : 0;
-      if (state === 'active' && instCount > 0) {
-        fleetEl.classList.add('status-green');
-      } else if (state === 'submitted' || state === 'modifying') {
-        fleetEl.classList.add('status-yellow');
-      } else {
-        fleetEl.classList.add('status-red');
-      }
-
-      instEl.querySelector('.value').textContent = instCount;
-      stepEl.querySelector('.value').textContent = training.step != null ? training.step : (training.status || '--');
-      costEl.querySelector('.value').textContent = cost.total != null ? formatCost(cost.total) : '--';
-    }
-
-    setInterval(pollLabStatus, 30000);
-    pollLabStatus();
-
-    // =========================================================================
-    // Fullscreen Toggle
-    // =========================================================================
-    let isFullscreen = false;
-
-    function toggleFullscreen() {
-      isFullscreen = !isFullscreen;
-      document.body.classList.toggle('fullscreen', isFullscreen);
-      const btn = document.getElementById('fs-toggle');
-      btn.innerHTML = isFullscreen ? '&#x2716;' : '&#x26F6;';
-      setTimeout(function() { fitAddon.fit(); }, 50);
-    }
-
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && isFullscreen) {
-        toggleFullscreen();
-      }
-    });
-  </script>
+</div>
+<script>
+document.querySelector('.hero-video').addEventListener('ended', function() {
+  this.style.opacity = '0';
+});
+</script>
 </body>
 </html>
