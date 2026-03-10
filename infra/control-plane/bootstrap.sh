@@ -254,22 +254,21 @@ step_13_deploy_systemd() {
     cp /tmp/systemd/*.service /etc/systemd/system/
     rm -rf /tmp/systemd
     systemctl daemon-reload
-    systemctl enable cloudflared ttyd controlplane-api rclone-icloud cc-tmux
+    systemctl enable cloudflared ttyd ttyd-shell controlplane-api rclone-icloud
     echo "Systemd services enabled"
 }
 
 step_14_start_services() {
     echo "Starting services..."
-    systemctl start cc-tmux
-    sleep 2
     systemctl start cloudflared
     systemctl start ttyd
+    systemctl start ttyd-shell
     systemctl start controlplane-api
     if ! systemctl start rclone-icloud 2>/dev/null; then
         echo "WARN: rclone-icloud failed to start (expected: needs 2FA setup via SSM)"
     fi
     echo "Service status:"
-    systemctl --no-pager status cc-tmux cloudflared ttyd controlplane-api || true
+    systemctl --no-pager status cloudflared ttyd ttyd-shell controlplane-api || true
 }
 
 step_15_health_check() {
