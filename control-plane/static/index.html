@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BitBanshee Lab</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;
+  --surface:#1a1d27;
+  --border:#2a2d3a;
+  --text:#e0e0e0;
+  --dim:#888;
+  --accent:#60a5fa;
+  --green:#34d399;
+  --yellow:#fbbf24;
+  --red:#f87171;
+  --radius:6px;
+}
+html,body{
+  height:100%;
+  font-family:'SF Mono','Fira Code','Consolas',monospace;
+  background:var(--bg);
+  color:var(--text);
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+a{color:var(--accent);text-decoration:none}
+
+/* ── Hero background ──────────────────────────────────────── */
+body{
+  background-image:url('https://bitbanshee.com/hero.png');
+  background-size:cover;
+  background-position:center top;
+  background-repeat:no-repeat;
+  background-attachment:fixed;
+}
+body::before{
+  content:'';
+  position:fixed;
+  inset:0;
+  background:rgba(15,17,23,0.88);
+  z-index:0;
+}
+
+.app{
+  position:relative;
+  z-index:1;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  overflow:hidden;
+}
+
+/* ── Toast ─────────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:var(--surface);color:var(--text);border:1px solid var(--border);
+  padding:10px 24px;border-radius:var(--radius);font-size:.8rem;
+  opacity:0;transition:opacity .3s;z-index:9999;pointer-events:none;
+}
+#toast.show{opacity:1}
+
+/* ── Toolbar ───────────────────────────────────────────────── */
+.toolbar{
+  display:flex;align-items:center;gap:0;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  min-height:36px;flex-shrink:0;
+}
+
+/* Tmux tabs — left side */
+.tmux-tabs{display:flex;align-items:stretch;flex:1;overflow-x:auto;min-width:0}
+.tmux-tab{
+  display:flex;align-items:center;padding:0 16px;
+  font-size:.75rem;font-weight:600;color:var(--dim);
+  border-bottom:2px solid transparent;
+  cursor:pointer;white-space:nowrap;min-height:36px;
+  transition:color .15s,border-color .15s;user-select:none;
+}
+.tmux-tab:hover{color:var(--text)}
+.tmux-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Right side buttons */
+.toolbar-right{display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0}
+.tb-btn{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:5px 10px;border-radius:var(--radius);font-size:.75rem;font-weight:600;
+  min-height:28px;transition:all .15s;
+}
+.tb-btn-accent{background:var(--accent);color:#0f1117}
+.tb-btn-accent:hover{background:#93bbfd}
+.tb-btn-ghost{color:var(--dim)}
+.tb-btn-ghost:hover{color:var(--accent)}
+
+/* ── Claude launcher dropdown ──────────────────────────────── */
+.claude-launcher{position:relative;display:inline-flex}
+.claude-dropdown{
+  display:none;position:absolute;top:100%;right:0;margin-top:4px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  min-width:200px;z-index:100;overflow:hidden;
+}
+.claude-launcher.open .claude-dropdown{display:block}
+.claude-dropdown button{
+  display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;
+  min-height:36px;transition:background .1s;
+}
+.claude-dropdown button:hover{background:rgba(96,165,250,.08)}
+.claude-dropdown .hint{color:var(--dim);font-size:.65rem;margin-top:2px}
+
+/* ── Elevation banner ──────────────────────────────────────── */
+.elevation-banner{
+  display:none;align-items:center;gap:10px;
+  padding:6px 12px;
+  background:rgba(251,191,36,.08);border-bottom:1px solid rgba(251,191,36,.25);
+  font-size:.75rem;flex-shrink:0;
+}
+.elevation-banner.visible{display:flex}
+.elevation-banner .elev-text{flex:1;color:var(--yellow)}
+.elevation-banner .elev-btn{
+  padding:4px 12px;border-radius:var(--radius);font-size:.7rem;font-weight:700;
+  min-height:26px;cursor:pointer;border:none;
+}
+.elev-approve{background:rgba(52,211,153,.25);color:var(--green)}
+.elev-approve:hover{background:rgba(52,211,153,.4)}
+.elev-deny{background:rgba(248,113,113,.2);color:var(--red)}
+.elev-deny:hover{background:rgba(248,113,113,.35)}
+
+/* ── Terminal ──────────────────────────────────────────────── */
+.terminal-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.terminal-container{flex:1;position:relative;overflow:hidden;cursor:text}
+#terminal{width:100%;height:100%}
+
+/* ── Footer ────────────────────────────────────────────────── */
+.footer{
+  display:flex;align-items:center;gap:8px;
+  padding:3px 12px;
+  background:var(--surface);border-top:1px solid var(--border);
+  font-size:.65rem;color:var(--dim);
+  min-height:24px;flex-shrink:0;
+}
+.footer .spacer{flex:1}
+.health-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.brand{font-weight:700;letter-spacing:.5px;color:var(--dim)}
+
+/* ── Fullscreen ────────────────────────────────────────────── */
+.app.fullscreen .toolbar,
+.app.fullscreen .footer,
+.app.fullscreen .elevation-banner{display:none}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media(max-width:600px){
+  .tmux-tab{padding:0 10px;font-size:.7rem}
+  .tb-btn{padding:4px 8px;font-size:.7rem}
+  .toolbar-right .hide-mobile{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Toolbar: tmux tabs left, actions right -->
+  <div class="toolbar">
+    <div class="tmux-tabs" id="tab-bar">
+      <div class="tmux-tab active" data-window="0">claude-code</div>
+      <div class="tmux-tab" data-window="1">monitor</div>
+      <div class="tmux-tab" data-window="2">shell</div>
+    </div>
+    <div class="toolbar-right">
+      <div class="claude-launcher" id="claude-launcher">
+        <button class="tb-btn tb-btn-accent" id="btn-claude">&#9889; Claude</button>
+        <div class="claude-dropdown">
+          <button id="btn-claude-here">Launch in current pane<div class="hint">Sends <code>claude</code> to active pane</div></button>
+          <button id="btn-claude-new">Launch in new window<div class="hint">Creates tmux window + <code>claude</code></div></button>
+        </div>
+      </div>
+      <a href="https://train.bitbanshee.com" target="_blank" class="tb-btn tb-btn-ghost hide-mobile" title="Training Dashboard">Train</a>
+      <button class="tb-btn tb-btn-ghost" id="btn-fullscreen" title="Fullscreen (Ctrl+Shift+F)">&#x26F6;</button>
+    </div>
+  </div>
+
+  <!-- Elevation banner — only visible when pending -->
+  <div class="elevation-banner" id="elevation-banner">
+    <span class="elev-text" id="elev-text"></span>
+    <button class="elev-btn elev-approve" id="elev-approve">Approve</button>
+    <button class="elev-btn elev-deny" id="elev-deny">Deny</button>
+  </div>
+
+  <!-- Terminal fills everything -->
+  <div class="terminal-area">
+    <div class="terminal-container" id="terminal-container">
+      <div id="terminal"></div>
+    </div>
+  </div>
+
+  <!-- Tiny footer -->
+  <div class="footer">
+    <span class="health-dot" id="health-dot"></span>
+    <span id="health-label">connecting</span>
+    <span class="spacer"></span>
+    <span class="brand">BitBanshee</span>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+<script>
+/* ── Helpers ───────────────────────────────────────────────── */
+function escHtml(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
+function showToast(m,dur){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._tid);t._tid=setTimeout(function(){t.classList.remove('show')},dur||2500)}
+async function apiFetch(path,opts){try{opts=opts||{};opts.credentials='include';var r=await fetch(path,opts);if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}catch(e){console.error('apiFetch:',path,e);return null}}
+
+/* ── Terminal ──────────────────────────────────────────────── */
+var term=new Terminal({
+  cursorBlink:true,
+  fontSize:14,
+  fontFamily:"'SF Mono','Fira Code','Consolas',monospace",
+  theme:{
+    background:'#0f1117',
+    foreground:'#e0e0e0',
+    cursor:'#60a5fa',
+    selectionBackground:'rgba(96,165,250,0.25)',
+    black:'#1a1d27',
+    red:'#f87171',
+    green:'#34d399',
+    yellow:'#fbbf24',
+    blue:'#60a5fa',
+    magenta:'#c084fc',
+    cyan:'#22d3ee',
+    white:'#e0e0e0',
+    brightBlack:'#4b5563',
+    brightRed:'#fca5a5',
+    brightGreen:'#6ee7b7',
+    brightYellow:'#fde68a',
+    brightBlue:'#93bbfd',
+    brightMagenta:'#d8b4fe',
+    brightCyan:'#67e8f9',
+    brightWhite:'#f9fafb'
+  },
+  allowProposedApi:true
+});
+var fitAddon=new FitAddon.FitAddon(),webLinksAddon=new WebLinksAddon.WebLinksAddon();
+term.loadAddon(fitAddon);term.loadAddon(webLinksAddon);
+
+var ws=null,wsTimer=null;
+
+function connectTerminal(){
+  var proto=location.protocol==='https:'?'wss:':'ws:';
+  ws=new WebSocket(proto+'//'+location.host+'/terminal/ws',['tty']);
+  ws.binaryType='arraybuffer';
+  ws.onopen=function(){
+    fitAddon.fit();
+    term.focus();
+    setHealth(true);
+  };
+  ws.onmessage=function(evt){
+    var d=new Uint8Array(evt.data);
+    if(d.length>0&&d[0]===0x30){  // ASCII '0' = output
+      term.write(d.slice(1));
+    }
+  };
+  ws.onclose=function(){
+    setHealth(false);
+    clearTimeout(wsTimer);
+    wsTimer=setTimeout(connectTerminal,3000);
+  };
+  ws.onerror=function(){ws.close()};
+}
+
+function sendInput(text){
+  if(!ws||ws.readyState!==WebSocket.OPEN)return;
+  var e=new TextEncoder().encode(text);
+  var b=new Uint8Array(e.length+1);
+  b[0]=0x30;  // ASCII '0' = input
+  b.set(e,1);
+  ws.send(b);
+}
+
+function sendResize(c,r){
+  if(!ws||ws.readyState!==WebSocket.OPEN)return;
+  var p=JSON.stringify({columns:c,rows:r});
+  var e=new TextEncoder().encode(p);
+  var b=new Uint8Array(e.length+1);
+  b[0]=0x31;  // ASCII '1' = resize
+  b.set(e,1);
+  ws.send(b);
+}
+
+var termEl=document.getElementById('terminal');
+term.open(termEl);
+fitAddon.fit();
+term.focus();
+connectTerminal();
+term.onData(function(d){sendInput(d)});
+term.onResize(function(s){sendResize(s.cols,s.rows)});
+new ResizeObserver(function(){try{fitAddon.fit()}catch(e){}}).observe(termEl);
+
+// Click terminal container to refocus
+document.getElementById('terminal-container').addEventListener('click',function(){term.focus()});
+
+/* ── Health ────────────────────────────────────────────────── */
+function setHealth(ok){
+  var dot=document.getElementById('health-dot');
+  var lbl=document.getElementById('health-label');
+  dot.style.background=ok?'var(--green)':'var(--red)';
+  lbl.textContent=ok?'connected':'reconnecting';
+}
+
+/* ── Tmux tabs ─────────────────────────────────────────────── */
+document.getElementById('tab-bar').addEventListener('click',function(e){
+  var t=e.target.closest('.tmux-tab');if(!t)return;
+  var w=parseInt(t.getAttribute('data-window'));if(isNaN(w))return;
+  sendInput('\x02'+String(w));
+  var tabs=document.querySelectorAll('.tmux-tab');
+  for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle('active',parseInt(tabs[i].getAttribute('data-window'))===w);
+  term.focus();
+});
+
+/* ── Claude launcher ───────────────────────────────────────── */
+var launcher=document.getElementById('claude-launcher');
+document.getElementById('btn-claude').addEventListener('click',function(e){e.stopPropagation();launcher.classList.toggle('open')});
+document.addEventListener('click',function(e){if(!launcher.contains(e.target))launcher.classList.remove('open')});
+document.getElementById('btn-claude-here').addEventListener('click',function(){
+  launcher.classList.remove('open');
+  sendInput('claude\n');
+  showToast('Launching Claude Code...');
+  term.focus();
+});
+document.getElementById('btn-claude-new').addEventListener('click',function(){
+  launcher.classList.remove('open');
+  sendInput('\x02c');
+  setTimeout(function(){sendInput('claude\n')},500);
+  showToast('New window + Claude Code...');
+  term.focus();
+});
+
+/* ── Fullscreen ────────────────────────────────────────────── */
+function toggleFullscreen(){
+  document.getElementById('app').classList.toggle('fullscreen');
+  setTimeout(function(){try{fitAddon.fit()}catch(e){};term.focus()},100);
+}
+document.getElementById('btn-fullscreen').addEventListener('click',toggleFullscreen);
+
+/* ── Elevation polling ─────────────────────────────────────── */
+var pendingElev=null;
+async function pollElevations(){
+  var data=await apiFetch('/api/elevation/pending');
+  var pending=Array.isArray(data)?data:[];
+  var banner=document.getElementById('elevation-banner');
+  if(pending.length>0){
+    pendingElev=pending[0];
+    var dur=pendingElev.duration_minutes?(' \u2014 '+pendingElev.duration_minutes+'m'):'';
+    document.getElementById('elev-text').textContent='\u26A0 Elevation pending: "'+
+      (pendingElev.action||'(action)')+'"'+dur;
+    banner.classList.add('visible');
+  }else{
+    pendingElev=null;
+    banner.classList.remove('visible');
+  }
+}
+document.getElementById('elev-approve').addEventListener('click',async function(){
+  if(!pendingElev)return;
+  await apiFetch('/api/elevation/approve/'+pendingElev.id,{method:'POST'});
+  showToast('Approved');pollElevations();
+});
+document.getElementById('elev-deny').addEventListener('click',async function(){
+  if(!pendingElev)return;
+  await apiFetch('/api/elevation/deny/'+pendingElev.id,{method:'POST'});
+  showToast('Denied');pollElevations();
+});
+
+/* ── Health polling ────────────────────────────────────────── */
+async function pollHealth(){
+  var h=await apiFetch('/health');
+  if(h)setHealth(true);
+}
+
+/* ── Poll loop ─────────────────────────────────────────────── */
+async function poll(){await Promise.allSettled([pollHealth(),pollElevations()])}
+poll();
+setInterval(poll,15000);
+
+/* ── Keys ──────────────────────────────────────────────────── */
+document.addEventListener('keydown',function(e){
+  if(e.ctrlKey&&e.shiftKey&&e.key==='F'){e.preventDefault();toggleFullscreen()}
+  if(e.key==='Escape'&&document.getElementById('app').classList.contains('fullscreen'))toggleFullscreen();
+});
+</script>
+</body>
+</html>
