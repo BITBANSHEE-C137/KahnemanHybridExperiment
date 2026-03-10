@@ -14,6 +14,7 @@ import os
 import pty
 import select
 import signal
+import subprocess
 import time
 from pathlib import Path
 
@@ -226,13 +227,25 @@ async def icloud_status() -> dict:
 @router.post("/auth/start")
 async def start_auth(req: SignInRequest) -> dict:
     """Write rclone config and kick off Apple auth (triggers 2FA push)."""
-    # Write rclone config with credentials
+    # Obscure the password using rclone's encoding
+    try:
+        result = subprocess.run(
+            [RCLONE_BIN, "obscure", req.password],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            raise HTTPException(500, detail="Failed to obscure password")
+        obscured_pw = result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        raise HTTPException(500, detail="rclone obscure timed out")
+
+    # Write rclone config with obscured password
     RCLONE_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     RCLONE_CONFIG.write_text(
         "[icloud]\n"
         "type = iclouddrive\n"
         f"apple_id = {req.apple_id}\n"
-        f"password = {req.password}\n"
+        f"password = {obscured_pw}\n"
     )
     os.chmod(str(RCLONE_CONFIG), 0o600)
 
