@@ -234,9 +234,27 @@ step_8_install_python_deps() {
 }
 
 step_9_setup_operator_dirs() {
-    mkdir -p "/home/${OPERATOR_USER}"/{lab,icloud,.ssh,.config/rclone,.aws,.npm-global,.local/bin}
+    mkdir -p "/home/${OPERATOR_USER}"/{lab,icloud,bin,.ssh,.config/rclone,.aws,.npm-global,.local/bin,.pyicloud}
     mkdir -p "${CONTROL_PLANE_DIR}/static"
     chmod 700 "/home/${OPERATOR_USER}/.ssh"
+
+    # Claude Code terminal wrapper: launches claude, drops to shell on exit, loops
+    cat > "/home/${OPERATOR_USER}/bin/claude-shell.sh" << 'CSHELL'
+#!/bin/bash
+export PATH=/home/claude-operator/.local/bin:$PATH
+
+while true; do
+    claude
+    echo ""
+    echo "Claude exited. Shell active. Type exit to restart Claude."
+    echo ""
+    bash --login
+    echo "Restarting Claude..."
+    echo ""
+done
+CSHELL
+    chmod 755 "/home/${OPERATOR_USER}/bin/claude-shell.sh"
+
     chown -R "${OPERATOR_USER}:${OPERATOR_USER}" "/home/${OPERATOR_USER}/"
     chown -R "${OPERATOR_USER}:${OPERATOR_USER}" "${CONTROL_PLANE_DIR}/"
 }
