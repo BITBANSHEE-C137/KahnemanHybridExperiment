@@ -207,7 +207,7 @@ step_7_install_rclone() {
     mkdir -p "/home/${OPERATOR_USER}/.config/rclone"
     {
         echo "[icloud]"
-        echo "type = icloud"
+        echo "type = iclouddrive"
         echo "apple_id = ${ICLOUD_APPLE_ID}"
         echo "password = ${ICLOUD_APP_PASSWORD}"
     } > "/home/${OPERATOR_USER}/.config/rclone/rclone.conf"
