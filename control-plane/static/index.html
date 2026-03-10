@@ -336,14 +336,14 @@ input { font-family: var(--font-ui); }
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 12px;
 }
 .tiles-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
   width: 100%;
-  max-width: 320px;
+  max-width: 360px;
 }
 .storage-tile {
   display: flex;
@@ -474,7 +474,7 @@ input { font-family: var(--font-ui); }
 
 /* ===== 7. Sessions Card ===== */
 #sessions-card {
-  flex: 1;
+  flex: 2;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -569,11 +569,14 @@ input { font-family: var(--font-ui); }
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
   overflow: hidden;
   min-width: 0;
+  min-height: 0;
 }
 #notes-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
+  min-height: 0;
 }
 .note-item {
   padding: 8px 14px;
@@ -624,11 +627,14 @@ input { font-family: var(--font-ui); }
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
   overflow: hidden;
   min-width: 0;
+  min-height: 0;
 }
 #tasks-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
+  min-height: 0;
 }
 .task-input-row {
   display: flex; gap: 8px;
@@ -701,6 +707,7 @@ input { font-family: var(--font-ui); }
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
   overflow: hidden;
   min-width: 0;
+  min-height: 0;
 }
 #profile-body {
   flex: 1;
@@ -708,16 +715,19 @@ input { font-family: var(--font-ui); }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  gap: 8px;
+  padding: 12px;
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 0;
 }
 .profile-avatar {
-  width: 48px; height: 48px;
+  width: 40px; height: 40px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent), #a78bfa);
   display: flex; align-items: center; justify-content: center;
-  font-size: 18px; font-weight: 700; color: #fff;
+  font-size: 15px; font-weight: 700; color: #fff;
   letter-spacing: -0.5px;
+  flex-shrink: 0;
 }
 .profile-name {
   font-size: 14px; font-weight: 600;
@@ -995,12 +1005,12 @@ body.terminal-maximized #left-col {
   <div id="cards-row">
     <!-- Left Column -->
     <div id="left-col">
-    <!-- Terminal Card -->
+    <!-- Claude Code Card -->
     <div id="terminal-card">
       <div class="card-header">
         <div class="card-title">
           <span class="dot" id="term-dot"></span>
-          <span>Terminal</span>
+          <span>Claude Code</span>
         </div>
         <div class="card-actions">
           <button class="card-btn" onclick="toggleTerminalMaximized()" title="Maximize / Restore">&#x26F6;</button>
