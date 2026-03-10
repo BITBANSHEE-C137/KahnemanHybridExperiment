@@ -1,567 +1,803 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bitbanshee's AI Playground</title>
-<meta name="description" content="AI experiments — building, training, monitoring, and theorizing about AI.">
-<meta property="og:title" content="Bitbanshee's AI Playground">
-<meta property="og:description" content="Building, training, monitoring, and theorizing about AI">
-<meta property="og:image" content="https://bitbanshee.com/hero.png">
-<meta property="og:url" content="https://bitbanshee.com">
-<meta property="og:type" content="website">
-<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML Lab Control Plane</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <style>
-:root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --border: #2a2d3a;
-  --text: #e0e0e0;
-  --dim: #888;
-  --accent: #60a5fa;
-  --green: #34d399;
-  --yellow: #fbbf24;
-  --red: #f87171;
-  --orange: #fb923c;
+/* ── Reset & Base ───────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1a1a2e;--panel:#16213e;--header:#0f3460;--accent:#00d4ff;
+  --text:#e0e0e0;--text-dim:#888;--danger:#ff4757;--success:#2ed573;
+  --warning:#ffa502;--radius:8px;--gap:12px;
 }
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html { overflow-x: hidden; }
-body {
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  background: var(--bg) url('/hero.png') center top / cover no-repeat fixed;
-  color: var(--text);
-  font-size: 17px;
-  line-height: 1.5;
-  overflow-x: hidden;
-  min-width: 0;
+html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text)}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+a{color:var(--accent);text-decoration:none}
+
+/* ── Toast ──────────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:#333;color:#fff;padding:10px 24px;border-radius:var(--radius);
+  font-size:.9rem;opacity:0;transition:opacity .3s;z-index:9999;pointer-events:none;
 }
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 17, 23, 0.88);
-  z-index: 1;
-  pointer-events: none;
+#toast.show{opacity:1}
+
+/* ── Layout ─────────────────────────────────────────────────── */
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* ── Status Bar ─────────────────────────────────────────────── */
+.status-bar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:var(--gap);
+  padding:10px 16px;background:var(--header);border-bottom:1px solid #223;
+  min-height:52px;
 }
-.hero-video {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 0;
-  pointer-events: none;
-  transition: opacity 1s ease-out;
+.status-item{
+  display:flex;align-items:center;gap:6px;font-size:.85rem;
+  padding:4px 10px;background:var(--panel);border-radius:var(--radius);
+  white-space:nowrap;
 }
-.container {
-  position: relative;
-  z-index: 2;
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 12px;
-  overflow: hidden;
+.status-item .label{color:var(--text-dim);font-size:.75rem;text-transform:uppercase}
+.status-item .value{font-weight:600}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-green{background:var(--success)}
+.dot-red{background:var(--danger)}
+.dot-yellow{background:var(--warning)}
+
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:4px;
+  font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+}
+.badge-running{background:rgba(46,213,115,.2);color:var(--success)}
+.badge-stopped{background:rgba(255,71,87,.2);color:var(--danger)}
+.badge-unknown{background:rgba(255,165,2,.2);color:var(--warning)}
+
+.status-bar .spacer{flex:1}
+
+.btn-icon{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 14px;border-radius:var(--radius);font-size:.85rem;font-weight:600;
+  min-width:44px;min-height:44px;justify-content:center;transition:background .15s;
+}
+.btn-accent{background:var(--accent);color:#000}
+.btn-accent:hover{background:#33e0ff}
+.btn-outline{border:1px solid var(--accent);color:var(--accent)}
+.btn-outline:hover{background:rgba(0,212,255,.1)}
+
+/* ── Claude Launcher Dropdown ───────────────────────────────── */
+.claude-launcher{position:relative;display:inline-flex}
+.claude-dropdown{
+  display:none;position:absolute;top:100%;right:0;margin-top:4px;
+  background:var(--panel);border:1px solid #334;border-radius:var(--radius);
+  min-width:200px;z-index:100;overflow:hidden;
+}
+.claude-launcher.open .claude-dropdown{display:block}
+.claude-dropdown button{
+  display:block;width:100%;text-align:left;padding:10px 14px;
+  font-size:.85rem;min-height:44px;transition:background .1s;
+}
+.claude-dropdown button:hover{background:rgba(0,212,255,.08)}
+.claude-dropdown button .hint{color:var(--text-dim);font-size:.75rem;margin-top:2px}
+
+/* ── Panels Container ───────────────────────────────────────── */
+.panels{display:flex;flex:1;overflow:hidden}
+
+/* ── Side Panel (Elevation + Instances) ─────────────────────── */
+.side-panel{
+  width:320px;min-width:280px;display:flex;flex-direction:column;
+  border-right:1px solid #223;background:var(--panel);overflow:hidden;
+  transition:width .2s,min-width .2s;
+}
+.side-panel.collapsed{width:0;min-width:0;border:none;overflow:hidden}
+
+.panel-section{display:flex;flex-direction:column;overflow:hidden}
+.panel-section.collapsed .panel-body{display:none}
+
+.panel-header{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  background:var(--header);cursor:pointer;user-select:none;
+  font-size:.85rem;font-weight:600;min-height:44px;
+}
+.panel-header .chevron{transition:transform .2s;font-size:.7rem}
+.panel-section.collapsed .panel-header .chevron{transform:rotate(-90deg)}
+.panel-header .count{
+  margin-left:auto;background:var(--accent);color:#000;
+  border-radius:10px;padding:1px 8px;font-size:.7rem;font-weight:700;
 }
 
-/* Header */
-.header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 60px 14px 12px;
-  background: url('/hero.png') center -75px / cover no-repeat;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 12px;
-  gap: 4px;
-  position: relative;
-}
-.header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(15, 17, 23, 0.65);
-  border-radius: inherit;
-}
-.header > * {
-  position: relative;
-  z-index: 1;
-}
-.header h1 { font-size: 22px; font-weight: 600; white-space: nowrap; }
-.header .subtitle {
-  font-size: 14px;
-  color: var(--dim);
-  margin-bottom: 4px;
-}
-.header-sub {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  width: 100%;
-  justify-content: space-between;
-  position: relative;
-}
-.header-links { display: flex; gap: 8px; font-size: 13px; }
-.header-links a {
-  color: var(--text);
-  text-decoration: none;
-  white-space: nowrap;
-  padding: 3px 10px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg);
-  transition: border-color 0.2s, background 0.2s;
-}
-.header-links a:hover {
-  border-color: var(--accent);
-  background: rgba(232, 121, 84, 0.1);
-}
-.pulse {
-  display: inline-block;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--green);
-  margin-right: 6px;
-  animation: pulse 2s infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
+.panel-body{flex:1;overflow-y:auto;padding:8px}
 
-/* Cards */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px;
-  min-width: 0;
-  overflow: hidden;
+/* ── Elevation Cards ────────────────────────────────────────── */
+.elev-card{
+  background:var(--bg);border-radius:var(--radius);padding:10px 12px;
+  margin-bottom:8px;font-size:.8rem;border-left:3px solid var(--accent);
 }
+.elev-card.pending{border-left-color:var(--warning)}
+.elev-card.active{border-left-color:var(--success)}
+.elev-card.done{border-left-color:var(--text-dim);opacity:.6}
+.elev-card .elev-prompt{font-weight:600;margin-bottom:4px}
+.elev-card .elev-meta{color:var(--text-dim);font-size:.72rem}
 
-/* Grid */
-.grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-bottom: 12px;
+/* ── Instance Cards ─────────────────────────────────────────── */
+.inst-card{
+  background:var(--bg);border-radius:var(--radius);padding:10px 12px;
+  margin-bottom:8px;font-size:.8rem;
 }
+.inst-card .inst-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.inst-card .inst-id{font-family:monospace;font-weight:600;font-size:.78rem}
+.inst-card .inst-badge{
+  padding:2px 6px;border-radius:4px;font-size:.65rem;font-weight:700;
+  text-transform:uppercase;
+}
+.inst-badge-running{background:rgba(46,213,115,.2);color:var(--success)}
+.inst-badge-healthy{background:rgba(46,213,115,.2);color:var(--success)}
+.inst-badge-unhealthy{background:rgba(255,71,87,.2);color:var(--danger)}
+.inst-card .inst-detail{
+  display:grid;grid-template-columns:auto 1fr;gap:2px 10px;
+  font-size:.75rem;color:var(--text-dim);margin-bottom:8px;
+}
+.inst-card .inst-detail .val{color:var(--text);font-family:monospace}
+.inst-card .inst-actions{display:flex;gap:6px}
+.inst-card .inst-actions button{
+  flex:1;padding:6px 10px;border-radius:4px;font-size:.75rem;
+  font-weight:600;min-height:36px;transition:background .15s;
+}
+.btn-ssh{background:rgba(0,212,255,.15);color:var(--accent)}
+.btn-ssh:hover{background:rgba(0,212,255,.25)}
+.btn-connect{background:var(--accent);color:#000}
+.btn-connect:hover{background:#33e0ff}
 
-/* Experiment cards */
-.experiment-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--green);
-  background: rgba(52, 211, 153, 0.1);
-  padding: 2px 10px;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-.status-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--green);
-}
-.status-badge.archive {
-  color: var(--dim);
-  background: rgba(136, 136, 136, 0.1);
-}
-.status-badge.archive .status-dot {
-  background: var(--dim);
-}
-.status-badge.complete { color: var(--accent); background: rgba(96, 165, 250, 0.1); }
-.status-badge.complete .status-dot { background: var(--accent); }
-.status-badge.offline { color: var(--orange); background: rgba(251, 146, 60, 0.1); }
-.status-badge.offline .status-dot { background: var(--orange); }
-.experiment-desc {
-  font-size: 14px;
-  color: var(--dim);
-  line-height: 1.6;
-  margin-bottom: 12px;
-}
-.experiment-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-.experiment-links a {
-  color: var(--text);
-  text-decoration: none;
-  padding: 3px 10px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg);
-  font-size: 13px;
-  transition: border-color 0.2s, background 0.2s;
-}
-.experiment-links a:hover {
-  border-color: var(--accent);
-  background: rgba(232, 121, 84, 0.1);
-}
-.arxiv-refs { display: flex; gap: 6px; flex-wrap: wrap; }
-.arxiv-pill {
-  font-size: 11px;
-  color: var(--dim);
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  text-decoration: none;
-  transition: border-color 0.2s, color 0.2s;
-}
-.arxiv-pill:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
+/* ── Terminal Area ──────────────────────────────────────────── */
+.terminal-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
-/* Card inner 2-column layout */
-.card-inner {
-  display: grid;
-  grid-template-columns: 2fr 3fr;
-  gap: 16px;
-  align-items: start;
+/* ── Tmux Tab Bar ───────────────────────────────────────────── */
+.tab-bar{
+  display:flex;align-items:stretch;background:var(--header);
+  border-bottom:1px solid #223;padding:0 8px;min-height:38px;
+  overflow-x:auto;flex-shrink:0;
 }
-.card-thumb {
-  width: 100%;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  display: block;
+.tab{
+  display:flex;align-items:center;padding:6px 16px;font-size:.8rem;
+  font-weight:600;color:var(--text-dim);border-bottom:2px solid transparent;
+  cursor:pointer;white-space:nowrap;min-width:44px;min-height:38px;
+  justify-content:center;transition:color .15s,border-color .15s;
+  user-select:none;
 }
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 
-/* Coming soon card */
-.card-muted {
-  opacity: 0.5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 160px;
-}
-.card-muted p {
-  font-size: 15px;
-  color: var(--dim);
-  font-style: italic;
-}
+/* ── Terminal Container ─────────────────────────────────────── */
+.terminal-container{flex:1;position:relative;overflow:hidden}
+#terminal{width:100%;height:100%}
 
-/* Stats row (inline summary) */
-.stats-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  color: var(--dim);
-  margin: 10px 0 6px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
+/* ── Terminal Toolbar ───────────────────────────────────────── */
+.terminal-toolbar{
+  display:flex;align-items:center;gap:8px;padding:4px 8px;
+  background:var(--header);border-top:1px solid #223;
 }
-.stats-row span { color: var(--text); font-weight: 600; }
+.terminal-toolbar button{min-width:44px;min-height:36px}
 
-/* Metric boxes */
-.metrics-row {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin-top: 8px;
-}
-.metric-box {
-  background: var(--bg);
-  border-radius: 6px;
-  padding: 10px 8px;
-  text-align: center;
-  min-width: 0;
-  overflow: hidden;
-  border-left: 3px solid transparent;
-}
-.metric-box.rag-green { border-left-color: var(--green); }
-.metric-box.rag-green .value { color: var(--green); }
-.metric-box.rag-amber { border-left-color: var(--yellow); }
-.metric-box.rag-amber .value { color: var(--yellow); }
-.metric-box .label {
-  font-size: 13px;
-  color: var(--dim);
-  margin-bottom: 3px;
-}
-.metric-box .value {
-  font-size: 20px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.metric-box .sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+/* ── Fullscreen ─────────────────────────────────────────────── */
+.app.fullscreen .status-bar,
+.app.fullscreen .side-panel,
+.app.fullscreen .tab-bar,
+.app.fullscreen .terminal-toolbar{display:none}
+.app.fullscreen .terminal-area{flex:1}
 
-/* Footer */
-.footer {
-  margin-top: 16px;
-  padding: 20px 14px;
-  border-top: 1px solid var(--border);
-  text-align: center;
-  font-size: 14px;
-  color: var(--dim);
+/* ── Responsive ─────────────────────────────────────────────── */
+@media(max-width:768px){
+  .side-panel{width:260px;min-width:220px}
+  .status-bar{padding:8px 10px;gap:8px}
+  .status-item{font-size:.78rem;padding:4px 8px}
 }
-
-/* Hamburger menu */
-.header-hamburger {
-  display: none;
-  background: none;
-  border: 1px solid var(--border);
-  padding: 4px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  font-size: 18px;
-  line-height: 1;
-}
-.header-menu {
-  display: none;
-  position: absolute;
-  top: 100%;
-  right: 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px;
-  z-index: 100;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-}
-.header-menu.open { display: flex; }
-.header-menu a {
-  color: var(--text);
-  text-decoration: none;
-  padding: 8px 14px;
-  border-radius: 6px;
-  font-size: 14px;
-  white-space: nowrap;
-  transition: background 0.2s;
-}
-.header-menu a:hover { background: var(--bg); }
-
-/* Responsive */
-@media (max-width: 900px) {
-  .metrics-row { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
-}
-@media (max-width: 700px) {
-  .card-inner { grid-template-columns: 1fr; }
-  .hero-video { display: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .hero-video { display: none; }
-}
-@media (max-width: 540px) {
-  .header-links { display: none; }
-  .header-hamburger { display: block; }
-  .header h1 { font-size: 17px; }
-  .metrics-row { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+@media(max-width:600px){
+  .panels{flex-direction:column}
+  .side-panel{width:100%;min-width:100%;max-height:40vh;border-right:none;border-bottom:1px solid #223}
+  .side-panel.collapsed{max-height:0}
 }
 </style>
 </head>
 <body>
-<video class="hero-video" autoplay muted playsinline poster="/hero.png">
-  <source src="/banshee-bg.mp4" type="video/mp4">
-</video>
-<div class="container">
+<div class="app" id="app">
 
-  <!-- Header (with subtitle merged from intro) -->
-  <div class="header">
-    <h1><span class="pulse"></span>Bitbanshee's AI Playground</h1>
-    <div class="subtitle">Building, training, monitoring, and theorizing about AI</div>
-    <div class="header-sub">
-      <div class="header-links">
-        <a href="https://github.com/BITBANSHEE-C137" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://linkedin.com/in/gwrowe" target="_blank" rel="noopener">LinkedIn</a>
-        <a href="https://siliconstrategy.ai" target="_blank" rel="noopener">siliconstrategy.ai</a>
-      </div>
-      <button class="header-hamburger" onclick="document.getElementById('header-menu').classList.toggle('open')">&#9776;</button>
-      <div class="header-menu" id="header-menu">
-        <a href="https://github.com/BITBANSHEE-C137" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://linkedin.com/in/gwrowe" target="_blank" rel="noopener">LinkedIn</a>
-        <a href="https://siliconstrategy.ai" target="_blank" rel="noopener">siliconstrategy.ai</a>
+  <!-- ── Status Bar ─────────────────────────────────────────── -->
+  <div class="status-bar">
+    <div class="status-item" id="sb-health" title="Control plane API health">
+      <span class="status-dot dot-red" id="health-dot"></span>
+      <span class="label">API</span>
+    </div>
+    <div class="status-item" id="sb-fleet">
+      <span class="label">Fleet</span>
+      <span class="value" id="fleet-state">--</span>
+    </div>
+    <div class="status-item" id="sb-instances">
+      <span class="label">Instances</span>
+      <span class="value" id="instance-count">--</span>
+    </div>
+    <div class="status-item" id="sb-spot">
+      <span class="label">Spot $/hr</span>
+      <span class="value" id="spot-price">--</span>
+    </div>
+    <div class="status-item" id="sb-training">
+      <span class="label">Training</span>
+      <span class="value" id="training-badge"><span class="badge badge-unknown">UNKNOWN</span></span>
+    </div>
+    <div class="status-item" id="sb-step">
+      <span class="label">Step</span>
+      <span class="value" id="training-step">--</span>
+    </div>
+    <div class="status-item" id="sb-ar-loss">
+      <span class="label">AR Loss</span>
+      <span class="value" id="ar-loss">--</span>
+    </div>
+    <div class="status-item" id="sb-diff-loss">
+      <span class="label">Diff Loss</span>
+      <span class="value" id="diff-loss">--</span>
+    </div>
+    <div class="status-item" id="sb-cost">
+      <span class="label">Cost</span>
+      <span class="value" id="cost-value">--</span>
+    </div>
+
+    <div class="spacer"></div>
+
+    <!-- Claude Launcher -->
+    <div class="claude-launcher" id="claude-launcher">
+      <button class="btn-icon btn-accent" id="btn-claude" title="Launch Claude Code">
+        &#9889; Claude
+      </button>
+      <div class="claude-dropdown">
+        <button id="btn-claude-here" title="Launch Claude in current pane">
+          Launch in current pane
+          <div class="hint">Sends <code>claude</code> to active pane</div>
+        </button>
+        <button id="btn-claude-new" title="Launch Claude in new tmux window">
+          Launch in new window
+          <div class="hint">Creates tmux window, then runs <code>claude</code></div>
+        </button>
       </div>
     </div>
+
+    <button class="btn-icon btn-outline" id="btn-panel-toggle" title="Toggle side panel">
+      &#9776;
+    </button>
+    <button class="btn-icon btn-outline" id="btn-fullscreen" title="Toggle fullscreen">
+      &#x26F6;
+    </button>
   </div>
 
-  <!-- Grid (no section header) -->
-  <div class="grid">
+  <!-- ── Main Panels ────────────────────────────────────────── -->
+  <div class="panels">
 
-    <!-- Dual-Process Model (with v1 results folded in) -->
-    <div class="card">
-      <div class="card-inner">
-      <img class="card-thumb" src="/dashboard.png" alt="ML Training Dashboard">
-      <div>
-      <div class="experiment-title">
-        Dual-Process Language Model
-        <span class="status-badge complete"><span class="status-dot"></span>v1 Complete</span>
-        <span class="status-badge"><span class="status-dot"></span>v2 Training</span>
-      </div>
-      <div class="experiment-desc">
-        Single Transformer operating in two cognitive modes &mdash; fast parallel generation via masked diffusion (System 1) and slow sequential reasoning via autoregressive decoding (System 2). A trained confidence head decides when to escalate.
-      </div>
-      <div class="experiment-links">
-        <a href="https://train.bitbanshee.com" target="_blank" rel="noopener">Dashboard &rarr;</a>
-        <a href="https://train.bitbanshee.com/reports/" target="_blank" rel="noopener">Reports &rarr;</a>
-        <a href="https://github.com/BITBANSHEE-C137/KahnemanHybridExperiment" target="_blank" rel="noopener">GitHub &rarr;</a>
-      </div>
-      <div class="arxiv-refs">
-        <a class="arxiv-pill" href="https://arxiv.org/abs/2512.14549" target="_blank" rel="noopener">arXiv:2512.14549</a>
-        <a class="arxiv-pill" href="https://arxiv.org/abs/2502.09992" target="_blank" rel="noopener">arXiv:2502.09992</a>
-      </div>
-      <div class="stats-row">
-        <span>50,000</span> steps &middot;
-        <span>$27.62</span> total cost &middot;
-        <span>4</span> spot instances &middot;
-        <span>63%</span> savings
-      </div>
-      <div class="metrics-row">
-        <div class="metric-box rag-green">
-          <div class="label">AR PPL</div>
-          <div class="value">26.9</div>
-          <div class="sub">target &lt;40</div>
+    <!-- Side Panel -->
+    <div class="side-panel" id="side-panel">
+
+      <!-- Elevation Panel -->
+      <div class="panel-section" id="elevation-section">
+        <div class="panel-header" data-toggle="elevation-section">
+          <span class="chevron">&#9660;</span>
+          Elevations
+          <span class="count" id="elev-count">0</span>
         </div>
-        <div class="metric-box rag-green">
-          <div class="label">AUROC</div>
-          <div class="value">0.854</div>
-          <div class="sub">target &gt;0.75</div>
-        </div>
-        <div class="metric-box rag-green">
-          <div class="label">ECE</div>
-          <div class="value">0.010</div>
-          <div class="sub">target &lt;0.05</div>
-        </div>
-        <div class="metric-box rag-amber">
-          <div class="label">Diff Loss</div>
-          <div class="value">4.13</div>
-          <div class="sub">target 4.0</div>
-        </div>
-        <div class="metric-box rag-amber">
-          <div class="label">S1 Accuracy</div>
-          <div class="value">28.7%</div>
-          <div class="sub">target 40%</div>
+        <div class="panel-body" id="elevation-body">
+          <div id="elev-pending"></div>
+          <div id="elev-active"></div>
+          <div id="elev-history"></div>
         </div>
       </div>
+
+      <!-- Instances Panel -->
+      <div class="panel-section" id="instances-section">
+        <div class="panel-header" data-toggle="instances-section">
+          <span class="chevron">&#9660;</span>
+          GPU Instances
+          <span class="count" id="inst-count">0</span>
+        </div>
+        <div class="panel-body" id="instances-body">
+          <div id="inst-list"></div>
+        </div>
       </div>
+
+    </div>
+
+    <!-- Terminal Area -->
+    <div class="terminal-area">
+      <!-- Tmux Tab Bar -->
+      <div class="tab-bar" id="tab-bar">
+        <div class="tab active" data-window="0">claude-code</div>
+        <div class="tab" data-window="1">monitor</div>
+        <div class="tab" data-window="2">shell</div>
+      </div>
+
+      <!-- Terminal -->
+      <div class="terminal-container">
+        <div id="terminal"></div>
+      </div>
+
+      <!-- Terminal Toolbar -->
+      <div class="terminal-toolbar">
+        <button class="btn-icon btn-outline" id="btn-clear" title="Send clear command">Clear</button>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn-icon btn-outline" id="btn-fullscreen2" title="Toggle fullscreen">&#x26F6; Fullscreen</button>
       </div>
     </div>
 
-    <!-- The Observer -->
-    <div class="card">
-      <div class="card-inner">
-      <img class="card-thumb" src="/observer.png" alt="The Observer Dashboard">
-      <div>
-      <div class="experiment-title">
-        The Observer
-        <span class="status-badge"><span class="status-dot"></span>Collecting Data</span>
-      </div>
-      <div class="experiment-desc">
-        Read-only intelligence dashboard monitoring Moltbook, a social network of autonomous AI agents. Quad-model analysis engine (GPT-5-mini, Claude, Gemini, Grok) scores every post across four dimensions &mdash; OPSEC failures, deception patterns, sycophancy loops, and operator influence &mdash; with composite threat profiling, correlation detection, and human ground-truth calibration. Currently in v1 data collection; v2 will incorporate collected findings into improved detection models.
-      </div>
-      <div class="experiment-links">
-        <a href="https://the-observer.replit.app" target="_blank" rel="noopener">App &rarr;</a>
-        <a href="https://github.com/BITBANSHEE-C137/theobserver" target="_blank" rel="noopener">GitHub &rarr;</a>
-      </div>
-      </div>
-      </div>
-    </div>
-
-    <!-- Structured Memory Engine -->
-    <div class="card">
-      <div class="card-inner">
-      <img class="card-thumb" src="/sme.png" alt="Structured Memory Engine">
-      <div>
-      <div class="experiment-title">
-        Structured Memory Engine
-        <span class="status-badge archive"><span class="status-dot"></span>Archive</span>
-      </div>
-      <div class="experiment-desc">
-        Proof-of-concept for persistent, cross-session AI memory. Goes beyond standard RAG by treating conversation history as structured semantic memory &mdash; adaptive retrieval thresholds, dual-database sync (PGVector local + Pinecone cloud), and real-time memory visualization. Built with TypeScript, React, OpenAI GPT-4o, and text-embedding-3-small.
-      </div>
-      <div class="experiment-links">
-        <a href="https://github.com/BITBANSHEE-C137/StructuredMemoryEngine_replit" target="_blank" rel="noopener">GitHub &rarr;</a>
-      </div>
-      <div class="arxiv-refs">
-        <span class="arxiv-pill">ai</span>
-        <span class="arxiv-pill">context-engineering</span>
-        <span class="arxiv-pill">memory</span>
-      </div>
-      </div>
-      </div>
-    </div>
-
-    <!-- SENTINEL -->
-    <div class="card">
-      <div class="card-inner">
-      <img class="card-thumb" src="/sentinel.png" alt="SENTINEL Dashboard">
-      <div>
-      <div class="experiment-title">
-        SENTINEL
-        <span class="status-badge archive"><span class="status-dot"></span>Archive</span>
-        <span class="status-badge offline"><span class="status-dot"></span>Offline</span>
-      </div>
-      <div class="experiment-desc">
-        AI-powered analytics platform for radio scanner call recordings. Automated transcription via local Whisper models, multi-tier geocoding with RadioReference integration (11,680+ frequencies), LLM-driven sentiment analysis and incident correlation, and real-time mapping with Leaflet. Built with React, TypeScript, Node.js, and PostgreSQL.
-      </div>
-      <!-- No links — repo is private -->
-      <div class="arxiv-refs">
-        <span class="arxiv-pill">ai</span>
-        <span class="arxiv-pill">radio</span>
-        <span class="arxiv-pill">transcription</span>
-        <span class="arxiv-pill">geospatial</span>
-        <span class="arxiv-pill">analytics</span>
-      </div>
-      </div>
-      </div>
-    </div>
-
-
-    <!-- Dead Cat Society -->
-    <div class="card">
-      <div class="card-inner">
-      <img class="card-thumb" src="/deadcatsociety.png" alt="Dead Cat Society">
-      <div>
-      <div class="experiment-title">
-        Dead Cat Society
-        <span class="status-badge"><span class="status-dot"></span>In Development</span>
-      </div>
-      <div class="experiment-desc">
-        Despite the name, strictly about cats sleeping in ridiculous positions &mdash; not roadkill. Upload, vote, comment, and rank the family's most dramatically &ldquo;dead&rdquo; sleeping cats. Two-stage AI moderation pipeline (Rekognition for image safety, then Claude Vision + Claude Text for contextual review) screens every upload via SQS with minimal human oversight. Fully serverless on AWS with React 19, DynamoDB single-table design, CDK v2, Google OAuth, and Lambda@Edge SEO.
-      </div>
-      <div class="experiment-links">
-        <a href="https://deadcatsociety.com" target="_blank" rel="noopener">App &rarr;</a>
-      </div>
-      <div class="arxiv-refs">
-        <span class="arxiv-pill">serverless</span>
-        <span class="arxiv-pill">aws-cdk</span>
-        <span class="arxiv-pill">react</span>
-        <span class="arxiv-pill">ai-moderation</span>
-        <span class="arxiv-pill">dynamodb</span>
-      </div>
-      </div>
-      </div>
-    </div>
-
-    <!-- Coming Soon -->
-    <div class="card card-muted">
-      <p>More experiments coming soon</p>
-    </div>
-
-  </div>
-
-  <!-- Footer (simple, no pill links) -->
-  <div class="footer">
-    Bitbanshee &middot; 2026
   </div>
 
 </div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- xterm.js -->
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+
 <script>
-document.querySelector('.hero-video').addEventListener('ended', function() {
-  this.style.opacity = '0';
+/* ── Utilities ──────────────────────────────────────────────── */
+
+function escHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str ?? "";
+  return d.innerHTML;
+}
+
+function showToast(msg, duration) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove("show"), duration || 2500);
+}
+
+async function apiFetch(path, opts) {
+  try {
+    opts = opts || {};
+    opts.credentials = "include";
+    const r = await fetch(path, opts);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  } catch (e) {
+    console.error("apiFetch error:", path, e);
+    return null;
+  }
+}
+
+
+/* ── Terminal Setup ─────────────────────────────────────────── */
+
+const term = new Terminal({
+  cursorBlink: true,
+  fontSize: 14,
+  fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+  theme: {
+    background: "#1a1a2e",
+    foreground: "#e0e0e0",
+    cursor: "#00d4ff",
+    selectionBackground: "rgba(0,212,255,0.25)",
+  },
+  allowProposedApi: true,
+});
+
+const fitAddon = new FitAddon.FitAddon();
+const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+term.loadAddon(fitAddon);
+term.loadAddon(webLinksAddon);
+
+let ws = null;
+let wsReconnectTimer = null;
+
+function connectTerminal() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const url = proto + "//" + location.host + "/terminal/ws";
+  ws = new WebSocket(url);
+  ws.binaryType = "arraybuffer";
+
+  ws.addEventListener("open", function() {
+    console.log("WebSocket connected");
+    fitAddon.fit();
+  });
+
+  ws.addEventListener("message", function(evt) {
+    const data = new Uint8Array(evt.data);
+    // ttyd protocol: type byte 0 = output
+    if (data.length > 0 && data[0] === 0) {
+      term.write(data.slice(1));
+    }
+    // type byte 1 = set window title (ignored)
+  });
+
+  ws.addEventListener("close", function() {
+    console.warn("WebSocket closed, reconnecting in 3s...");
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = setTimeout(connectTerminal, 3000);
+  });
+
+  ws.addEventListener("error", function() {
+    ws.close();
+  });
+}
+
+function sendTerminalInput(text) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  var encoded = new TextEncoder().encode(text);
+  var buf = new Uint8Array(encoded.length + 1);
+  buf[0] = 0;
+  buf.set(encoded, 1);
+  ws.send(buf);
+}
+
+function sendTerminalResize(cols, rows) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  // ttyd resize message: type 1 + JSON
+  var payload = JSON.stringify({ columns: cols, rows: rows });
+  var encoded = new TextEncoder().encode(payload);
+  var buf = new Uint8Array(encoded.length + 1);
+  buf[0] = 1;
+  buf.set(encoded, 1);
+  ws.send(buf);
+}
+
+// Mount terminal
+var termEl = document.getElementById("terminal");
+term.open(termEl);
+fitAddon.fit();
+connectTerminal();
+
+// Forward keyboard input to WebSocket
+term.onData(function(data) { sendTerminalInput(data); });
+term.onResize(function(size) { sendTerminalResize(size.cols, size.rows); });
+
+// Resize observer
+var ro = new ResizeObserver(function() {
+  try { fitAddon.fit(); } catch(e) {}
+});
+ro.observe(termEl);
+
+
+/* ── Tmux Tab Switching ─────────────────────────────────────── */
+
+var activeTab = 0;
+
+function switchTmuxWindow(windowIndex) {
+  // Send Ctrl-B (tmux prefix) then window number
+  sendTerminalInput("\x02" + String(windowIndex));
+  activeTab = windowIndex;
+  var tabs = document.querySelectorAll(".tab-bar .tab");
+  for (var i = 0; i < tabs.length; i++) {
+    var win = parseInt(tabs[i].getAttribute("data-window"));
+    if (win === windowIndex) {
+      tabs[i].classList.add("active");
+    } else {
+      tabs[i].classList.remove("active");
+    }
+  }
+}
+
+document.getElementById("tab-bar").addEventListener("click", function(e) {
+  var tab = e.target.closest(".tab");
+  if (!tab) return;
+  var win = parseInt(tab.getAttribute("data-window"));
+  if (!isNaN(win)) switchTmuxWindow(win);
+});
+
+
+/* ── Claude Launcher ────────────────────────────────────────── */
+
+var launcher = document.getElementById("claude-launcher");
+var btnClaude = document.getElementById("btn-claude");
+
+btnClaude.addEventListener("click", function(e) {
+  e.stopPropagation();
+  launcher.classList.toggle("open");
+});
+
+document.addEventListener("click", function(e) {
+  if (!launcher.contains(e.target)) launcher.classList.remove("open");
+});
+
+document.getElementById("btn-claude-here").addEventListener("click", function() {
+  launcher.classList.remove("open");
+  sendTerminalInput("claude\n");
+  showToast("Launching Claude Code...");
+});
+
+document.getElementById("btn-claude-new").addEventListener("click", function() {
+  launcher.classList.remove("open");
+  // tmux new-window: Ctrl-B c
+  sendTerminalInput("\x02c");
+  setTimeout(function() { sendTerminalInput("claude\n"); }, 500);
+  showToast("Launching Claude Code in new window...");
+});
+
+
+/* ── Fullscreen Toggle ──────────────────────────────────────── */
+
+function toggleFullscreen() {
+  document.getElementById("app").classList.toggle("fullscreen");
+  setTimeout(function() { try { fitAddon.fit(); } catch(e) {} }, 100);
+}
+
+document.getElementById("btn-fullscreen").addEventListener("click", toggleFullscreen);
+document.getElementById("btn-fullscreen2").addEventListener("click", toggleFullscreen);
+
+
+/* ── Side Panel Toggle ──────────────────────────────────────── */
+
+document.getElementById("btn-panel-toggle").addEventListener("click", function() {
+  document.getElementById("side-panel").classList.toggle("collapsed");
+  setTimeout(function() { try { fitAddon.fit(); } catch(e) {} }, 200);
+});
+
+
+/* ── Collapsible Panel Sections ─────────────────────────────── */
+
+var panelHeaders = document.querySelectorAll(".panel-header[data-toggle]");
+for (var h = 0; h < panelHeaders.length; h++) {
+  (function(hdr) {
+    hdr.addEventListener("click", function() {
+      var sectionId = hdr.getAttribute("data-toggle");
+      document.getElementById(sectionId).classList.toggle("collapsed");
+    });
+  })(panelHeaders[h]);
+}
+
+
+/* ── Clear Button ───────────────────────────────────────────── */
+
+document.getElementById("btn-clear").addEventListener("click", function() {
+  sendTerminalInput("clear\n");
+});
+
+
+/* ── Status Polling ─────────────────────────────────────────── */
+
+var lastStatus = null;
+
+async function pollStatus() {
+  var data = await apiFetch("/api/lab/status");
+  var healthDot = document.getElementById("health-dot");
+
+  if (!data) {
+    healthDot.className = "status-dot dot-red";
+    return;
+  }
+
+  healthDot.className = "status-dot dot-green";
+  lastStatus = data;
+
+  // Fleet
+  var fleet = data.fleet || {};
+  document.getElementById("fleet-state").textContent = fleet.state || "--";
+
+  var instances = fleet.instances || [];
+  var running = 0;
+  for (var i = 0; i < instances.length; i++) {
+    if (instances[i].state === "running" || instances[i].health === "healthy") {
+      running++;
+    }
+  }
+  document.getElementById("instance-count").textContent = running + "/" + instances.length;
+
+  // Spot price from first instance with a price
+  var firstSpot = null;
+  for (var j = 0; j < instances.length; j++) {
+    if (instances[j].spot_price) { firstSpot = instances[j]; break; }
+  }
+  document.getElementById("spot-price").textContent = firstSpot
+    ? "$" + parseFloat(firstSpot.spot_price).toFixed(3)
+    : "--";
+
+  // Training
+  var training = data.training || {};
+  var tStatus = (training.status || "unknown").toLowerCase();
+  var badgeEl = document.getElementById("training-badge");
+  if (tStatus === "running" || tStatus === "active") {
+    badgeEl.innerHTML = '<span class="badge badge-running">RUNNING</span>';
+  } else if (tStatus === "stopped" || tStatus === "completed") {
+    badgeEl.innerHTML = '<span class="badge badge-stopped">STOPPED</span>';
+  } else {
+    badgeEl.innerHTML = '<span class="badge badge-unknown">UNKNOWN</span>';
+  }
+
+  document.getElementById("training-step").textContent =
+    training.step != null ? Number(training.step).toLocaleString() : "--";
+  document.getElementById("ar-loss").textContent =
+    training.ar_loss != null ? parseFloat(training.ar_loss).toFixed(2) : "--";
+  document.getElementById("diff-loss").textContent =
+    training.diff_loss != null ? parseFloat(training.diff_loss).toFixed(2) : "--";
+
+  // Cost
+  var cost = data.cost || {};
+  var spent = cost.total_spent != null ? cost.total_spent : cost.spent;
+  var budget = cost.budget;
+  if (spent != null) {
+    document.getElementById("cost-value").textContent = budget
+      ? "$" + parseFloat(spent).toFixed(2) + " / $" + parseFloat(budget).toFixed(0)
+      : "$" + parseFloat(spent).toFixed(2);
+  } else {
+    document.getElementById("cost-value").textContent = "--";
+  }
+
+  // Instance count badge in side panel
+  document.getElementById("inst-count").textContent = instances.length;
+
+  // Render instance cards
+  renderInstances(instances);
+}
+
+function renderInstances(instances) {
+  var container = document.getElementById("inst-list");
+  if (!instances.length) {
+    container.innerHTML =
+      '<div style="color:var(--text-dim);font-size:.8rem;padding:8px">No active instances</div>';
+    return;
+  }
+
+  var html = "";
+  for (var i = 0; i < instances.length; i++) {
+    var inst = instances[i];
+    var id = escHtml(inst.instance_id || "--");
+    var shortId = id.length > 10 ? id.slice(0, 5) + "..." + id.slice(-5) : id;
+    var itype = escHtml(inst.instance_type || "--");
+    var az = escHtml(inst.az || "--");
+    var ip = inst.public_ip || "";
+    var price = inst.spot_price
+      ? "$" + parseFloat(inst.spot_price).toFixed(3) + "/hr"
+      : "--";
+    var health = (inst.health || "").toLowerCase();
+    var state = (inst.state || "").toLowerCase();
+
+    var badgeClass = "inst-badge-running";
+    var badgeText = state || health || "unknown";
+    if (health === "unhealthy" || state === "terminated" || state === "shutting-down") {
+      badgeClass = "inst-badge-unhealthy";
+    }
+
+    html += '<div class="inst-card">'
+      + '<div class="inst-header">'
+      + '<span class="inst-id" title="' + id + '">' + shortId + '</span>'
+      + '<span class="inst-badge ' + badgeClass + '">' + escHtml(badgeText) + '</span>'
+      + '</div>'
+      + '<div class="inst-detail">'
+      + '<span>Type</span><span class="val">' + itype + '</span>'
+      + '<span>AZ</span><span class="val">' + az + '</span>'
+      + '<span>IP</span><span class="val">' + escHtml(ip || "--") + '</span>'
+      + '<span>Spot</span><span class="val">' + price + '</span>'
+      + '</div>'
+      + '<div class="inst-actions">'
+      + '<button class="btn-ssh" onclick="copySSH(\'' + escHtml(ip) + '\')"'
+      + (ip ? '' : ' disabled') + '>Copy SSH</button>'
+      + '<button class="btn-connect" onclick="connectSSH(\'' + escHtml(ip) + '\')"'
+      + (ip ? '' : ' disabled') + '>Connect</button>'
+      + '</div>'
+      + '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function copySSH(ip) {
+  if (!ip) return;
+  var cmd = "ssh -i ~/.ssh/gpu-key.pem ubuntu@" + ip;
+  navigator.clipboard.writeText(cmd).then(
+    function() { showToast("SSH command copied to clipboard"); },
+    function() { showToast("Failed to copy to clipboard"); }
+  );
+}
+
+function connectSSH(ip) {
+  if (!ip) return;
+  var cmd = "ssh -i ~/.ssh/gpu-key.pem ubuntu@" + ip + "\n";
+  sendTerminalInput(cmd);
+  showToast("Connecting to " + ip + "...");
+}
+
+
+/* ── Elevation Polling ──────────────────────────────────────── */
+
+async function pollElevations() {
+  var results = await Promise.allSettled([
+    apiFetch("/api/elevation/pending"),
+    apiFetch("/api/elevation/active"),
+    apiFetch("/api/elevation/history"),
+  ]);
+
+  var pending = (results[0].status === "fulfilled" && Array.isArray(results[0].value)) ? results[0].value : [];
+  var activeData = (results[1].status === "fulfilled" && results[1].value) ? results[1].value : {};
+  var active = activeData.id ? [activeData] : [];
+  var history = (results[2].status === "fulfilled" && Array.isArray(results[2].value)) ? results[2].value.slice(0, 10) : [];
+
+  document.getElementById("elev-count").textContent = pending.length + active.length;
+
+  document.getElementById("elev-pending").innerHTML = pending.length
+    ? '<div style="color:var(--text-dim);font-size:.7rem;padding:0 0 4px;text-transform:uppercase">Pending</div>'
+      + pending.map(function(e) { return elevCard(e, "pending"); }).join("")
+    : "";
+
+  document.getElementById("elev-active").innerHTML = active.length
+    ? '<div style="color:var(--text-dim);font-size:.7rem;padding:4px 0;text-transform:uppercase">Active</div>'
+      + active.map(function(e) { return elevCard(e, "active"); }).join("")
+    : "";
+
+  document.getElementById("elev-history").innerHTML = history.length
+    ? '<div style="color:var(--text-dim);font-size:.7rem;padding:4px 0;text-transform:uppercase">History</div>'
+      + history.map(function(e) { return elevCard(e, "done"); }).join("")
+    : "";
+}
+
+function elevCard(elev, cls) {
+  var action = escHtml(elev.action || "");
+  var justification = escHtml(elev.justification || "");
+  var dur = elev.duration_minutes ? elev.duration_minutes + "m" : "";
+  var decidedBy = elev.decided_by ? "by " + escHtml(elev.decided_by) : "";
+
+  // Active session: show expiry countdown
+  var extra = "";
+  if (cls === "active" && elev.expires_at) {
+    var remaining = Math.max(0, (new Date(elev.expires_at).getTime() - Date.now()) / 1000);
+    var mins = Math.floor(remaining / 60);
+    var secs = Math.floor(remaining % 60);
+    extra = ' <span style="color:var(--warning);font-weight:600">' + mins + 'm ' + secs + 's left</span>';
+  }
+
+  // Pending: show approve/deny buttons
+  var buttons = "";
+  if (cls === "pending" && elev.id) {
+    buttons = '<div style="display:flex;gap:6px;margin-top:6px">'
+      + '<button style="flex:1;padding:6px 10px;border-radius:4px;font-size:.75rem;font-weight:600;min-height:36px;background:rgba(46,213,115,.3);color:var(--success);border:none;cursor:pointer" onclick="approveElev(\'' + escHtml(elev.id) + '\')">Approve</button>'
+      + '<button style="flex:1;padding:6px 10px;border-radius:4px;font-size:.75rem;font-weight:600;min-height:36px;background:rgba(255,71,87,.3);color:var(--danger);border:none;cursor:pointer" onclick="denyElev(\'' + escHtml(elev.id) + '\')">Deny</button>'
+      + '</div>';
+  }
+
+  return '<div class="elev-card ' + cls + '">'
+    + '<div class="elev-prompt">' + (action || "(no action)") + (dur ? ' <span style="color:var(--text-dim)">(' + dur + ')</span>' : '') + '</div>'
+    + '<div class="elev-meta">' + justification + ' ' + decidedBy + extra + '</div>'
+    + buttons
+    + '</div>';
+}
+
+async function approveElev(id) {
+  var res = await apiFetch("/api/elevation/approve/" + id, { method: "POST" });
+  if (res) {
+    showToast("Elevation approved");
+    pollElevations();
+  }
+}
+
+async function denyElev(id) {
+  var res = await apiFetch("/api/elevation/deny/" + id, { method: "POST" });
+  if (res) {
+    showToast("Elevation denied");
+    pollElevations();
+  }
+}
+
+
+/* ── Poll Loop ──────────────────────────────────────────────── */
+
+async function poll() {
+  await Promise.allSettled([pollStatus(), pollElevations()]);
+}
+
+poll();
+setInterval(poll, 15000);
+
+
+/* ── Keyboard Shortcuts ─────────────────────────────────────── */
+
+document.addEventListener("keydown", function(e) {
+  // Ctrl+Shift+F = fullscreen
+  if (e.ctrlKey && e.shiftKey && e.key === "F") {
+    e.preventDefault();
+    toggleFullscreen();
+  }
+  // Escape exits fullscreen
+  if (e.key === "Escape" && document.getElementById("app").classList.contains("fullscreen")) {
+    toggleFullscreen();
+  }
 });
 </script>
 </body>
