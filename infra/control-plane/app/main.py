@@ -398,6 +398,84 @@ async def restart_terminal() -> dict[str, Any]:
     except sp.TimeoutExpired:
         raise HTTPException(status_code=500, detail="Restart timed out")
 
+import asyncio as _asyncio
+
+import websockets as _ws
+from fastapi import WebSocket as _FastAPIWebSocket
+from starlette.websockets import WebSocketDisconnect as _WsDisconnect
+
+
+@app.websocket("/api/shell/ws")
+async def shell_ws_proxy(client: _FastAPIWebSocket) -> None:
+    """Proxies WebSocket traffic to the shell ttyd instance on port 7682.
+
+    Accepts the browser WebSocket, opens a connection to the local
+    ttyd-shell, and forwards binary frames in both directions.
+    """
+    await client.accept(subprotocol="tty")
+    try:
+        async with _ws.connect(
+            "ws://127.0.0.1:7682/ws",
+            subprotocols=["tty"],
+            max_size=2**20,
+        ) as backend:
+
+            async def client_to_backend() -> None:
+                try:
+                    while True:
+                        data = await client.receive_bytes()
+                        await backend.send(data)
+                except _WsDisconnect:
+                    pass
+
+            async def backend_to_client() -> None:
+                try:
+                    async for msg in backend:
+                        if isinstance(msg, bytes):
+                            await client.send_bytes(msg)
+                        else:
+                            await client.send_text(msg)
+                except _ws.exceptions.ConnectionClosed:
+                    pass
+
+            done, pending = await _asyncio.wait(
+                [
+                    _asyncio.create_task(client_to_backend()),
+                    _asyncio.create_task(backend_to_client()),
+                ],
+                return_when=_asyncio.FIRST_COMPLETED,
+            )
+            for t in pending:
+                t.cancel()
+    except Exception:
+        logger.exception("Shell WebSocket proxy error")
+    finally:
+        try:
+            await client.close()
+        except Exception:
+            pass
+
+
+@app.post("/api/shell/restart")
+async def restart_shell() -> dict[str, Any]:
+    """Restarts the shell ttyd service to create a fresh session.
+
+    Returns:
+        Dict with status of the restart.
+    """
+    import subprocess as sp
+    try:
+        sp.run(["sudo", "systemctl", "restart", "cc-shell"], check=True, timeout=10)
+        sp.run(["sudo", "systemctl", "restart", "ttyd-shell"], check=True, timeout=10)
+        logger.info("Shell terminal services restarted")
+        return {"status": "ok", "message": "Shell session restarted"}
+    except sp.CalledProcessError as exc:
+        logger.exception("Failed to restart shell services")
+        raise HTTPException(status_code=500, detail=f"Restart failed: {exc}")
+    except sp.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Restart timed out")
+
+
 # --- Routes: Elevation (existing) ---
 
 @app.get("/api/elevation/pending")
