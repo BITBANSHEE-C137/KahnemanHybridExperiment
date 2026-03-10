@@ -40,17 +40,33 @@ body::before{
   content:'';
   position:fixed;
   inset:0;
-  background:rgba(15,17,23,0.88);
+  background:rgba(15,17,23,0.7);
   z-index:0;
 }
 
+/* ── App — centered terminal window ───────────────────────── */
 .app{
   position:relative;
   z-index:1;
   display:flex;
-  flex-direction:column;
+  align-items:center;
+  justify-content:center;
   height:100vh;
   overflow:hidden;
+  padding:24px;
+}
+
+/* ── Terminal window — normal terminal size ────────────────── */
+.term-window{
+  display:flex;
+  flex-direction:column;
+  width:740px;
+  max-width:100%;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(96,165,250,.06);
 }
 
 /* ── Toast ─────────────────────────────────────────────────── */
@@ -67,6 +83,7 @@ body::before{
   display:flex;align-items:center;gap:0;
   background:var(--surface);border-bottom:1px solid var(--border);
   min-height:36px;flex-shrink:0;
+  border-radius:10px 10px 0 0;
 }
 
 /* Tmux tabs — left side */
@@ -126,9 +143,8 @@ body::before{
 .elev-deny{background:rgba(248,113,113,.2);color:var(--red)}
 .elev-deny:hover{background:rgba(248,113,113,.35)}
 
-/* ── Terminal ──────────────────────────────────────────────── */
-.terminal-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.terminal-container{flex:1;position:relative;overflow:hidden;cursor:text}
+/* ── Terminal — fixed height for ~24 rows ─────────────────── */
+.terminal-container{position:relative;overflow:hidden;cursor:text;height:430px}
 #terminal{width:100%;height:100%}
 
 /* ── Footer ────────────────────────────────────────────────── */
@@ -138,18 +154,25 @@ body::before{
   background:var(--surface);border-top:1px solid var(--border);
   font-size:.65rem;color:var(--dim);
   min-height:24px;flex-shrink:0;
+  border-radius:0 0 10px 10px;
 }
 .footer .spacer{flex:1}
 .health-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .brand{font-weight:700;letter-spacing:.5px;color:var(--dim)}
 
-/* ── Fullscreen ────────────────────────────────────────────── */
-.app.fullscreen .toolbar,
-.app.fullscreen .footer,
-.app.fullscreen .elevation-banner{display:none}
+/* ── Fullscreen — terminal window fills viewport ──────────── */
+.app.fullscreen{padding:0}
+.app.fullscreen .term-window{
+  width:100%;max-width:100%;height:100%;border-radius:0;border:none;
+}
+.app.fullscreen .toolbar{border-radius:0}
+.app.fullscreen .footer{border-radius:0}
+.app.fullscreen .terminal-container{flex:1;height:auto}
 
 /* ── Responsive ────────────────────────────────────────────── */
 @media(max-width:600px){
+  .app{padding:8px}
+  .term-window{width:100%}
   .tmux-tab{padding:0 10px;font-size:.7rem}
   .tb-btn{padding:4px 8px;font-size:.7rem}
   .toolbar-right .hide-mobile{display:none}
@@ -158,50 +181,50 @@ body::before{
 </head>
 <body>
 <div class="app" id="app">
+  <div class="term-window">
 
-  <!-- Toolbar: tmux tabs left, actions right -->
-  <div class="toolbar">
-    <div class="tmux-tabs" id="tab-bar">
-      <div class="tmux-tab active" data-window="0">claude-code</div>
-      <div class="tmux-tab" data-window="1">monitor</div>
-      <div class="tmux-tab" data-window="2">shell</div>
-    </div>
-    <div class="toolbar-right">
-      <div class="claude-launcher" id="claude-launcher">
-        <button class="tb-btn tb-btn-accent" id="btn-claude">&#9889; Claude</button>
-        <div class="claude-dropdown">
-          <button id="btn-claude-here">Launch in current pane<div class="hint">Sends <code>claude</code> to active pane</div></button>
-          <button id="btn-claude-new">Launch in new window<div class="hint">Creates tmux window + <code>claude</code></div></button>
-        </div>
+    <!-- Toolbar: tmux tabs left, actions right -->
+    <div class="toolbar">
+      <div class="tmux-tabs" id="tab-bar">
+        <div class="tmux-tab active" data-window="0">claude-code</div>
+        <div class="tmux-tab" data-window="1">monitor</div>
+        <div class="tmux-tab" data-window="2">shell</div>
       </div>
-      <a href="https://train.bitbanshee.com" target="_blank" class="tb-btn tb-btn-ghost hide-mobile" title="Training Dashboard">Train</a>
-      <button class="tb-btn tb-btn-ghost" id="btn-fullscreen" title="Fullscreen (Ctrl+Shift+F)">&#x26F6;</button>
-      <a href="/cdn-cgi/access/logout" class="tb-btn tb-btn-ghost hide-mobile" title="Logout">Logout</a>
+      <div class="toolbar-right">
+        <div class="claude-launcher" id="claude-launcher">
+          <button class="tb-btn tb-btn-accent" id="btn-claude">&#9889; Claude</button>
+          <div class="claude-dropdown">
+            <button id="btn-claude-here">Launch in current pane<div class="hint">Sends <code>claude</code> to active pane</div></button>
+            <button id="btn-claude-new">Launch in new window<div class="hint">Creates tmux window + <code>claude</code></div></button>
+          </div>
+        </div>
+        <a href="https://train.bitbanshee.com" target="_blank" class="tb-btn tb-btn-ghost hide-mobile" title="Training Dashboard">Train</a>
+        <button class="tb-btn tb-btn-ghost" id="btn-fullscreen" title="Fullscreen (Ctrl+Shift+F)">&#x26F6;</button>
+        <a href="/cdn-cgi/access/logout" class="tb-btn tb-btn-ghost hide-mobile" title="Logout">Logout</a>
+      </div>
     </div>
-  </div>
 
-  <!-- Elevation banner — only visible when pending -->
-  <div class="elevation-banner" id="elevation-banner">
-    <span class="elev-text" id="elev-text"></span>
-    <button class="elev-btn elev-approve" id="elev-approve">Approve</button>
-    <button class="elev-btn elev-deny" id="elev-deny">Deny</button>
-  </div>
+    <!-- Elevation banner — only visible when pending -->
+    <div class="elevation-banner" id="elevation-banner">
+      <span class="elev-text" id="elev-text"></span>
+      <button class="elev-btn elev-approve" id="elev-approve">Approve</button>
+      <button class="elev-btn elev-deny" id="elev-deny">Deny</button>
+    </div>
 
-  <!-- Terminal fills everything -->
-  <div class="terminal-area">
+    <!-- Terminal — 80x24 ish -->
     <div class="terminal-container" id="terminal-container">
       <div id="terminal"></div>
     </div>
-  </div>
 
-  <!-- Tiny footer -->
-  <div class="footer">
-    <span class="health-dot" id="health-dot"></span>
-    <span id="health-label">connecting</span>
-    <span class="spacer"></span>
-    <span class="brand">BitBanshee</span>
-  </div>
+    <!-- Tiny footer -->
+    <div class="footer">
+      <span class="health-dot" id="health-dot"></span>
+      <span id="health-label">connecting</span>
+      <span class="spacer"></span>
+      <span class="brand">BitBanshee</span>
+    </div>
 
+  </div>
 </div>
 <div id="toast"></div>
 
