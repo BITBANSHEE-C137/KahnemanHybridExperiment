@@ -224,7 +224,7 @@ input { font-family: var(--font-ui); }
   flex-shrink: 0;
 }
 #shell-card {
-  height: 400px;
+  height: 800px;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -2734,30 +2734,38 @@ function loadProfile() {
   pollAuthStatus();
 }
 
+function quietFetch(path) {
+  // Like apiFetch but no error toasts — for background polling
+  return fetch(path).then(function(r) {
+    if (!r.ok) throw new Error(r.statusText);
+    var ct = r.headers.get('content-type') || '';
+    if (ct.includes('application/json')) return r.json();
+    return r;
+  });
+}
+
 function pollAuthStatus() {
-  // AWS — if /health works, AWS is active
-  fetch('/health', { signal: AbortSignal.timeout(3000) }).then(function(r) {
-    setAuthBadge('auth-aws', r.ok);
+  // AWS — API is reachable
+  quietFetch('/health').then(function(data) {
+    setAuthBadge('auth-aws', data && data.status === 'ok');
   }).catch(function() { setAuthBadge('auth-aws', false); });
 
-  // Cloudflare — if we're here, CF is active
+  // Cloudflare — if page loaded, CF is active
   setAuthBadge('auth-cf', true);
 
   // iCloud
-  apiFetch('/api/icloud/status').then(function(data) {
-    setAuthBadge('auth-icloud', data.authenticated);
+  quietFetch('/api/icloud/status').then(function(data) {
+    setAuthBadge('auth-icloud', data && data.authenticated);
   }).catch(function() { setAuthBadge('auth-icloud', false); });
 
   // Elevation
-  apiFetch('/api/elevation/active').then(function(data) {
-    var active = data && data.id;
-    setAuthBadge('auth-elevated', active, 'elevated');
+  quietFetch('/api/elevation/active').then(function(data) {
+    setAuthBadge('auth-elevated', data && data.id, 'elevated');
   }).catch(function() { setAuthBadge('auth-elevated', false); });
 
-  // GitHub — check if git is configured (use profile endpoint hint)
-  apiFetch('/api/profile').then(function(data) {
-    // If API responds, GitHub credentials are configured on the instance
-    setAuthBadge('auth-github', true);
+  // GitHub — if profile API responds, instance is configured
+  quietFetch('/api/profile').then(function(data) {
+    setAuthBadge('auth-github', data && data.username);
   }).catch(function() { setAuthBadge('auth-github', false); });
 }
 
