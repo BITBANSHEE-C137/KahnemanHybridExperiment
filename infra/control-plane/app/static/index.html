@@ -58,7 +58,7 @@ input { font-family: var(--font-ui); }
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
   height: var(--header-h);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 80px;
+  padding: 0 160px;
   background: rgba(15,17,23,0.85);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -135,7 +135,8 @@ input { font-family: var(--font-ui); }
   left: 0; right: 0; bottom: 0;
   z-index: 10;
   display: flex;
-  padding: 32px 80px;
+  padding: 32px 160px;
+  padding-bottom: 80px;
   gap: 24px;
   flex-direction: column;
   overflow-y: auto;
@@ -410,10 +411,10 @@ input { font-family: var(--font-ui); }
 }
 #storage-modal-content {
   position: relative;
-  width: 640px;
+  width: 900px;
   max-width: 90vw;
-  height: 520px;
-  max-height: 80vh;
+  height: 680px;
+  max-height: 85vh;
   background: var(--glass);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -887,6 +888,23 @@ input { font-family: var(--font-ui); }
 }
 .elev-btn.deny:hover { background: rgba(248,113,113,0.25); }
 
+/* ===== 12. Page Footer ===== */
+#page-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-top: 1px solid var(--glass-border);
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: auto;
+}
+#page-footer a { color: var(--dim); transition: color 0.2s; }
+#page-footer a:hover { color: var(--text); }
+.footer-left, .footer-right { display: flex; align-items: center; gap: 16px; }
+.footer-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--dim); opacity: 0.5; }
+
 /* ===== 8. Context Menu ===== */
 #ctx-menu {
   display: none;
@@ -1045,9 +1063,13 @@ body.terminal-maximized #terminal-card {
   }
   #shell-card { height: 30vh; }
   #terminal-card.maximized { height: auto; }
+  #main {
+    padding: 12px;
+    padding-bottom: 60px;
+  }
   #storage-modal-content {
     width: 95vw;
-    height: 70vh;
+    height: 80vh;
   }
 }
 </style>
@@ -1220,6 +1242,20 @@ body.terminal-maximized #terminal-card {
     <div class="elev-icon">&#9888;&#65039;</div>
     <div class="elev-info" id="elev-info"></div>
     <div class="elev-actions" id="elev-actions"></div>
+  </div>
+
+  <!-- Footer -->
+  <div id="page-footer">
+    <div class="footer-left">
+      <span>BitBanshee AI Lab</span>
+      <span class="footer-dot"></span>
+      <span id="footer-uptime"></span>
+    </div>
+    <div class="footer-right">
+      <a href="https://bitbanshee.com" target="_blank">bitbanshee.com</a>
+      <span class="footer-dot"></span>
+      <a href="https://github.com/BITBANSHEE-C137" target="_blank">GitHub</a>
+    </div>
   </div>
 </div>
 
@@ -1794,6 +1830,16 @@ async function pollHealth() {
   try {
     var resp = await fetch('/health', { signal: AbortSignal.timeout(5000) });
     setHealth(resp.ok);
+    if (resp.ok) {
+      var data = await resp.json();
+      var el = document.getElementById('footer-uptime');
+      if (el && data.uptime) {
+        var s = Math.floor(data.uptime);
+        var h = Math.floor(s / 3600); s %= 3600;
+        var m = Math.floor(s / 60);
+        el.textContent = 'uptime ' + (h > 0 ? h + 'h ' : '') + m + 'm';
+      }
+    }
   } catch (e) {
     setHealth(false);
   }
