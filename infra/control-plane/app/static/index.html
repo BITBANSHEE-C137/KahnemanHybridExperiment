@@ -1073,12 +1073,19 @@ body.terminal-maximized #terminal-card {
 
 /* ===== 13. Mobile Responsive ===== */
 @media (max-width: 767px) {
+  #header {
+    padding: 0 16px;
+    height: 56px;
+  }
+  #header .header-bg { background-size: 250px auto; }
   .header-subtitle { display: none; }
-  .header-title { font-size: 14px; }
+  .header-title { font-size: 13px; }
   #main {
     padding: 12px;
+    padding-bottom: 60px;
     gap: 12px;
     overflow-y: auto;
+    top: 56px;
   }
   #row-1, #row-2 {
     flex-direction: column;
@@ -1101,15 +1108,34 @@ body.terminal-maximized #terminal-card {
     flex: none !important;
     min-height: 160px;
   }
-  #shell-card { height: 30vh; }
-  #terminal-card.maximized { height: auto; }
-  #main {
-    padding: 12px;
-    padding-bottom: 60px;
+  #shell-card { height: 40vh; }
+  #terminal-card.maximized {
+    height: calc(100vh - 56px - 24px);
   }
+  #profile-card {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .profile-meta {
+    gap: 4px;
+  }
+  .auth-badge { font-size: 9px; padding: 1px 4px; }
+  .rc-toggle { font-size: 10px; padding: 3px 8px; }
   #storage-modal-content {
     width: 95vw;
-    height: 80vh;
+    height: 85vh;
+    max-width: 95vw;
+  }
+  #icloud-auth-content {
+    width: 90vw;
+  }
+  .card-header { padding: 12px 16px; }
+  .card-title { font-size: 13px; }
+  #page-footer {
+    padding: 12px 0;
+    font-size: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 }
 </style>
@@ -1147,9 +1173,9 @@ body.terminal-maximized #terminal-card {
     <div id="left-col">
       <!-- Profile (compact bar) -->
       <div id="profile-card">
-        <div class="profile-avatar" id="profile-avatar">CO</div>
+        <div class="profile-avatar" id="profile-avatar">BB</div>
         <div class="profile-info">
-          <div class="profile-name" id="profile-name">claude-operator</div>
+          <div class="profile-name" id="profile-name">Bitbanshee</div>
           <div class="profile-meta" id="profile-meta">
             <span class="auth-badge" id="auth-aws"><span class="auth-dot"></span>AWS</span>
             <span class="auth-badge" id="auth-cf"><span class="auth-dot"></span>Cloudflare</span>
@@ -1311,27 +1337,29 @@ body.terminal-maximized #terminal-card {
         <button class="card-btn" onclick="closeStorageModal()" title="Close">&#x2715;</button>
       </div>
     </div>
-    <div class="browser-header">
-      <button class="browser-back" onclick="closeBrowser()" title="Back to root">&#8592;</button>
-      <div class="breadcrumb" id="breadcrumb"></div>
-    </div>
-    <div class="file-list" id="file-list"></div>
-    <div id="file-preview" style="display:none">
-      <div class="preview-header">
-        <button class="preview-back" onclick="closePreview()" title="Back to listing">&#8592;</button>
-        <span class="preview-filename" id="preview-filename"></span>
-        <button class="preview-download" id="preview-download-btn" onclick="downloadPreviewFile()" title="Download">&#8595;</button>
+    <div class="browser-view" id="browser-view">
+      <div class="browser-header">
+        <button class="browser-back" onclick="closeBrowser()" title="Back to root">&#8592;</button>
+        <div class="breadcrumb" id="breadcrumb"></div>
       </div>
-      <div class="preview-body" id="preview-body"></div>
-    </div>
-    <div class="browser-footer" id="browser-footer">
-      <button class="browser-footer-btn" onclick="triggerUpload()">
-        <span>&#8593;</span> Upload
-        <input type="file" id="upload-input" multiple onchange="handleUpload(this.files)">
-      </button>
-      <button class="browser-footer-btn" onclick="promptMkdir()">
-        <span>&#43;</span> New Folder
-      </button>
+      <div class="file-list" id="file-list"></div>
+      <div id="file-preview" style="display:none">
+        <div class="preview-header">
+          <button class="preview-back" onclick="closePreview()" title="Back to listing">&#8592;</button>
+          <span class="preview-filename" id="preview-filename"></span>
+          <button class="preview-download" id="preview-download-btn" onclick="downloadPreviewFile()" title="Download">&#8595;</button>
+        </div>
+        <div class="preview-body" id="preview-body"></div>
+      </div>
+      <div class="browser-footer" id="browser-footer">
+        <button class="browser-footer-btn" onclick="triggerUpload()">
+          <span>&#8593;</span> Upload
+          <input type="file" id="upload-input" multiple onchange="handleUpload(this.files)">
+        </button>
+        <button class="browser-footer-btn" onclick="promptMkdir()">
+          <span>&#43;</span> New Folder
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -1937,7 +1965,9 @@ function openStorageModal(type) {
   var modal = document.getElementById('storage-modal');
   var title = document.getElementById('storage-modal-title');
   var footer = document.getElementById('browser-footer');
+  var bv = document.getElementById('browser-view');
   modal.classList.add('open');
+  if (bv) bv.style.display = 'flex';
 
   if (type === 's3') {
     title.textContent = 'Amazon S3';
@@ -2750,10 +2780,9 @@ function setAuthBadge(id, active, cls) {
 function loadProfile() {
   // Profile name + avatar
   apiFetch('/api/profile').then(function(data) {
-    var name = data.username || 'operator';
-    var initials = name.split('-').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0, 2);
-    document.getElementById('profile-avatar').textContent = initials;
-    document.getElementById('profile-name').textContent = name;
+    var displayName = 'Bitbanshee';
+    document.getElementById('profile-avatar').textContent = 'BB';
+    document.getElementById('profile-name').textContent = displayName;
   }).catch(function() {});
 
   // Auth statuses
