@@ -148,22 +148,23 @@ input { font-family: var(--font-ui); }
   flex: 2;
   min-height: 680px;
 }
+#left-col {
+  flex: 28 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
 #row-2 {
   display: flex;
   gap: 24px;
   flex: 1;
   min-height: 280px;
 }
-#row-3 {
-  display: flex;
-  gap: 24px;
-  flex: 0.8;
-  min-height: 220px;
-}
 
 /* ===== 5. Terminal Card ===== */
 #terminal-card {
-  flex: 65 0 0;
+  flex: 72 0 0;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -263,9 +264,38 @@ input { font-family: var(--font-ui); }
   pointer-events: auto;
 }
 
-/* ===== 6. Storage Card ===== */
+/* ===== 5c. RC Toggle ===== */
+.rc-toggle {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px; font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--dim);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--glass-border);
+  transition: all var(--transition);
+  cursor: pointer;
+}
+.rc-toggle:hover { background: rgba(255,255,255,0.08); }
+.rc-toggle.active {
+  color: var(--green);
+  background: rgba(52,211,153,0.1);
+  border-color: rgba(52,211,153,0.3);
+}
+.rc-toggle .rc-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--dim);
+  transition: all var(--transition);
+}
+.rc-toggle.active .rc-dot {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(52,211,153,0.5);
+}
+
+/* ===== 6. Storage Card (compact, in left-col) ===== */
 #storage-card {
-  flex: 35 0 0;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -275,60 +305,78 @@ input { font-family: var(--font-ui); }
   border-radius: var(--radius);
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
   overflow: hidden;
-  transition: all var(--transition);
-  min-width: 0;
-  min-height: 0;
 }
-#storage-card.browsing .tiles-view { display: none; }
-#storage-card.browsing .browser-view { display: flex; }
 #storage-body {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-.tiles-view {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
-  padding: 16px 20px;
-  gap: 10px;
+  padding: 12px 16px;
 }
 .tiles-grid {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 .storage-tile {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
+  gap: 10px;
+  padding: 8px 12px;
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   cursor: pointer;
-  transition: transform var(--transition), background var(--transition), border-color var(--transition), box-shadow var(--transition);
+  transition: background var(--transition), border-color var(--transition);
 }
 .storage-tile:hover {
-  transform: translateX(4px);
   background: rgba(255,255,255,0.07);
   border-color: var(--glass-border-hover);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
 }
 .storage-tile.disabled {
   opacity: 0.4;
   cursor: default;
   pointer-events: none;
 }
-.tile-icon { font-size: 22px; line-height: 1; flex-shrink: 0; width: 28px; text-align: center; }
+.tile-icon { font-size: 16px; line-height: 1; flex-shrink: 0; }
 .tile-info { display: flex; flex-direction: column; min-width: 0; }
-.tile-label { font-size: 13px; font-weight: 600; white-space: nowrap; }
-.tile-sub { font-size: 11px; color: var(--dim); margin-top: 1px; }
+.tile-label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tile-sub { font-size: 10px; color: var(--dim); }
+
+/* ===== 6b. Storage Modal ===== */
+#storage-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+#storage-modal.open { display: flex; }
+#storage-modal-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#storage-modal-content {
+  position: relative;
+  width: 640px;
+  max-width: 90vw;
+  height: 520px;
+  max-height: 80vh;
+  background: var(--glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalIn 0.2s ease;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
 
 .browser-view {
   display: none;
@@ -430,7 +478,7 @@ input { font-family: var(--font-ui); }
 
 /* ===== 7. Sessions Card ===== */
 #sessions-card {
-  flex: 60 0 0;
+  flex: 50 0 0;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -514,7 +562,7 @@ input { font-family: var(--font-ui); }
 
 /* ===== 8. Notes Card ===== */
 #notes-card {
-  flex: 40 0 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -572,7 +620,7 @@ input { font-family: var(--font-ui); }
 
 /* ===== 9. Tasks Card ===== */
 #tasks-card {
-  flex: 65 0 0;
+  flex: 50 0 0;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -650,60 +698,48 @@ input { font-family: var(--font-ui); }
 .task-item:hover .task-delete { display: flex; }
 .task-delete:hover { color: var(--red); background: rgba(248,113,113,0.15); }
 
-/* ===== 10. Profile Card ===== */
+/* ===== 10. Profile Card (compact bar) ===== */
 #profile-card {
-  flex: 35 0 0;
+  flex-shrink: 0;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
   background: var(--glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-  overflow: hidden;
-  min-width: 0;
-  min-height: 0;
-}
-#profile-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 28px 24px;
-  gap: 10px;
-  overflow-y: auto;
-  min-height: 0;
 }
 .profile-avatar {
-  width: 64px; height: 64px;
+  width: 36px; height: 36px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent), #a78bfa);
   display: flex; align-items: center; justify-content: center;
-  font-size: 22px; font-weight: 700; color: #fff;
-  letter-spacing: -0.5px;
+  font-size: 13px; font-weight: 700; color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 4px 20px rgba(96,165,250,0.25);
+}
+.profile-info {
+  flex: 1; min-width: 0;
 }
 .profile-name {
-  font-size: 17px; font-weight: 700;
-  margin-top: 8px;
+  font-size: 13px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .profile-meta {
-  font-size: 12px; color: var(--dim);
-  text-align: center;
-  line-height: 1.7;
+  font-size: 10px; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .profile-logout {
-  margin-top: 10px;
-  padding: 8px 20px;
+  padding: 5px 12px;
   background: rgba(248,113,113,0.1);
   border: 1px solid rgba(248,113,113,0.25);
-  border-radius: 10px;
-  font-size: 12px; font-weight: 600;
+  border-radius: 8px;
+  font-size: 11px; font-weight: 600;
   color: var(--red);
   cursor: pointer;
+  flex-shrink: 0;
   transition: background var(--transition);
 }
 .profile-logout:hover { background: rgba(248,113,113,0.2); }
@@ -864,9 +900,8 @@ input { font-family: var(--font-ui); }
 .loading { animation: pulse 1.5s ease infinite; }
 
 /* ===== 12. Fullscreen / Maximized States ===== */
-body.terminal-maximized #row-1 > :not(#terminal-card),
+body.terminal-maximized #left-col,
 body.terminal-maximized #row-2,
-body.terminal-maximized #row-3,
 body.terminal-maximized #shell-row,
 body.terminal-maximized #elevation-card {
   display: none !important;
@@ -887,30 +922,32 @@ body.terminal-maximized #terminal-card {
     gap: 12px;
     overflow-y: auto;
   }
-  #row-1, #row-2, #row-3 {
+  #row-1, #row-2 {
     flex-direction: column;
     min-height: auto;
     flex: none;
+  }
+  #left-col {
+    flex: none;
+    gap: 12px;
   }
   #terminal-card {
     flex: none !important;
     height: 50vh;
   }
-  #profile-card {
+  #notes-card {
     flex: none !important;
-    min-height: 180px;
+    min-height: 200px;
   }
-  #sessions-card, #notes-card, #tasks-card, #storage-card {
+  #sessions-card, #tasks-card {
     flex: none !important;
     min-height: 160px;
   }
   #shell-card { height: 30vh; }
-  .tiles-grid {
-    flex-direction: row;
-  }
-  .storage-tile { padding: 10px 14px; }
-  #terminal-card.maximized {
-    height: auto;
+  #terminal-card.maximized { height: auto; }
+  #storage-modal-content {
+    width: 95vw;
+    height: 70vh;
   }
 }
 </style>
@@ -946,20 +983,65 @@ body.terminal-maximized #terminal-card {
 
 <!-- Main Content -->
 <div id="main">
-  <!-- Row 1: Profile + Claude Code Terminal -->
+  <!-- Row 1: Left sidebar + Claude Code Terminal -->
   <div id="row-1">
-    <!-- Profile Card -->
-    <div id="profile-card">
-      <div class="card-header">
-        <div class="card-title"><span>Profile</span></div>
-      </div>
-      <div id="profile-body">
+    <!-- Left Column: Profile + Storage + Notes -->
+    <div id="left-col">
+      <!-- Profile (compact bar) -->
+      <div id="profile-card">
         <div class="profile-avatar" id="profile-avatar">CO</div>
-        <div class="profile-name" id="profile-name">claude-operator</div>
-        <div class="profile-meta" id="profile-meta">Loading...</div>
+        <div class="profile-info">
+          <div class="profile-name" id="profile-name">claude-operator</div>
+          <div class="profile-meta" id="profile-meta">Loading...</div>
+        </div>
         <button class="profile-logout" onclick="window.location.href='/cdn-cgi/access/logout'">Logout</button>
       </div>
-    </div>
+
+      <!-- Storage (compact tiles) -->
+      <div id="storage-card">
+        <div class="card-header">
+          <div class="card-title"><span>Storage</span></div>
+        </div>
+        <div id="storage-body">
+          <div class="tiles-grid">
+            <div class="storage-tile" onclick="openStorageModal('local')">
+              <div class="tile-icon">&#128193;</div>
+              <div class="tile-info">
+                <div class="tile-label">Local Files</div>
+              </div>
+            </div>
+            <div class="storage-tile" onclick="openStorageModal('s3')">
+              <div class="tile-icon">&#9729;&#65039;</div>
+              <div class="tile-info">
+                <div class="tile-label">Amazon S3</div>
+              </div>
+            </div>
+            <div class="storage-tile disabled">
+              <div class="tile-icon">&#9729;</div>
+              <div class="tile-info">
+                <div class="tile-label">iCloud</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div id="notes-card">
+        <div class="card-header">
+          <div class="card-title"><span>Notes</span></div>
+          <div class="card-actions">
+            <button class="card-btn" onclick="createNote()" title="New note">&#43;</button>
+          </div>
+        </div>
+        <div id="notes-body">
+          <div class="note-editor" id="note-editor">
+            <input class="note-editor-title" id="note-edit-title" placeholder="Title" onchange="saveCurrentNote()">
+            <textarea class="note-editor-content" id="note-edit-content" placeholder="Write a note..." onchange="saveCurrentNote()"></textarea>
+          </div>
+        </div>
+      </div>
+    </div><!-- /left-col -->
 
     <!-- Claude Code Card -->
     <div id="terminal-card">
@@ -969,6 +1051,9 @@ body.terminal-maximized #terminal-card {
           <span>Claude Code</span>
         </div>
         <div class="card-actions">
+          <button class="rc-toggle" id="rc-toggle" onclick="toggleRC()" title="Remote Control on/off">
+            <span class="rc-dot"></span> /rc
+          </button>
           <button class="card-btn" onclick="toggleTerminalMaximized()" title="Maximize / Restore">&#x26F6;</button>
         </div>
       </div>
@@ -983,9 +1068,9 @@ body.terminal-maximized #terminal-card {
     </div>
   </div><!-- /row-1 -->
 
-  <!-- Row 2: Sessions + Notes -->
+  <!-- Row 2: Sessions + Tasks -->
   <div id="row-2">
-    <!-- Claude Code Sessions Card -->
+    <!-- Sessions Card -->
     <div id="sessions-card">
       <div class="card-header">
         <div class="card-title"><span>Sessions</span></div>
@@ -995,77 +1080,6 @@ body.terminal-maximized #terminal-card {
       </div>
       <div id="sessions-body">
         <div class="session-empty" id="sessions-empty">No sessions yet</div>
-      </div>
-    </div>
-
-    <!-- Notes Card -->
-    <div id="notes-card">
-      <div class="card-header">
-        <div class="card-title"><span>Notes</span></div>
-        <div class="card-actions">
-          <button class="card-btn" onclick="createNote()" title="New note">&#43;</button>
-        </div>
-      </div>
-      <div id="notes-body">
-        <div class="note-editor" id="note-editor">
-          <input class="note-editor-title" id="note-edit-title" placeholder="Title" onchange="saveCurrentNote()">
-          <textarea class="note-editor-content" id="note-edit-content" placeholder="Write a note..." onchange="saveCurrentNote()"></textarea>
-        </div>
-      </div>
-    </div>
-  </div><!-- /row-2 -->
-
-  <!-- Row 3: Storage + Tasks -->
-  <div id="row-3">
-    <!-- Storage Card (icon grid) -->
-    <div id="storage-card">
-      <div class="card-header">
-        <div class="card-title"><span>Storage</span></div>
-      </div>
-      <div id="storage-body">
-        <!-- Tiles View -->
-        <div class="tiles-view">
-          <div class="tiles-grid">
-            <div class="storage-tile" onclick="openStorageBrowser('local')">
-              <div class="tile-icon">&#128193;</div>
-              <div class="tile-info">
-                <div class="tile-label">Local Files</div>
-                <div class="tile-sub">~/projects</div>
-              </div>
-            </div>
-            <div class="storage-tile" onclick="openStorageBrowser('s3')">
-              <div class="tile-icon">&#9729;&#65039;</div>
-              <div class="tile-info">
-                <div class="tile-label">Amazon S3</div>
-                <div class="tile-sub">ml-lab-004507070771</div>
-              </div>
-            </div>
-            <div class="storage-tile disabled">
-              <div class="tile-icon">&#9729;</div>
-              <div class="tile-info">
-                <div class="tile-label">iCloud Drive</div>
-                <div class="tile-sub">Coming soon</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Browser View -->
-        <div class="browser-view" id="browser-view">
-          <div class="browser-header">
-            <button class="browser-back" onclick="closeBrowser()" title="Back to storage">&#8592;</button>
-            <div class="breadcrumb" id="breadcrumb"></div>
-          </div>
-          <div class="file-list" id="file-list"></div>
-          <div class="browser-footer" id="browser-footer">
-            <button class="browser-footer-btn" onclick="triggerUpload()">
-              <span>&#8593;</span> Upload
-              <input type="file" id="upload-input" multiple onchange="handleUpload(this.files)">
-            </button>
-            <button class="browser-footer-btn" onclick="promptMkdir()">
-              <span>&#43;</span> New Folder
-            </button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -1079,7 +1093,7 @@ body.terminal-maximized #terminal-card {
       </div>
       <div id="tasks-body"></div>
     </div>
-  </div><!-- /row-3 -->
+  </div><!-- /row-2 -->
 
   <!-- Shell Row -->
   <div id="shell-row">
@@ -1106,6 +1120,33 @@ body.terminal-maximized #terminal-card {
     <div class="elev-icon">&#9888;&#65039;</div>
     <div class="elev-info" id="elev-info"></div>
     <div class="elev-actions" id="elev-actions"></div>
+  </div>
+</div>
+
+<!-- Storage Modal -->
+<div id="storage-modal">
+  <div id="storage-modal-backdrop" onclick="closeStorageModal()"></div>
+  <div id="storage-modal-content">
+    <div class="card-header">
+      <div class="card-title"><span id="storage-modal-title">Local Files</span></div>
+      <div class="card-actions">
+        <button class="card-btn" onclick="closeStorageModal()" title="Close">&#x2715;</button>
+      </div>
+    </div>
+    <div class="browser-header">
+      <button class="browser-back" onclick="closeBrowser()" title="Back to root">&#8592;</button>
+      <div class="breadcrumb" id="breadcrumb"></div>
+    </div>
+    <div class="file-list" id="file-list"></div>
+    <div class="browser-footer" id="browser-footer">
+      <button class="browser-footer-btn" onclick="triggerUpload()">
+        <span>&#8593;</span> Upload
+        <input type="file" id="upload-input" multiple onchange="handleUpload(this.files)">
+      </button>
+      <button class="browser-footer-btn" onclick="promptMkdir()">
+        <span>&#43;</span> New Folder
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1429,6 +1470,36 @@ function toggleTerminalMaximized() {
 }
 
 /* ========================================
+   Remote Control Toggle
+   ======================================== */
+var rcActive = false;
+
+function toggleRC() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    showToast('Terminal not connected', 3000);
+    return;
+  }
+  rcActive = !rcActive;
+  var btn = document.getElementById('rc-toggle');
+  if (rcActive) {
+    btn.classList.add('active');
+    sendTerminalInput('/rc on\n');
+  } else {
+    btn.classList.remove('active');
+    sendTerminalInput('/rc off\n');
+  }
+}
+
+function sendTerminalInput(text) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  var enc = new TextEncoder().encode(text);
+  var buf = new Uint8Array(enc.length + 1);
+  buf[0] = 0x30;
+  buf.set(enc, 1);
+  ws.send(buf);
+}
+
+/* ========================================
    Shell Terminal (xterm.js + WebSocket proxy)
    ======================================== */
 var shellTerm = null;
@@ -1621,26 +1692,44 @@ async function denyElevation(id) {
 /* ========================================
    Storage: Tiles + Browser
    ======================================== */
-function openStorageBrowser(type) {
+function openStorageModal(type) {
   activeStorage = type;
   saveState();
-  document.getElementById('storage-card').classList.add('browsing');
-
+  var modal = document.getElementById('storage-modal');
+  var title = document.getElementById('storage-modal-title');
   var footer = document.getElementById('browser-footer');
+  modal.classList.add('open');
+
   if (type === 's3') {
+    title.textContent = 'Amazon S3';
     footer.style.display = 'none';
     loadS3Dir(s3Prefix);
   } else {
+    title.textContent = 'Local Files';
     footer.style.display = '';
     loadLocalDir(localPath);
   }
 }
 
-function closeBrowser() {
+function closeStorageModal() {
+  document.getElementById('storage-modal').classList.remove('open');
   activeStorage = null;
   saveState();
-  document.getElementById('storage-card').classList.remove('browsing');
 }
+
+// Keep closeBrowser for breadcrumb back-to-root
+function closeBrowser() {
+  if (activeStorage === 'local') {
+    localPath = '/home/claude-operator/projects';
+    loadLocalDir(localPath);
+  } else if (activeStorage === 's3') {
+    s3Prefix = '';
+    loadS3Dir(s3Prefix);
+  }
+}
+
+// Legacy alias
+function openStorageBrowser(type) { openStorageModal(type); }
 
 /* ---- Local File Browser ---- */
 async function loadLocalDir(path) {
@@ -2299,9 +2388,13 @@ document.addEventListener('keydown', function(e) {
     toggleTerminalMaximized();
     return;
   }
-  // Escape — close overlays, restore terminal
+  // Escape — close overlays, modals, restore terminal
   if (e.key === 'Escape') {
     closeDropdowns();
+    if (document.getElementById('storage-modal').classList.contains('open')) {
+      closeStorageModal();
+      return;
+    }
     if (terminalMaximized) {
       toggleTerminalMaximized();
     }
@@ -2336,7 +2429,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Restore active storage browser
   if (activeStorage === 'local' || activeStorage === 's3') {
-    openStorageBrowser(activeStorage);
+    openStorageModal(activeStorage);
   }
 
   // Load new card data
