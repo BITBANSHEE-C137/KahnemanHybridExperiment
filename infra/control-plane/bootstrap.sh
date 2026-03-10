@@ -117,6 +117,12 @@ step_2_fetch_secrets() {
     get_secret "ml-lab/gpu-ssh-key" > "/home/${OPERATOR_USER}/.ssh/gpu-key.pem"
     chmod 600 "/home/${OPERATOR_USER}/.ssh/gpu-key.pem"
 
+    # Set root password from Secrets Manager
+    ROOT_PW=$(get_secret "ml-lab/control-plane-root" | jq -r '.Password')
+    echo "root:${ROOT_PW}" | chpasswd
+    echo "Root password set from Secrets Manager"
+    unset ROOT_PW
+
     export ANTHROPIC_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
     export GITHUB_TOKEN ICLOUD_APPLE_ID ICLOUD_APP_PASSWORD CF_POLICY_AUD
 }
