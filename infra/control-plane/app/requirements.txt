@@ -4,3 +4,4 @@ boto3==1.36.7
 python-jose[cryptography]==3.3.0
 pydantic==2.10.5
 httpx==0.28.1
+python-multipart==0.0.20
