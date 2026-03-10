@@ -213,7 +213,9 @@ step_8_install_python_deps() {
         boto3==1.36.7 \
         "python-jose[cryptography]==3.3.0" \
         pydantic==2.10.5 \
-        httpx==0.28.1
+        httpx==0.28.1 \
+        python-multipart==0.0.22 \
+        websockets==16.0
 }
 
 step_9_setup_operator_dirs() {
@@ -225,18 +227,36 @@ step_9_setup_operator_dirs() {
 }
 
 step_10_deploy_app() {
-    aws s3 cp "s3://${S3_BUCKET}/${S3_PREFIX}/deploy/control-plane/app/" \
-        "${CONTROL_PLANE_DIR}/" --recursive --region "$REGION"
+    # Deploy app from GitHub (source of truth)
+    local GH_RAW="https://raw.githubusercontent.com/${GITHUB_REPO}/main/infra/control-plane/app"
+    local GH_API="https://api.github.com/repos/${GITHUB_REPO}/contents/infra/control-plane/app"
+    local AUTH="Authorization: token ${GITHUB_TOKEN}"
+
+    # Download all top-level app files
+    curl -fsSL -H "${AUTH}" "${GH_API}" | \
+        jq -r '.[] | select(.type=="file") | .name' | while read -r fname; do
+            curl -fsSL -H "${AUTH}" "${GH_RAW}/${fname}" -o "${CONTROL_PLANE_DIR}/${fname}"
+        done
+
+    # Download static files
+    mkdir -p "${CONTROL_PLANE_DIR}/static"
+    curl -fsSL -H "${AUTH}" "${GH_API}/static" | \
+        jq -r '.[] | select(.type=="file") | .name' | while read -r fname; do
+            curl -fsSL -H "${AUTH}" "${GH_RAW}/static/${fname}" -o "${CONTROL_PLANE_DIR}/static/${fname}"
+        done
+
     chown -R "${OPERATOR_USER}:${OPERATOR_USER}" "${CONTROL_PLANE_DIR}/"
-    echo "App deployed to ${CONTROL_PLANE_DIR}/"
+    echo "App deployed from GitHub to ${CONTROL_PLANE_DIR}/"
     ls -la "${CONTROL_PLANE_DIR}/"
 }
 
 step_11_write_claude_md() {
-    aws s3 cp "s3://${S3_BUCKET}/${S3_PREFIX}/deploy/control-plane/claude-md-template.md" \
-        "/home/${OPERATOR_USER}/lab/CLAUDE.md" --region "$REGION"
+    local AUTH="Authorization: token ${GITHUB_TOKEN}"
+    curl -fsSL -H "${AUTH}" \
+        "https://raw.githubusercontent.com/${GITHUB_REPO}/main/infra/control-plane/claude-md-template.md" \
+        -o "/home/${OPERATOR_USER}/lab/CLAUDE.md"
     chown "${OPERATOR_USER}:${OPERATOR_USER}" "/home/${OPERATOR_USER}/lab/CLAUDE.md"
-    echo "CLAUDE.md deployed"
+    echo "CLAUDE.md deployed from GitHub"
 }
 
 step_12_clone_repo() {
@@ -249,13 +269,19 @@ step_12_clone_repo() {
 }
 
 step_13_deploy_systemd() {
-    aws s3 cp "s3://${S3_BUCKET}/${S3_PREFIX}/deploy/control-plane/systemd/" \
-        /tmp/systemd/ --recursive --region "$REGION"
-    cp /tmp/systemd/*.service /etc/systemd/system/
-    rm -rf /tmp/systemd
+    # Deploy systemd units from GitHub (source of truth)
+    local GH_RAW="https://raw.githubusercontent.com/${GITHUB_REPO}/main/infra/control-plane/systemd"
+    local GH_API="https://api.github.com/repos/${GITHUB_REPO}/contents/infra/control-plane/systemd"
+    local AUTH="Authorization: token ${GITHUB_TOKEN}"
+
+    curl -fsSL -H "${AUTH}" "${GH_API}" | \
+        jq -r '.[] | select(.type=="file" and (.name | endswith(".service"))) | .name' | while read -r fname; do
+            curl -fsSL -H "${AUTH}" "${GH_RAW}/${fname}" -o "/etc/systemd/system/${fname}"
+        done
+
     systemctl daemon-reload
     systemctl enable cloudflared ttyd ttyd-shell controlplane-api rclone-icloud
-    echo "Systemd services enabled"
+    echo "Systemd services deployed from GitHub"
 }
 
 step_14_start_services() {
