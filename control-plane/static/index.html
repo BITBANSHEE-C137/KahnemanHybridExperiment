@@ -171,41 +171,37 @@ input { font-family: var(--font-ui); }
   left: 0; right: 0; bottom: 0;
   z-index: 10;
   display: flex;
-  padding: 64px 80px;
-  gap: 32px;
+  padding: 32px 48px;
+  gap: 24px;
   flex-direction: column;
+  overflow-y: auto;
 }
-#cards-row {
+#top-row {
   display: flex;
-  gap: 32px;
+  gap: 24px;
   flex: 1;
-  min-height: 0;
-}
-#left-col {
-  flex: 60 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  min-height: 0;
-  min-width: 0;
+  min-height: 380px;
 }
 #right-col {
-  flex: 40 0 0;
+  flex: 2 0 0;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 24px;
   min-width: 0;
 }
 #bottom-row {
   display: flex;
-  gap: 32px;
-  height: 200px;
+  gap: 24px;
+  height: 220px;
+  flex-shrink: 0;
+}
+#storage-row {
   flex-shrink: 0;
 }
 
 /* ===== 5. Terminal Card ===== */
 #terminal-card {
-  flex: 1;
+  flex: 3 0 0;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -220,7 +216,7 @@ input { font-family: var(--font-ui); }
 }
 .card-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--glass-border);
   flex-shrink: 0;
 }
@@ -304,9 +300,9 @@ input { font-family: var(--font-ui); }
 
 /* ===== 6. Storage Card ===== */
 #storage-card {
-  flex: 1;
   display: flex;
   flex-direction: column;
+  height: 160px;
   background: var(--glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -315,6 +311,9 @@ input { font-family: var(--font-ui); }
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
   overflow: hidden;
   transition: all var(--transition);
+}
+#storage-card.browsing {
+  height: 320px;
 }
 #storage-body {
   flex: 1;
@@ -336,14 +335,14 @@ input { font-family: var(--font-ui); }
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
+  padding: 16px 24px;
 }
 .tiles-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
   width: 100%;
-  max-width: 360px;
+  max-width: 600px;
 }
 .storage-tile {
   display: flex;
@@ -558,7 +557,7 @@ input { font-family: var(--font-ui); }
 
 /* ===== 8. Notes Card ===== */
 #notes-card {
-  flex: 1;
+  flex: 3;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -616,7 +615,7 @@ input { font-family: var(--font-ui); }
 
 /* ===== 9. Tasks Card ===== */
 #tasks-card {
-  flex: 1;
+  flex: 3;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -696,7 +695,7 @@ input { font-family: var(--font-ui); }
 
 /* ===== 10. Profile Card ===== */
 #profile-card {
-  flex: 1;
+  flex: 1.5;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -909,45 +908,49 @@ input { font-family: var(--font-ui); }
 /* ===== 12. Fullscreen / Maximized States ===== */
 body.terminal-maximized #right-col,
 body.terminal-maximized #bottom-row,
+body.terminal-maximized #storage-row,
 body.terminal-maximized #elevation-card {
   display: none !important;
 }
-body.terminal-maximized #cards-row {
-  flex: 1;
-}
-body.terminal-maximized #left-col {
+body.terminal-maximized #top-row {
   flex: 1;
 }
 
 /* ===== 13. Mobile Responsive ===== */
 @media (max-width: 767px) {
   #header-left .brand-text { display: none; }
-  #cards-row {
+  #main {
+    padding: 12px;
+    gap: 12px;
+    overflow-y: auto;
+  }
+  #top-row {
     flex-direction: column;
-  }
-  #left-col {
-    flex: none;
-    min-height: 0;
-  }
-  #right-col {
-    flex: none;
-    flex-direction: row;
-    height: 30vh;
-  }
-  #bottom-row {
-    height: auto;
-    flex-direction: column;
-  }
-  #bottom-row > div {
-    min-height: 120px;
+    min-height: auto;
   }
   #terminal-card {
     flex: none;
     height: 50vh;
   }
+  #right-col {
+    flex: none;
+    flex-direction: row;
+    height: 30vh;
+    gap: 12px;
+  }
   #shell-card { flex: 1; }
-  #storage-card { flex: 1; }
   #sessions-card { flex: 1; }
+  #bottom-row {
+    height: auto;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #bottom-row > div {
+    min-height: 120px;
+  }
+  #storage-card {
+    height: 140px;
+  }
   .tiles-grid {
     grid-template-columns: repeat(3, 1fr);
     max-width: 100%;
@@ -957,15 +960,11 @@ body.terminal-maximized #left-col {
     padding: 12px;
   }
   .storage-tile {
-    padding: 16px 8px;
+    padding: 12px 8px;
   }
   .tile-icon { font-size: 24px; }
   #terminal-card.maximized {
     height: auto;
-  }
-  #main {
-    padding: 12px;
-    gap: 10px;
   }
 }
 </style>
@@ -1002,9 +1001,8 @@ body.terminal-maximized #left-col {
 
 <!-- Main Content -->
 <div id="main">
-  <div id="cards-row">
-    <!-- Left Column -->
-    <div id="left-col">
+  <!-- Top Row: Claude Code + Sessions/Shell -->
+  <div id="top-row">
     <!-- Claude Code Card -->
     <div id="terminal-card">
       <div class="card-header">
@@ -1026,92 +1024,93 @@ body.terminal-maximized #left-col {
       </div>
     </div>
 
-    <!-- Bottom Row: Notes + Tasks + Profile -->
-    <div id="bottom-row">
-
-      <!-- Notes Card -->
-      <div id="notes-card">
-        <div class="card-header">
-          <div class="card-title"><span>Notes</span></div>
-          <div class="card-actions">
-            <button class="card-btn" onclick="createNote()" title="New note">&#43;</button>
-          </div>
-        </div>
-        <div id="notes-body">
-          <div class="note-editor" id="note-editor">
-            <input class="note-editor-title" id="note-edit-title" placeholder="Title" onchange="saveCurrentNote()">
-            <textarea class="note-editor-content" id="note-edit-content" placeholder="Write a note..." onchange="saveCurrentNote()"></textarea>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tasks Card -->
-      <div id="tasks-card">
-        <div class="card-header">
-          <div class="card-title"><span>Tasks</span></div>
-        </div>
-        <div class="task-input-row">
-          <input class="task-input" id="task-input" placeholder="Add a task..." onkeydown="if(event.key==='Enter')addTask()">
-        </div>
-        <div id="tasks-body"></div>
-      </div>
-
-      <!-- Profile Card -->
-      <div id="profile-card">
-        <div class="card-header">
-          <div class="card-title"><span>Profile</span></div>
-        </div>
-        <div id="profile-body">
-          <div class="profile-avatar" id="profile-avatar">CO</div>
-          <div class="profile-name" id="profile-name">claude-operator</div>
-          <div class="profile-meta" id="profile-meta">Loading...</div>
-          <button class="profile-logout" onclick="window.location.href='/cdn-cgi/access/logout'">Logout</button>
-        </div>
-      </div>
-
-    </div><!-- /bottom-row -->
-    </div><!-- /left-col -->
-
-    <!-- Right Column: Sessions + Shell + Storage -->
+    <!-- Right Column: Sessions + Shell -->
     <div id="right-col">
 
-    <!-- Claude Code Sessions Card -->
-    <div id="sessions-card">
+      <!-- Claude Code Sessions Card -->
+      <div id="sessions-card">
+        <div class="card-header">
+          <div class="card-title"><span>Sessions</span></div>
+          <div class="card-actions">
+            <button class="session-new-btn" onclick="newClaudeSession()">&#43; New</button>
+          </div>
+        </div>
+        <div id="sessions-body">
+          <div class="session-empty" id="sessions-empty">No sessions yet</div>
+        </div>
+      </div>
+
+      <!-- Shell Card -->
+      <div id="shell-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="dot" id="shell-dot"></span>
+            <span>Shell</span>
+          </div>
+        </div>
+        <div id="shell-body">
+          <div id="shell-container"></div>
+          <div id="shell-overlay">
+            <div style="font-size:16px;font-weight:600">Session ended</div>
+            <div style="font-size:13px;color:var(--dim)">Shell connection was lost.</div>
+            <button id="shell-overlay-btn" onclick="restartShell()" style="padding:10px 24px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.3);border-radius:10px;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer">New Session</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /right-col -->
+  </div><!-- /top-row -->
+
+  <!-- Middle Row: Notes + Tasks + Profile -->
+  <div id="bottom-row">
+
+    <!-- Notes Card -->
+    <div id="notes-card">
       <div class="card-header">
-        <div class="card-title"><span>Claude Code</span></div>
+        <div class="card-title"><span>Notes</span></div>
         <div class="card-actions">
-          <button class="session-new-btn" onclick="newClaudeSession()">&#43; New</button>
+          <button class="card-btn" onclick="createNote()" title="New note">&#43;</button>
         </div>
       </div>
-      <div id="sessions-body">
-        <div class="session-empty" id="sessions-empty">No sessions yet</div>
+      <div id="notes-body">
+        <div class="note-editor" id="note-editor">
+          <input class="note-editor-title" id="note-edit-title" placeholder="Title" onchange="saveCurrentNote()">
+          <textarea class="note-editor-content" id="note-edit-content" placeholder="Write a note..." onchange="saveCurrentNote()"></textarea>
+        </div>
       </div>
     </div>
 
-    <!-- Shell Card -->
-    <div id="shell-card">
+    <!-- Tasks Card -->
+    <div id="tasks-card">
       <div class="card-header">
-        <div class="card-title">
-          <span class="dot" id="shell-dot"></span>
-          <span>Shell</span>
-        </div>
+        <div class="card-title"><span>Tasks</span></div>
       </div>
-      <div id="shell-body">
-        <div id="shell-container"></div>
-        <div id="shell-overlay">
-          <div style="font-size:16px;font-weight:600">Session ended</div>
-          <div style="font-size:13px;color:var(--dim)">Shell connection was lost.</div>
-          <button id="shell-overlay-btn" onclick="restartShell()" style="padding:10px 24px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.3);border-radius:10px;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer">New Session</button>
-        </div>
+      <div class="task-input-row">
+        <input class="task-input" id="task-input" placeholder="Add a task..." onkeydown="if(event.key==='Enter')addTask()">
+      </div>
+      <div id="tasks-body"></div>
+    </div>
+
+    <!-- Profile Card -->
+    <div id="profile-card">
+      <div class="card-header">
+        <div class="card-title"><span>Profile</span></div>
+      </div>
+      <div id="profile-body">
+        <div class="profile-avatar" id="profile-avatar">CO</div>
+        <div class="profile-name" id="profile-name">claude-operator</div>
+        <div class="profile-meta" id="profile-meta">Loading...</div>
+        <button class="profile-logout" onclick="window.location.href='/cdn-cgi/access/logout'">Logout</button>
       </div>
     </div>
 
-    <!-- Storage Card -->
+  </div><!-- /bottom-row -->
+
+  <!-- Storage Row -->
+  <div id="storage-row">
     <div id="storage-card">
       <div class="card-header">
-        <div class="card-title">
-          <span>Storage</span>
-        </div>
+        <div class="card-title"><span>Storage</span></div>
       </div>
       <div id="storage-body">
         <div class="storage-inner" id="storage-inner">
@@ -1155,8 +1154,7 @@ body.terminal-maximized #left-col {
         </div>
       </div>
     </div>
-    </div><!-- /right-col -->
-  </div>
+  </div><!-- /storage-row -->
 
   <!-- Elevation Card -->
   <div id="elevation-card">
@@ -1717,6 +1715,7 @@ function openStorageBrowser(type) {
   activeStorage = type;
   saveState();
   document.getElementById('storage-inner').classList.add('browsing');
+  document.getElementById('storage-card').classList.add('browsing');
 
   var footer = document.getElementById('browser-footer');
   if (type === 's3') {
@@ -1732,6 +1731,7 @@ function closeBrowser() {
   activeStorage = null;
   saveState();
   document.getElementById('storage-inner').classList.remove('browsing');
+  document.getElementById('storage-card').classList.remove('browsing');
 }
 
 /* ---- Local File Browser ---- */
