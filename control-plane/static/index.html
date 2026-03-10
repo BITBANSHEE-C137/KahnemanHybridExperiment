@@ -2,953 +2,1598 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>BitBanshee Lab</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BitBanshee's Brain — ML Lab</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0f1117;
-  --surface:#1a1d27;
-  --border:#2a2d3a;
-  --text:#e0e0e0;
-  --dim:#888;
-  --accent:#60a5fa;
-  --green:#34d399;
-  --yellow:#fbbf24;
-  --red:#f87171;
-  --radius:6px;
+/* ===== 1. Reset + Variables ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0c0e14;
+  --glass: rgba(20,22,30,0.85);
+  --glass-border: rgba(255,255,255,0.08);
+  --glass-border-hover: rgba(255,255,255,0.15);
+  --accent: #60a5fa;
+  --green: #34d399;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --text: #e8eaed;
+  --dim: #6b7280;
+  --font-ui: 'SF Pro Display','SF Pro',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --font-mono: 'SF Mono','Fira Code','Consolas',monospace;
+  --header-h: 48px;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --transition: 0.3s ease;
 }
-html,body{
-  height:100%;
-  font-family:'SF Mono','Fira Code','Consolas',monospace;
-  background:var(--bg);
-  color:var(--text);
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  color: var(--text);
+  background: var(--bg);
 }
-button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
-a{color:var(--accent);text-decoration:none}
+a { color: var(--accent); text-decoration: none; }
+button { font-family: var(--font-ui); cursor: pointer; border: none; background: none; color: var(--text); }
+input { font-family: var(--font-ui); }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
 
-body{
-  background-image:url('https://bitbanshee.com/hero.png');
-  background-size:cover;
-  background-position:center top;
-  background-repeat:no-repeat;
-  background-attachment:fixed;
+/* ===== 2. Background + Overlay ===== */
+#bg-layer {
+  position: fixed; inset: 0; z-index: 0;
+  background: url('https://bitbanshee.com/hero.png') center/cover no-repeat;
 }
-body::before{
-  content:'';
-  position:fixed;
-  inset:0;
-  background:rgba(15,17,23,0.7);
-  z-index:0;
-}
-
-.app{
-  position:relative;
-  z-index:1;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  height:100vh;
-  overflow:hidden;
-  padding:24px;
+#bg-overlay {
+  position: fixed; inset: 0; z-index: 1;
+  background: rgba(12,14,20,0.82);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
 }
 
-.term-window{
-  display:flex;
-  flex-direction:column;
-  width:740px;
-  max-width:100%;
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:10px;
-  overflow:hidden;
-  box-shadow:0 20px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(96,165,250,.06);
+/* ===== 3. Header Bar ===== */
+#header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--header-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(20,22,30,0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--glass-border);
+}
+#header-left {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 600; letter-spacing: -0.2px;
+  white-space: nowrap;
+}
+#header-left .brain-icon { font-size: 18px; }
+#header-left .brand-brain {
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 6px rgba(96,165,250,0.4));
+}
+#header-center { position: relative; }
+#project-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 14px 5px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  font-size: 13px; font-weight: 500;
+  color: var(--text);
+  transition: background var(--transition), border-color var(--transition);
+  cursor: pointer;
+}
+#project-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--glass-border-hover); }
+#project-btn .proj-icon { font-size: 14px; }
+#project-btn .proj-name { font-weight: 600; }
+#project-btn .caret { font-size: 10px; color: var(--dim); margin-left: 2px; }
+#project-dropdown {
+  display: none; position: absolute; top: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%);
+  min-width: 280px;
+  background: var(--glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  overflow: hidden; z-index: 200;
+  animation: dropdownIn 0.2s ease;
+}
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+#project-dropdown.open { display: block; }
+.proj-option {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.proj-option:hover { background: rgba(255,255,255,0.06); }
+.proj-option.active { background: rgba(96,165,250,0.1); }
+.proj-option .po-icon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
+.proj-option .po-info { display: flex; flex-direction: column; }
+.proj-option .po-name { font-size: 13px; font-weight: 600; }
+.proj-option .po-desc { font-size: 11px; color: var(--dim); }
+
+#header-right {
+  display: flex; align-items: center; gap: 14px;
+}
+#health-indicator {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--dim);
+}
+#health-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(52,211,153,0.5);
+  transition: background var(--transition), box-shadow var(--transition);
+}
+#health-dot.bad {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(248,113,113,0.5);
+}
+.header-btn {
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: background var(--transition);
+}
+.header-btn:hover { background: rgba(255,255,255,0.08); }
+
+/* ===== 4. Main Grid Layout ===== */
+#main {
+  position: fixed;
+  top: var(--header-h);
+  left: 0; right: 0; bottom: 0;
+  z-index: 10;
+  display: flex;
+  padding: 12px;
+  gap: 12px;
+  flex-direction: column;
+}
+#cards-row {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 
-#toast{
-  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-  background:var(--surface);color:var(--text);border:1px solid var(--border);
-  padding:10px 24px;border-radius:var(--radius);font-size:.8rem;
-  opacity:0;transition:opacity .3s;z-index:9999;pointer-events:none;
+/* ===== 5. Terminal Card ===== */
+#terminal-card {
+  flex: 65 0 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  overflow: hidden;
+  transition: all var(--transition);
+  position: relative;
 }
-#toast.show{opacity:1}
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+.card-title {
+  font-size: 13px; font-weight: 600; letter-spacing: -0.1px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.card-actions { display: flex; gap: 4px; }
+.card-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: background var(--transition);
+}
+.card-btn:hover { background: rgba(255,255,255,0.08); }
+#terminal-body {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#terminal-container {
+  position: absolute; inset: 0;
+  padding: 4px;
+}
+#terminal-container .xterm { height: 100%; }
 
-/* ── Toolbar ───────────────────────────────────────────────── */
-.toolbar{
-  display:flex;align-items:center;gap:0;
-  background:var(--surface);border-bottom:1px solid var(--border);
-  min-height:36px;flex-shrink:0;
-  border-radius:10px 10px 0 0;
-}
-
-/* Project selector — left side */
-.project-selector{display:flex;align-items:stretch;flex-shrink:0;position:relative}
-.project-btn{
-  display:flex;align-items:center;gap:6px;padding:0 14px;
-  font-size:.75rem;font-weight:700;color:var(--accent);
-  cursor:pointer;min-height:36px;border-right:1px solid var(--border);
-  transition:background .15s;
-}
-.project-btn:hover{background:rgba(96,165,250,.06)}
-.project-btn .arrow{font-size:.6rem;color:var(--dim);transition:transform .15s}
-.project-selector.open .arrow{transform:rotate(180deg)}
-.project-menu{
-  display:none;position:absolute;top:100%;left:0;margin-top:1px;
-  background:var(--surface);border:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius);
-  min-width:240px;z-index:200;overflow:hidden;
-  box-shadow:0 8px 24px rgba(0,0,0,.4);
-}
-.project-selector.open .project-menu{display:block}
-.project-option{
-  display:flex;align-items:center;gap:10px;width:100%;
-  padding:10px 14px;font-size:.75rem;text-align:left;
-  min-height:40px;transition:background .1s;border-bottom:1px solid var(--border);
-}
-.project-option:last-child{border-bottom:none}
-.project-option:hover{background:rgba(96,165,250,.06)}
-.project-option.active{background:rgba(96,165,250,.1)}
-.project-option .po-icon{font-size:1rem;width:20px;text-align:center;flex-shrink:0}
-.project-option .po-info{flex:1;min-width:0}
-.project-option .po-name{font-weight:700;color:var(--text)}
-.project-option .po-desc{font-size:.65rem;color:var(--dim);margin-top:1px}
-
-/* Spacer */
-.toolbar .spacer{flex:1}
-
-/* Right side buttons */
-.toolbar-right{display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0}
-.tb-btn{
-  display:inline-flex;align-items:center;gap:4px;
-  padding:5px 10px;border-radius:var(--radius);font-size:.75rem;font-weight:600;
-  min-height:28px;transition:all .15s;
-}
-.tb-btn-ghost{color:var(--dim)}
-.tb-btn-ghost:hover{color:var(--accent)}
-.tb-btn-ghost.active{color:var(--accent);background:rgba(96,165,250,.1)}
-
-/* ── Elevation banner ──────────────────────────────────────── */
-.elevation-banner{
-  display:none;align-items:center;gap:10px;
-  padding:6px 12px;
-  background:rgba(251,191,36,.08);border-bottom:1px solid rgba(251,191,36,.25);
-  font-size:.75rem;flex-shrink:0;
-}
-.elevation-banner.visible{display:flex}
-.elevation-banner .elev-text{flex:1;color:var(--yellow)}
-.elevation-banner .elev-btn{
-  padding:4px 12px;border-radius:var(--radius);font-size:.7rem;font-weight:700;
-  min-height:26px;cursor:pointer;border:none;
-}
-.elev-approve{background:rgba(52,211,153,.25);color:var(--green)}
-.elev-approve:hover{background:rgba(52,211,153,.4)}
-.elev-deny{background:rgba(248,113,113,.2);color:var(--red)}
-.elev-deny:hover{background:rgba(248,113,113,.35)}
-
-/* ── Workspace body ────────────────────────────────────────── */
-.workspace-body{
-  display:flex;flex:1;overflow:hidden;min-height:0;
-}
-.terminal-wrapper{
-  flex:1;display:flex;flex-direction:column;min-width:0;
+/* Terminal maximized */
+#terminal-card.maximized {
+  position: fixed;
+  top: var(--header-h);
+  left: 0; right: 0; bottom: 0;
+  z-index: 50;
+  border-radius: 0;
+  border: none;
 }
 
-/* ── Terminal ──────────────────────────────────────────────── */
-.terminal-container{position:relative;overflow:hidden;cursor:text;height:602px}
-#terminal{width:100%;height:100%}
+/* ===== 6. Storage Card ===== */
+#storage-card {
+  flex: 35 0 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  overflow: hidden;
+  transition: all var(--transition);
+}
+#storage-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+.storage-inner {
+  display: flex;
+  width: 200%;
+  height: 100%;
+  transition: transform 0.3s ease;
+}
+.storage-inner.browsing {
+  transform: translateX(-50%);
+}
+.tiles-view {
+  width: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.tiles-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+}
+.storage-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: transform var(--transition), background var(--transition), border-color var(--transition), box-shadow var(--transition);
+}
+.storage-tile:hover {
+  transform: translateY(-2px);
+  background: rgba(255,255,255,0.07);
+  border-color: var(--glass-border-hover);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+.storage-tile.disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+.tile-icon { font-size: 32px; line-height: 1; }
+.tile-label { font-size: 13px; font-weight: 600; }
+.tile-sub { font-size: 11px; color: var(--dim); }
 
-/* ── File panel — hidden by default ────────────────────────── */
-.file-panel{
-  width:260px;min-width:200px;max-width:400px;
-  background:var(--surface);border-right:1px solid var(--border);
-  display:none;flex-direction:column;flex-shrink:0;overflow:hidden;
-  position:relative;
+.browser-view {
+  width: 50%;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
-.resize-handle{
-  width:4px;cursor:col-resize;background:transparent;
-  transition:background .15s;flex-shrink:0;display:none;
+.browser-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
 }
-.resize-handle:hover,.resize-handle.dragging{background:var(--accent)}
+.browser-back {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: background var(--transition);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.browser-back:hover { background: rgba(255,255,255,0.08); }
+.breadcrumb {
+  display: flex; align-items: center; gap: 2px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.breadcrumb::-webkit-scrollbar { height: 0; }
+.bc-seg {
+  color: var(--accent);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+.bc-seg:hover { background: rgba(96,165,250,0.15); }
+.bc-sep { color: var(--dim); flex-shrink: 0; margin: 0 1px; }
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background var(--transition);
+  font-size: 13px;
+  user-select: none;
+}
+.file-item:hover { background: rgba(255,255,255,0.05); }
+.file-item .fi-icon { width: 20px; text-align: center; font-size: 15px; flex-shrink: 0; }
+.file-item .fi-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item .fi-name.dir { color: var(--accent); font-weight: 500; }
+.file-item .fi-size { color: var(--dim); font-size: 11px; flex-shrink: 0; font-family: var(--font-mono); }
+.file-empty {
+  display: flex; align-items: center; justify-content: center;
+  flex: 1;
+  color: var(--dim);
+  font-size: 13px;
+  padding: 40px 20px;
+  text-align: center;
+}
+.browser-footer {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+.browser-footer-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  font-size: 12px;
+  transition: background var(--transition), border-color var(--transition);
+}
+.browser-footer-btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: var(--glass-border-hover);
+}
+.browser-footer-btn input[type="file"] { display: none; }
 
-/* Source tabs */
-.source-tabs{display:flex;border-bottom:1px solid var(--border)}
-.source-tab{
-  flex:1;padding:8px;font-size:.7rem;font-weight:700;
-  text-transform:uppercase;letter-spacing:.5px;color:var(--dim);
-  border-bottom:2px solid transparent;transition:all .15s;
-  background:none;cursor:pointer;
-}
-.source-tab:hover{color:var(--text)}
-.source-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-
-/* Breadcrumb */
-.breadcrumb{
-  padding:8px 12px;font-size:.7rem;color:var(--dim);
-  border-bottom:1px solid var(--border);white-space:nowrap;overflow-x:auto;
-}
-.breadcrumb span{cursor:pointer;color:var(--dim)}
-.breadcrumb span:hover{color:var(--accent)}
-.breadcrumb .sep{margin:0 2px;color:var(--border);cursor:default}
-.breadcrumb .sep:hover{color:var(--border)}
-.breadcrumb .current{color:var(--text);cursor:default}
-.breadcrumb .current:hover{color:var(--text)}
-
-/* File tree */
-.file-tree{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0}
-.file-entry{
-  display:flex;align-items:center;gap:8px;padding:5px 12px;
-  font-size:.75rem;cursor:pointer;transition:background .1s;position:relative;
-}
-.file-entry:hover{background:rgba(96,165,250,.06)}
-.file-entry .fe-icon{width:16px;text-align:center;flex-shrink:0;font-size:.8rem}
-.file-entry .fe-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.file-entry .fe-size{font-size:.6rem;color:var(--dim);flex-shrink:0}
-.file-entry .fe-dir{color:var(--accent);font-weight:600}
-.file-tree-loading{
-  display:flex;justify-content:center;padding:20px;
-  color:var(--dim);font-size:.75rem;
+/* Drop zone */
+.drop-zone-active .file-list {
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  margin: 4px 8px;
+  background: rgba(96,165,250,0.05);
 }
 
-/* Panel actions */
-.panel-actions{display:flex;gap:4px;padding:8px;border-top:1px solid var(--border)}
-.panel-action-btn{
-  flex:1;padding:6px;font-size:.7rem;font-weight:600;text-align:center;
-  background:rgba(96,165,250,.08);border:1px solid var(--border);
-  border-radius:var(--radius);color:var(--text);cursor:pointer;transition:all .15s;
+/* ===== 7. Elevation Card ===== */
+#elevation-card {
+  display: none;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(251,191,36,0.3);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  padding: 12px 16px;
+  flex-shrink: 0;
+  animation: slideDown 0.3s ease;
 }
-.panel-action-btn:hover{background:rgba(96,165,250,.15);border-color:var(--accent)}
+#elevation-card.visible { display: flex; align-items: center; gap: 12px; }
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.elev-icon { font-size: 18px; flex-shrink: 0; }
+.elev-info { flex: 1; font-size: 13px; }
+.elev-info strong { color: var(--yellow); }
+.elev-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.elev-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background var(--transition), transform var(--transition);
+}
+.elev-btn:active { transform: scale(0.96); }
+.elev-btn.approve {
+  background: rgba(52,211,153,0.15);
+  color: var(--green);
+  border: 1px solid rgba(52,211,153,0.3);
+}
+.elev-btn.approve:hover { background: rgba(52,211,153,0.25); }
+.elev-btn.deny {
+  background: rgba(248,113,113,0.15);
+  color: var(--red);
+  border: 1px solid rgba(248,113,113,0.3);
+}
+.elev-btn.deny:hover { background: rgba(248,113,113,0.25); }
 
-/* Upload zone */
-.upload-zone{
-  display:none;position:absolute;inset:0;
-  background:rgba(96,165,250,.1);border:2px dashed var(--accent);
-  color:var(--accent);font-size:.9rem;font-weight:700;
-  justify-content:center;align-items:center;z-index:50;
+/* ===== 8. Context Menu ===== */
+#ctx-menu {
+  display: none;
+  position: fixed;
+  z-index: 300;
+  min-width: 180px;
+  background: var(--glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  padding: 4px 0;
+  animation: ctxIn 0.15s ease;
 }
-.file-panel.drag-over .upload-zone{display:flex}
+#ctx-menu.open { display: block; }
+@keyframes ctxIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.ctx-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.ctx-item:hover { background: rgba(255,255,255,0.06); }
+.ctx-item .ctx-icon { width: 18px; text-align: center; font-size: 13px; }
+.ctx-item.danger { color: var(--red); }
+.ctx-sep { height: 1px; background: var(--glass-border); margin: 4px 0; }
 
-/* Context menu */
-.context-menu{
-  position:fixed;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:4px 0;min-width:160px;z-index:300;
-  box-shadow:0 8px 24px rgba(0,0,0,.5);
+/* ===== 9. Toast ===== */
+#toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
 }
-.context-menu button{
-  display:block;width:100%;text-align:left;padding:8px 14px;
-  font-size:.75rem;transition:background .1s;background:none;border:none;
-  color:var(--text);cursor:pointer;font-family:inherit;
+.toast {
+  padding: 10px 18px;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  animation: toastIn 0.25s ease;
+  pointer-events: auto;
 }
-.context-menu button:hover{background:rgba(96,165,250,.08)}
-.context-menu .cm-sep{height:1px;background:var(--border);margin:4px 0}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.toast.out { animation: toastOut 0.2s ease forwards; }
+@keyframes toastOut {
+  to { opacity: 0; transform: translateY(10px); }
+}
 
-/* ── Panel OPEN — workspace mode ───────────────────────────── */
-.app.panel-open{padding:0}
-.app.panel-open .term-window{
-  width:100%;max-width:100%;height:100%;border-radius:0;border:none;
+/* ===== 10. Terminal Reconnection Overlay ===== */
+#term-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+  background: rgba(15,17,23,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
 }
-.app.panel-open .toolbar{border-radius:0}
-.app.panel-open .footer{border-radius:0}
-.app.panel-open .file-panel{display:flex;flex-direction:column}
-.app.panel-open .resize-handle{display:block}
-.app.panel-open .terminal-container{height:auto;flex:1}
-
-/* ── Footer ────────────────────────────────────────────────── */
-.footer{
-  display:flex;align-items:center;gap:8px;
-  padding:3px 12px;
-  background:var(--surface);border-top:1px solid var(--border);
-  font-size:.65rem;color:var(--dim);
-  min-height:24px;flex-shrink:0;
-  border-radius:0 0 10px 10px;
+#term-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
-.footer .spacer{flex:1}
-.health-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.brand{font-weight:700;letter-spacing:.5px;color:var(--dim)}
-
-/* ── Fullscreen ────────────────────────────────────────────── */
-.app.fullscreen{padding:0}
-.app.fullscreen .term-window{
-  width:100%;max-width:100%;height:100%;border-radius:0;border:none;
+#term-overlay-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
 }
-.app.fullscreen .toolbar{border-radius:0}
-.app.fullscreen .footer{border-radius:0}
-.app.fullscreen .terminal-container{flex:1;height:auto}
+#term-overlay-sub {
+  font-size: 13px;
+  color: var(--dim);
+}
+#term-overlay-btn {
+  padding: 10px 24px;
+  background: rgba(96,165,250,0.15);
+  border: 1px solid rgba(96,165,250,0.3);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+}
+#term-overlay-btn:hover { background: rgba(96,165,250,0.25); }
+#term-overlay-btn:active { transform: scale(0.96); }
 
-@media(max-width:600px){
-  .app{padding:8px}
-  .term-window{width:100%}
-  .tb-btn{padding:4px 8px;font-size:.7rem}
-  .toolbar-right .hide-mobile{display:none}
-  .project-btn{padding:0 10px;font-size:.7rem}
-  .file-panel{display:none !important}
-  .resize-handle{display:none !important}
+/* ===== 11. Animations ===== */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.loading { animation: pulse 1.5s ease infinite; }
+
+/* ===== 12. Fullscreen / Maximized States ===== */
+body.terminal-maximized #storage-card,
+body.terminal-maximized #elevation-card {
+  display: none !important;
+}
+body.terminal-maximized #cards-row {
+  flex: 1;
+}
+
+/* ===== 13. Mobile Responsive ===== */
+@media (max-width: 767px) {
+  #header-left .brand-text { display: none; }
+  #header-left .brain-icon { display: none; }
+  #cards-row {
+    flex-direction: column;
+  }
+  #terminal-card {
+    flex: none;
+    height: 70vh;
+  }
+  #storage-card {
+    flex: none;
+    height: 30vh;
+  }
+  .tiles-grid {
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 100%;
+  }
+  .tiles-view {
+    align-items: flex-start;
+    padding: 12px;
+  }
+  .storage-tile {
+    padding: 16px 8px;
+  }
+  .tile-icon { font-size: 24px; }
+  #terminal-card.maximized {
+    height: auto;
+  }
+  #main {
+    padding: 8px;
+    gap: 8px;
+  }
 }
 </style>
 </head>
 <body>
-<div class="app" id="app">
-  <div class="term-window">
 
-    <div class="toolbar">
-      <!-- Project selector -->
-      <div class="project-selector" id="project-selector">
-        <div class="project-btn" id="project-btn">
-          <span id="current-project">ml-lab</span>
-          <span class="arrow">&#9660;</span>
-        </div>
-        <div class="project-menu" id="project-menu">
-          <button class="project-option active" data-project="ml-lab" data-path="/home/claude-operator/projects/ml-lab">
-            <span class="po-icon">&#9881;</span>
-            <span class="po-info">
-              <div class="po-name">ml-lab</div>
-              <div class="po-desc">Dual-process language model</div>
-            </span>
-          </button>
-          <button class="project-option" data-project="bitbanshee" data-path="/home/claude-operator/projects/bitbanshee">
-            <span class="po-icon">&#9889;</span>
-            <span class="po-info">
-              <div class="po-name">bitbanshee</div>
-              <div class="po-desc">Landing page &amp; brand</div>
-            </span>
-          </button>
-          <button class="project-option" data-project="deadcatsociety" data-path="/home/claude-operator/projects/deadcatsociety">
-            <span class="po-icon">&#128049;</span>
-            <span class="po-info">
-              <div class="po-name">deadcatsociety</div>
-              <div class="po-desc">Community platform</div>
-            </span>
-          </button>
-          <button class="project-option" data-project="shell" data-path="/home/claude-operator">
-            <span class="po-icon">&#62;</span>
-            <span class="po-info">
-              <div class="po-name">shell</div>
-              <div class="po-desc">Plain terminal</div>
-            </span>
-          </button>
-        </div>
-      </div>
+<!-- Background -->
+<div id="bg-layer"></div>
+<div id="bg-overlay"></div>
 
-      <div class="spacer"></div>
-
-      <div class="toolbar-right">
-        <button class="tb-btn tb-btn-ghost" id="btn-files" title="File Browser (Ctrl+Shift+E)">&#128193;</button>
-        <button class="tb-btn tb-btn-ghost" id="btn-fullscreen" title="Fullscreen (Ctrl+Shift+F)">&#x26F6;</button>
-        <a href="/cdn-cgi/access/logout" class="tb-btn tb-btn-ghost hide-mobile" title="Logout">Logout</a>
-      </div>
+<!-- Header -->
+<header id="header">
+  <div id="header-left">
+    <span class="brain-icon">&#129504;</span>
+    <span class="brand-text">BitBanshee's <span class="brand-brain">Brain</span></span>
+  </div>
+  <div id="header-center">
+    <button id="project-btn" onclick="toggleProjectDropdown()">
+      <span class="proj-icon" id="proj-btn-icon">&#9881;&#65039;</span>
+      <span class="proj-name" id="proj-btn-name">ml-lab</span>
+      <span class="caret">&#9660;</span>
+    </button>
+    <div id="project-dropdown"></div>
+  </div>
+  <div id="header-right">
+    <div id="health-indicator">
+      <div id="health-dot"></div>
+      <span id="health-text">ok</span>
     </div>
+    <button class="header-btn" onclick="togglePageFullscreen()" title="Fullscreen">&#x26F6;</button>
+    <a class="header-btn" href="https://bitbanshee.com" target="_blank" rel="noopener" title="bitbanshee.com">&#8599;</a>
+  </div>
+</header>
 
-    <div class="elevation-banner" id="elevation-banner">
-      <span class="elev-text" id="elev-text"></span>
-      <button class="elev-btn elev-approve" id="elev-approve">Approve</button>
-      <button class="elev-btn elev-deny" id="elev-deny">Deny</button>
-    </div>
-
-    <div class="workspace-body">
-      <div class="file-panel" id="file-panel">
-        <div class="source-tabs">
-          <button class="source-tab active" data-source="local">Local</button>
-          <button class="source-tab" data-source="s3">S3</button>
+<!-- Main Content -->
+<div id="main">
+  <div id="cards-row">
+    <!-- Terminal Card -->
+    <div id="terminal-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="dot" id="term-dot"></span>
+          <span>Terminal</span>
         </div>
-        <div class="breadcrumb" id="breadcrumb"></div>
-        <div class="file-tree" id="file-tree"></div>
-        <div class="panel-actions">
-          <label class="panel-action-btn" id="upload-btn">
-            Upload
-            <input type="file" id="upload-input" style="display:none" multiple>
-          </label>
-          <button class="panel-action-btn" id="mkdir-btn">New Folder</button>
+        <div class="card-actions">
+          <button class="card-btn" onclick="toggleTerminalMaximized()" title="Maximize / Restore">&#x26F6;</button>
         </div>
-        <div class="upload-zone" id="upload-zone">Drop files here</div>
       </div>
-      <div class="resize-handle" id="resize-handle"></div>
-      <div class="terminal-wrapper">
-        <div class="terminal-container" id="terminal-container">
-          <div id="terminal"></div>
+      <div id="terminal-body">
+        <div id="terminal-container"></div>
+        <div id="term-overlay">
+          <div id="term-overlay-text">Session ended</div>
+          <div id="term-overlay-sub">The terminal connection was lost.</div>
+          <button id="term-overlay-btn" onclick="restartTerminal()">New Session</button>
         </div>
       </div>
     </div>
 
-    <div class="footer">
-      <span class="health-dot" id="health-dot"></span>
-      <span id="health-label">connecting</span>
-      <span class="spacer"></span>
-      <span class="brand">BitBanshee</span>
+    <!-- Storage Card -->
+    <div id="storage-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span>Storage</span>
+        </div>
+      </div>
+      <div id="storage-body">
+        <div class="storage-inner" id="storage-inner">
+          <!-- Tiles View -->
+          <div class="tiles-view">
+            <div class="tiles-grid">
+              <div class="storage-tile" onclick="openStorageBrowser('local')">
+                <div class="tile-icon">&#128193;</div>
+                <div class="tile-label">Local Files</div>
+                <div class="tile-sub">~/projects</div>
+              </div>
+              <div class="storage-tile" onclick="openStorageBrowser('s3')">
+                <div class="tile-icon">&#9729;&#65039;</div>
+                <div class="tile-label">Amazon S3</div>
+                <div class="tile-sub">ml-lab-004507070771</div>
+              </div>
+              <div class="storage-tile disabled">
+                <div class="tile-icon">&#9729;</div>
+                <div class="tile-label">iCloud Drive</div>
+                <div class="tile-sub">Coming soon</div>
+              </div>
+            </div>
+          </div>
+          <!-- Browser View -->
+          <div class="browser-view" id="browser-view">
+            <div class="browser-header">
+              <button class="browser-back" onclick="closeBrowser()" title="Back to storage">&#8592;</button>
+              <div class="breadcrumb" id="breadcrumb"></div>
+            </div>
+            <div class="file-list" id="file-list"></div>
+            <div class="browser-footer" id="browser-footer">
+              <button class="browser-footer-btn" onclick="triggerUpload()">
+                <span>&#8593;</span> Upload
+                <input type="file" id="upload-input" multiple onchange="handleUpload(this.files)">
+              </button>
+              <button class="browser-footer-btn" onclick="promptMkdir()">
+                <span>&#43;</span> New Folder
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 
+  <!-- Elevation Card -->
+  <div id="elevation-card">
+    <div class="elev-icon">&#9888;&#65039;</div>
+    <div class="elev-info" id="elev-info"></div>
+    <div class="elev-actions" id="elev-actions"></div>
   </div>
 </div>
-<div id="toast"></div>
 
+<!-- Context Menu -->
+<div id="ctx-menu"></div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- CDN Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+
 <script>
-/* ── Helpers ───────────────────────────────────────────────── */
-function escHtml(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
-function showToast(m,dur){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._tid);t._tid=setTimeout(function(){t.classList.remove('show')},dur||2500)}
-async function apiFetch(path,opts){try{opts=opts||{};opts.credentials='include';var r=await fetch(path,opts);if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}catch(e){console.error('apiFetch:',path,e);return null}}
+/* ========================================
+   Global State
+   ======================================== */
+var currentProject = 'ml-lab';
+var terminalMaximized = localStorage.getItem('terminalMaximized') === 'true';
+var activeStorage = localStorage.getItem('activeStorage') || null;
+var localPath = localStorage.getItem('localPath') || '/home/claude-operator/projects';
+var s3Prefix = localStorage.getItem('s3Prefix') || '';
+var ws = null;
+var wsTimer = null;
+var wsRetries = 0;
+var maxRetries = 3;
+var term = null;
+var fitAddon = null;
+var healthTimer = null;
+var elevTimer = null;
+var ctxTarget = null;
+var dragCounter = 0;
 
-/* ── Terminal ──────────────────────────────────────────────── */
-var term=new Terminal({
-  cursorBlink:true,
-  fontSize:14,
-  fontFamily:"'SF Mono','Fira Code','Consolas',monospace",
-  theme:{
-    background:'#0f1117',
-    foreground:'#e0e0e0',
-    cursor:'#60a5fa',
-    selectionBackground:'rgba(96,165,250,0.25)',
-    black:'#1a1d27',
-    red:'#f87171',
-    green:'#34d399',
-    yellow:'#fbbf24',
-    blue:'#60a5fa',
-    magenta:'#c084fc',
-    cyan:'#22d3ee',
-    white:'#e0e0e0',
-    brightBlack:'#4b5563',
-    brightRed:'#fca5a5',
-    brightGreen:'#6ee7b7',
-    brightYellow:'#fde68a',
-    brightBlue:'#93bbfd',
-    brightMagenta:'#d8b4fe',
-    brightCyan:'#67e8f9',
-    brightWhite:'#f9fafb'
-  },
-  allowProposedApi:true
-});
-var fitAddon=new FitAddon.FitAddon(),webLinksAddon=new WebLinksAddon.WebLinksAddon();
-term.loadAddon(fitAddon);term.loadAddon(webLinksAddon);
+var S3_BUCKET = 'ml-lab-004507070771';
 
-var ws=null,wsTimer=null;
+var projects = [
+  { id: 'ml-lab', path: '/home/claude-operator/projects/ml-lab', desc: 'Dual-process language model', icon: '\u2699\uFE0F' },
+  { id: 'bitbanshee', path: '/home/claude-operator/projects/bitbanshee', desc: 'Landing page & brand', icon: '\u26A1' },
+  { id: 'deadcatsociety', path: '/home/claude-operator/projects/deadcatsociety', desc: 'Community platform', icon: '\uD83D\uDC31' },
+  { id: 'shell', path: '/home/claude-operator', desc: 'Plain terminal', icon: '>' }
+];
 
-function connectTerminal(){
-  var proto=location.protocol==='https:'?'wss:':'ws:';
-  ws=new WebSocket(proto+'//'+location.host+'/terminal/ws',['tty']);
-  ws.binaryType='arraybuffer';
-  ws.onopen=function(){
-    fitAddon.fit();
-    var initMsg=JSON.stringify({AuthToken:'',columns:term.cols,rows:term.rows});
-    ws.send(new TextEncoder().encode(initMsg));
-    term.focus();
+/* ========================================
+   Utility Functions
+   ======================================== */
+function escHtml(s) {
+  var d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+function showToast(m, dur) {
+  dur = dur || 3000;
+  var container = document.getElementById('toast-container');
+  var el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = m;
+  container.appendChild(el);
+  setTimeout(function() {
+    el.classList.add('out');
+    setTimeout(function() { el.remove(); }, 200);
+  }, dur);
+}
+
+async function apiFetch(path, opts) {
+  opts = opts || {};
+  try {
+    var resp = await fetch(path, opts);
+    if (!resp.ok) {
+      var text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    var ct = resp.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      return await resp.json();
+    }
+    return resp;
+  } catch (e) {
+    showToast('Error: ' + e.message, 4000);
+    throw e;
+  }
+}
+
+function formatSize(bytes) {
+  if (bytes == null || bytes === '') return '';
+  bytes = Number(bytes);
+  if (isNaN(bytes)) return '';
+  if (bytes === 0) return '0 B';
+  var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var i = Math.floor(Math.log(bytes) / Math.log(1024));
+  if (i >= units.length) i = units.length - 1;
+  var val = bytes / Math.pow(1024, i);
+  return val.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+}
+
+function getFileIcon(name) {
+  if (!name) return '\uD83D\uDCC4';
+  var ext = name.split('.').pop().toLowerCase();
+  var map = {
+    py: '\uD83D\uDC0D', js: '\uD83D\uDFE8', ts: '\uD83D\uDD35', jsx: '\u269B\uFE0F', tsx: '\u269B\uFE0F',
+    json: '\uD83D\uDCCB', yaml: '\uD83D\uDCCB', yml: '\uD83D\uDCCB', toml: '\uD83D\uDCCB',
+    md: '\uD83D\uDCD6', txt: '\uD83D\uDCC4', csv: '\uD83D\uDCCA',
+    html: '\uD83C\uDF10', css: '\uD83C\uDFA8', scss: '\uD83C\uDFA8',
+    sh: '\uD83D\uDCDC', bash: '\uD83D\uDCDC', zsh: '\uD83D\uDCDC',
+    png: '\uD83D\uDDBC\uFE0F', jpg: '\uD83D\uDDBC\uFE0F', jpeg: '\uD83D\uDDBC\uFE0F', gif: '\uD83D\uDDBC\uFE0F', svg: '\uD83D\uDDBC\uFE0F', webp: '\uD83D\uDDBC\uFE0F',
+    mp4: '\uD83C\uDFAC', mp3: '\uD83C\uDFB5', wav: '\uD83C\uDFB5',
+    zip: '\uD83D\uDCE6', tar: '\uD83D\uDCE6', gz: '\uD83D\uDCE6',
+    pdf: '\uD83D\uDCC5',
+    log: '\uD83D\uDCC3', cfg: '\u2699\uFE0F', ini: '\u2699\uFE0F', env: '\uD83D\uDD12',
+    pt: '\uD83E\uDDE0', pth: '\uD83E\uDDE0', ckpt: '\uD83E\uDDE0',
+    ipynb: '\uD83D\uDCD3'
+  };
+  return map[ext] || '\uD83D\uDCC4';
+}
+
+function saveState() {
+  localStorage.setItem('terminalMaximized', terminalMaximized);
+  localStorage.setItem('activeStorage', activeStorage || '');
+  localStorage.setItem('localPath', localPath);
+  localStorage.setItem('s3Prefix', s3Prefix);
+}
+
+/* ========================================
+   Header / Project Selector
+   ======================================== */
+function buildProjectDropdown() {
+  var dd = document.getElementById('project-dropdown');
+  dd.innerHTML = '';
+  projects.forEach(function(p) {
+    var div = document.createElement('div');
+    div.className = 'proj-option' + (p.id === currentProject ? ' active' : '');
+    div.innerHTML = '<div class="po-icon">' + escHtml(p.icon) + '</div>' +
+      '<div class="po-info"><div class="po-name">' + escHtml(p.id) + '</div>' +
+      '<div class="po-desc">' + escHtml(p.desc) + '</div></div>';
+    div.addEventListener('click', function() { selectProject(p.id); });
+    dd.appendChild(div);
+  });
+  var sep = document.createElement('div');
+  sep.style.height = '1px';
+  sep.style.background = 'var(--glass-border)';
+  sep.style.margin = '4px 0';
+  dd.appendChild(sep);
+  var logout = document.createElement('div');
+  logout.className = 'proj-option';
+  logout.innerHTML = '<div class="po-icon">\uD83D\uDEAA</div>' +
+    '<div class="po-info"><div class="po-name" style="color:var(--red)">Logout</div>' +
+    '<div class="po-desc">Sign out of Cloudflare Access</div></div>';
+  logout.addEventListener('click', function() { window.location.href = '/cdn-cgi/access/logout'; });
+  dd.appendChild(logout);
+}
+
+function toggleProjectDropdown() {
+  var dd = document.getElementById('project-dropdown');
+  dd.classList.toggle('open');
+}
+
+function closeDropdowns() {
+  document.getElementById('project-dropdown').classList.remove('open');
+  closeContextMenu();
+}
+
+function selectProject(id) {
+  var proj = projects.find(function(p) { return p.id === id; });
+  if (!proj) return;
+  currentProject = id;
+  document.getElementById('proj-btn-icon').textContent = proj.icon;
+  document.getElementById('proj-btn-name').textContent = proj.id;
+  closeDropdowns();
+  buildProjectDropdown();
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(new Uint8Array([0x30, 0x03]));
+    setTimeout(function() {
+      var cmd;
+      if (id === 'shell') {
+        cmd = 'cd ' + proj.path + '\n';
+      } else {
+        cmd = 'cd ' + proj.path + ' && claude\n';
+      }
+      var enc = new TextEncoder().encode(cmd);
+      var buf = new Uint8Array(enc.length + 1);
+      buf[0] = 0x30;
+      buf.set(enc, 1);
+      ws.send(buf);
+    }, 200);
+    showToast(id === 'shell' ? 'Switched to shell' : 'Loading ' + id + '...');
+  }
+
+  if (activeStorage === 'local') {
+    localPath = proj.path === '/home/claude-operator' ? '/home/claude-operator/projects' : proj.path;
+    loadLocalDir(localPath);
+  }
+}
+
+/* ========================================
+   Terminal (xterm.js + WebSocket)
+   ======================================== */
+function initTerminal() {
+  term = new Terminal({
+    cursorBlink: true,
+    fontSize: 14,
+    fontFamily: "'SF Mono','Fira Code','Consolas',monospace",
+    theme: {
+      background: '#0f1117',
+      foreground: '#e0e0e0',
+      cursor: '#60a5fa',
+      selectionBackground: 'rgba(96,165,250,0.25)',
+      black: '#1a1d27',
+      red: '#f87171',
+      green: '#34d399',
+      yellow: '#fbbf24',
+      blue: '#60a5fa',
+      magenta: '#c084fc',
+      cyan: '#22d3ee',
+      white: '#e0e0e0',
+      brightBlack: '#4b5563',
+      brightRed: '#fca5a5',
+      brightGreen: '#6ee7b7',
+      brightYellow: '#fde68a',
+      brightBlue: '#93bbfd',
+      brightMagenta: '#d8b4fe',
+      brightCyan: '#67e8f9',
+      brightWhite: '#f9fafb'
+    },
+    allowProposedApi: true
+  });
+
+  fitAddon = new FitAddon.FitAddon();
+  var webLinksAddon = new WebLinksAddon.WebLinksAddon();
+  term.loadAddon(fitAddon);
+  term.loadAddon(webLinksAddon);
+  term.open(document.getElementById('terminal-container'));
+  fitAddon.fit();
+
+  var ro = new ResizeObserver(function() {
+    try { fitAddon.fit(); } catch (e) {}
+    if (ws && ws.readyState === WebSocket.OPEN && term.cols && term.rows) {
+      var resizeMsg = JSON.stringify({ columns: term.cols, rows: term.rows });
+      var enc = new TextEncoder().encode(resizeMsg);
+      var buf = new Uint8Array(enc.length + 1);
+      buf[0] = 0x31;
+      buf.set(enc, 1);
+      ws.send(buf);
+    }
+  });
+  ro.observe(document.getElementById('terminal-body'));
+
+  term.onData(function(data) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      var enc = new TextEncoder().encode(data);
+      var buf = new Uint8Array(enc.length + 1);
+      buf[0] = 0x30;
+      buf.set(enc, 1);
+      ws.send(buf);
+    }
+  });
+
+  term.onBinary(function(data) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      var buf = new Uint8Array(data.length + 1);
+      buf[0] = 0x30;
+      for (var i = 0; i < data.length; i++) {
+        buf[i + 1] = data.charCodeAt(i) & 0xFF;
+      }
+      ws.send(buf);
+    }
+  });
+
+  connectTerminal();
+}
+
+function connectTerminal() {
+  if (ws) {
+    try { ws.close(); } catch (e) {}
+  }
+  var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  var url = protocol + '//' + location.host + '/terminal/ws';
+  ws = new WebSocket(url, ['tty']);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = function() {
+    wsRetries = 0;
+    hideTerminalOverlay();
     setHealth(true);
+    document.getElementById('term-dot').style.background = 'var(--green)';
+    var authMsg = JSON.stringify({ AuthToken: '', columns: term.cols, rows: term.rows });
+    ws.send(new TextEncoder().encode(authMsg));
   };
-  ws.onmessage=function(evt){
-    var d=new Uint8Array(evt.data);
-    if(d.length<1)return;
-    var cmd=d[0];
-    if(cmd===0x30){
-      term.write(d.slice(1));
-    }else if(cmd===0x31){
-      document.title=new TextDecoder().decode(d.slice(1))+' - BitBanshee Lab';
+
+  ws.onmessage = function(ev) {
+    if (typeof ev.data === 'string') {
+      term.write(ev.data);
+      return;
+    }
+    var data = new Uint8Array(ev.data);
+    if (data.length < 1) return;
+    var cmd = data[0];
+    var payload = data.slice(1);
+    if (cmd === 0x30) {
+      term.write(payload);
+    } else if (cmd === 0x31) {
+      var titleStr = new TextDecoder().decode(payload);
+      document.title = titleStr || "BitBanshee's Brain";
     }
   };
-  ws.onclose=function(){
+
+  ws.onclose = function() {
     setHealth(false);
-    clearTimeout(wsTimer);
-    wsTimer=setTimeout(connectTerminal,3000);
+    document.getElementById('term-dot').style.background = 'var(--red)';
+    wsRetries++;
+    if (wsRetries <= maxRetries) {
+      clearTimeout(wsTimer);
+      wsTimer = setTimeout(connectTerminal, 3000);
+    } else {
+      showTerminalOverlay();
+    }
   };
-  ws.onerror=function(){ws.close()};
+
+  ws.onerror = function() {
+    // onclose will fire after this
+  };
 }
 
-function sendInput(text){
-  if(!ws||ws.readyState!==WebSocket.OPEN)return;
-  var e=new TextEncoder().encode(text);
-  var b=new Uint8Array(e.length+1);
-  b[0]=0x30;
-  b.set(e,1);
-  ws.send(b);
+function showTerminalOverlay() {
+  document.getElementById('term-overlay-text').textContent = 'Session ended';
+  document.getElementById('term-overlay-sub').textContent = 'The terminal connection was lost.';
+  document.getElementById('term-overlay').classList.add('visible');
 }
 
-function sendResize(c,r){
-  if(!ws||ws.readyState!==WebSocket.OPEN)return;
-  var p=JSON.stringify({columns:c,rows:r});
-  var e=new TextEncoder().encode(p);
-  var b=new Uint8Array(e.length+1);
-  b[0]=0x31;
-  b.set(e,1);
-  ws.send(b);
+function hideTerminalOverlay() {
+  document.getElementById('term-overlay').classList.remove('visible');
 }
 
-var termEl=document.getElementById('terminal');
-term.open(termEl);
-fitAddon.fit();
-term.focus();
-connectTerminal();
-term.onData(function(d){sendInput(d)});
-term.onResize(function(s){sendResize(s.cols,s.rows)});
-new ResizeObserver(function(){try{fitAddon.fit()}catch(e){}}).observe(termEl);
-document.getElementById('terminal-container').addEventListener('click',function(){term.focus()});
-
-/* ── Health ────────────────────────────────────────────────── */
-function setHealth(ok){
-  var dot=document.getElementById('health-dot');
-  var lbl=document.getElementById('health-label');
-  dot.style.background=ok?'var(--green)':'var(--red)';
-  lbl.textContent=ok?'connected':'reconnecting';
-}
-
-/* ── Project selector ──────────────────────────────────────── */
-var activeProject='ml-lab';
-var projectSelector=document.getElementById('project-selector');
-
-document.getElementById('project-btn').addEventListener('click',function(e){
-  e.stopPropagation();
-  projectSelector.classList.toggle('open');
-});
-document.addEventListener('click',function(e){
-  if(!projectSelector.contains(e.target))projectSelector.classList.remove('open');
-});
-
-document.getElementById('project-menu').addEventListener('click',function(e){
-  var opt=e.target.closest('.project-option');
-  if(!opt)return;
-  var proj=opt.getAttribute('data-project');
-  var path=opt.getAttribute('data-path');
-  if(proj===activeProject){projectSelector.classList.remove('open');return}
-
-  activeProject=proj;
-  document.getElementById('current-project').textContent=proj;
-  document.querySelectorAll('.project-option').forEach(function(o){
-    o.classList.toggle('active',o.getAttribute('data-project')===proj);
-  });
-  projectSelector.classList.remove('open');
-
-  // Send Ctrl+C to interrupt anything, then cd + launch claude
-  if(proj==='shell'){
-    sendInput('\x03');
-    setTimeout(function(){sendInput('cd '+path+'\n')},200);
-    showToast('Switched to shell');
-  }else{
-    sendInput('\x03');
-    setTimeout(function(){
-      sendInput('cd '+path+' && claude\n');
-    },200);
-    showToast('Loading '+proj+'...');
+async function restartTerminal() {
+  document.getElementById('term-overlay-text').textContent = 'Starting session...';
+  document.getElementById('term-overlay-sub').textContent = '';
+  try {
+    await apiFetch('/api/terminal/restart', { method: 'POST' });
+  } catch (e) {
+    // Will try to reconnect anyway
   }
+  wsRetries = 0;
+  setTimeout(connectTerminal, 2000);
+}
 
-  // Navigate file panel if open
-  if(filePanelOpen && currentSource==='local'){
-    loadLocalDir(path);
+function toggleTerminalMaximized() {
+  terminalMaximized = !terminalMaximized;
+  var card = document.getElementById('terminal-card');
+  if (terminalMaximized) {
+    card.classList.add('maximized');
+    document.body.classList.add('terminal-maximized');
+  } else {
+    card.classList.remove('maximized');
+    document.body.classList.remove('terminal-maximized');
   }
-
-  term.focus();
-});
-
-/* ── Fullscreen ────────────────────────────────────────────── */
-function toggleFullscreen(){
-  document.getElementById('app').classList.toggle('fullscreen');
-  setTimeout(function(){try{fitAddon.fit()}catch(e){};term.focus()},100);
+  saveState();
+  setTimeout(function() { try { fitAddon.fit(); } catch (e) {} }, 350);
 }
-document.getElementById('btn-fullscreen').addEventListener('click',toggleFullscreen);
 
-/* ── File panel state ──────────────────────────────────────── */
-var filePanelOpen=localStorage.getItem('filePanelOpen')==='true';
-var filePanelWidth=parseInt(localStorage.getItem('filePanelWidth'))||260;
-var currentSource=localStorage.getItem('fileSource')||'local';
-var currentLocalPath=localStorage.getItem('localPath')||'/home/claude-operator/projects';
-var currentS3Bucket='ml-lab-004507070771';
-var currentS3Prefix=localStorage.getItem('s3Prefix')||'';
-
-/* ── File panel toggle ─────────────────────────────────────── */
-function toggleFilePanel(){
-  filePanelOpen=!filePanelOpen;
-  var app=document.getElementById('app');
-  var btn=document.getElementById('btn-files');
-  app.classList.toggle('panel-open',filePanelOpen);
-  btn.classList.toggle('active',filePanelOpen);
-  localStorage.setItem('filePanelOpen',filePanelOpen);
-  if(filePanelOpen){
-    document.getElementById('file-panel').style.width=filePanelWidth+'px';
-    refreshFileView();
+/* ========================================
+   Health Indicator
+   ======================================== */
+function setHealth(ok) {
+  var dot = document.getElementById('health-dot');
+  var text = document.getElementById('health-text');
+  if (ok) {
+    dot.classList.remove('bad');
+    text.textContent = 'ok';
+  } else {
+    dot.classList.add('bad');
+    text.textContent = 'reconnecting';
   }
-  setTimeout(function(){try{fitAddon.fit()}catch(e){};term.focus()},150);
-}
-document.getElementById('btn-files').addEventListener('click',toggleFilePanel);
-
-/* ── File helpers ──────────────────────────────────────────── */
-function getFileIcon(name){
-  var ext=(name.split('.').pop()||'').toLowerCase();
-  var icons={py:'\uD83D\uDC0D',js:'\uD83D\uDCDC',ts:'\uD83D\uDCDC',json:'\uD83D\uDCCB',yaml:'\uD83D\uDCCB',yml:'\uD83D\uDCCB',md:'\uD83D\uDCDD',txt:'\uD83D\uDCC4',sh:'\u2699\uFE0F',css:'\uD83C\uDFA8',html:'\uD83C\uDF10'};
-  return icons[ext]||'\uD83D\uDCC4';
 }
 
-function formatSize(bytes){
-  if(!bytes)return '';
-  if(bytes<1024)return bytes+' B';
-  if(bytes<1048576)return (bytes/1024).toFixed(1)+' KB';
-  if(bytes<1073741824)return (bytes/1048576).toFixed(1)+' MB';
-  return (bytes/1073741824).toFixed(1)+' GB';
+async function pollHealth() {
+  try {
+    var resp = await fetch('/health', { signal: AbortSignal.timeout(5000) });
+    setHealth(resp.ok);
+  } catch (e) {
+    setHealth(false);
+  }
 }
 
-/* ── Source tab switching ──────────────────────────────────── */
-document.querySelectorAll('.source-tab').forEach(function(tab){
-  tab.addEventListener('click',function(){
-    document.querySelectorAll('.source-tab').forEach(function(t){t.classList.remove('active')});
-    tab.classList.add('active');
-    currentSource=tab.getAttribute('data-source');
-    localStorage.setItem('fileSource',currentSource);
-    refreshFileView();
-  });
-});
-
-function refreshFileView(){
-  if(currentSource==='local')loadLocalDir(currentLocalPath);
-  else loadS3Dir(currentS3Prefix);
-}
-
-/* ── Local file browser ────────────────────────────────────── */
-async function loadLocalDir(path){
-  currentLocalPath=path;
-  localStorage.setItem('localPath',path);
-  var tree=document.getElementById('file-tree');
-  tree.innerHTML='<div class="file-tree-loading">Loading\u2026</div>';
-  var data=await apiFetch('/api/fs/local/list?path='+encodeURIComponent(path));
-  if(!data){tree.innerHTML='<div class="file-tree-loading">Error loading</div>';return}
-  renderLocalBreadcrumb(data.path);
-  renderFileTree(data.entries,'local');
-}
-
-function renderLocalBreadcrumb(path){
-  var bc=document.getElementById('breadcrumb');
-  var homePrefix='/home/claude-operator';
-  var parts=path.split('/').filter(Boolean);
-  var html='';
-
-  // Build clickable segments, abbreviating home as ~
-  var isHome=path.startsWith(homePrefix);
-  if(isHome){
-    var afterHome=path.slice(homePrefix.length);
-    var segs=['~'].concat(afterHome.split('/').filter(Boolean));
-    for(var i=0;i<segs.length;i++){
-      if(i>0)html+='<span class="sep">/</span>';
-      // Build the real path for this segment
-      var clickPath;
-      if(i===0)clickPath=homePrefix;
-      else clickPath=homePrefix+'/'+afterHome.split('/').filter(Boolean).slice(0,i).join('/');
-      if(i===segs.length-1){
-        html+='<span class="current">'+escHtml(segs[i])+'</span>';
-      }else{
-        html+='<span onclick="loadLocalDir(\''+clickPath.replace(/'/g,"\\'")+'\')">'+escHtml(segs[i])+'</span>';
-      }
+/* ========================================
+   Elevation
+   ======================================== */
+async function pollElevation() {
+  try {
+    var data = await apiFetch('/api/elevation/pending');
+    var card = document.getElementById('elevation-card');
+    if (data && data.length > 0) {
+      var el = data[0];
+      document.getElementById('elev-info').innerHTML =
+        'Elevation pending: <strong>' + escHtml(el.action || el.name || 'unknown') + '</strong>' +
+        (el.duration ? ' \u2014 ' + escHtml(el.duration) : '');
+      document.getElementById('elev-actions').innerHTML =
+        '<button class="elev-btn approve" onclick="approveElevation(\'' + escHtml(el.id) + '\')">Approve</button>' +
+        '<button class="elev-btn deny" onclick="denyElevation(\'' + escHtml(el.id) + '\')">Deny</button>';
+      card.classList.add('visible');
+    } else {
+      card.classList.remove('visible');
     }
-  }else{
-    for(var j=0;j<parts.length;j++){
-      if(j>0)html+='<span class="sep">/</span>';
-      var cp='/'+parts.slice(0,j+1).join('/');
-      if(j===parts.length-1){
-        html+='<span class="current">'+escHtml(parts[j])+'</span>';
-      }else{
-        html+='<span onclick="loadLocalDir(\''+cp.replace(/'/g,"\\'")+'\')">'+escHtml(parts[j])+'</span>';
-      }
-    }
+  } catch (e) {
+    // Silently ignore elevation poll errors
   }
-  bc.innerHTML=html;
 }
 
-function renderFileTree(entries,source){
-  var tree=document.getElementById('file-tree');
-  if(!entries||entries.length===0){
-    tree.innerHTML='<div class="file-tree-loading">Empty</div>';
+async function approveElevation(id) {
+  try {
+    await apiFetch('/api/elevation/approve/' + encodeURIComponent(id), { method: 'POST' });
+    showToast('Elevation approved');
+    pollElevation();
+  } catch (e) {}
+}
+
+async function denyElevation(id) {
+  try {
+    await apiFetch('/api/elevation/deny/' + encodeURIComponent(id), { method: 'POST' });
+    showToast('Elevation denied');
+    pollElevation();
+  } catch (e) {}
+}
+
+/* ========================================
+   Storage: Tiles + Browser
+   ======================================== */
+function openStorageBrowser(type) {
+  activeStorage = type;
+  saveState();
+  document.getElementById('storage-inner').classList.add('browsing');
+
+  var footer = document.getElementById('browser-footer');
+  if (type === 's3') {
+    footer.style.display = 'none';
+    loadS3Dir(s3Prefix);
+  } else {
+    footer.style.display = '';
+    loadLocalDir(localPath);
+  }
+}
+
+function closeBrowser() {
+  activeStorage = null;
+  saveState();
+  document.getElementById('storage-inner').classList.remove('browsing');
+}
+
+/* ---- Local File Browser ---- */
+async function loadLocalDir(path) {
+  localPath = path;
+  saveState();
+  renderBreadcrumb('local', path);
+  var listEl = document.getElementById('file-list');
+  listEl.innerHTML = '<div class="file-empty loading">Loading...</div>';
+
+  try {
+    var data = await apiFetch('/api/fs/local/list?path=' + encodeURIComponent(path));
+    renderFileList(data, 'local');
+  } catch (e) {
+    listEl.innerHTML = '<div class="file-empty">Failed to load directory</div>';
+  }
+}
+
+/* ---- S3 File Browser ---- */
+async function loadS3Dir(prefix) {
+  s3Prefix = prefix;
+  saveState();
+  renderBreadcrumb('s3', prefix);
+  var listEl = document.getElementById('file-list');
+  listEl.innerHTML = '<div class="file-empty loading">Loading...</div>';
+
+  try {
+    var data = await apiFetch('/api/fs/s3/list?bucket=' + encodeURIComponent(S3_BUCKET) + '&prefix=' + encodeURIComponent(prefix));
+    renderFileList(data, 's3');
+  } catch (e) {
+    listEl.innerHTML = '<div class="file-empty">Failed to load bucket</div>';
+  }
+}
+
+/* ---- Breadcrumb Rendering ---- */
+function renderBreadcrumb(type, pathOrPrefix) {
+  var bc = document.getElementById('breadcrumb');
+  bc.innerHTML = '';
+
+  if (type === 'local') {
+    var homePath = '/home/claude-operator';
+    var display = pathOrPrefix;
+    if (pathOrPrefix.startsWith(homePath)) {
+      display = '~' + pathOrPrefix.slice(homePath.length);
+    }
+    var parts = display.split('/').filter(Boolean);
+    if (display.startsWith('~')) {
+      // First part is ~ replacement
+    }
+
+    var segments = [];
+    if (pathOrPrefix.startsWith(homePath)) {
+      segments.push({ label: '~', path: homePath });
+      var rest = pathOrPrefix.slice(homePath.length);
+      var restParts = rest.split('/').filter(Boolean);
+      var acc = homePath;
+      restParts.forEach(function(p) {
+        acc += '/' + p;
+        segments.push({ label: p, path: acc });
+      });
+    } else {
+      var accPath = '';
+      var allParts = pathOrPrefix.split('/').filter(Boolean);
+      segments.push({ label: '/', path: '/' });
+      allParts.forEach(function(p) {
+        accPath += '/' + p;
+        segments.push({ label: p, path: accPath });
+      });
+    }
+
+    segments.forEach(function(seg, idx) {
+      if (idx > 0) {
+        var sep = document.createElement('span');
+        sep.className = 'bc-sep';
+        sep.textContent = '/';
+        bc.appendChild(sep);
+      }
+      var el = document.createElement('span');
+      el.className = 'bc-seg';
+      el.textContent = seg.label;
+      el.addEventListener('click', function() { loadLocalDir(seg.path); });
+      bc.appendChild(el);
+    });
+  } else {
+    // S3
+    var segments2 = [];
+    segments2.push({ label: S3_BUCKET, prefix: '' });
+    if (pathOrPrefix) {
+      var prefixParts = pathOrPrefix.split('/').filter(Boolean);
+      var accPfx = '';
+      prefixParts.forEach(function(p) {
+        accPfx += p + '/';
+        segments2.push({ label: p, prefix: accPfx });
+      });
+    }
+
+    segments2.forEach(function(seg, idx) {
+      if (idx > 0) {
+        var sep = document.createElement('span');
+        sep.className = 'bc-sep';
+        sep.textContent = '/';
+        bc.appendChild(sep);
+      }
+      var el = document.createElement('span');
+      el.className = 'bc-seg';
+      el.textContent = seg.label;
+      el.addEventListener('click', function() { loadS3Dir(seg.prefix); });
+      bc.appendChild(el);
+    });
+  }
+}
+
+/* ---- File List Rendering ---- */
+function renderFileList(data, type) {
+  var listEl = document.getElementById('file-list');
+  listEl.innerHTML = '';
+
+  var items = (data && data.entries) ? data.entries : [];
+
+  if (items.length === 0) {
+    listEl.innerHTML = '<div class="file-empty">Empty directory</div>';
     return;
   }
-  var html='';
-  entries.forEach(function(e){
-    var icon=e.type==='dir'?'\uD83D\uDCC1':getFileIcon(e.name);
-    var sizeStr=e.type==='file'?formatSize(e.size):'';
-    var nameClass=e.type==='dir'?'fe-name fe-dir':'fe-name';
-    html+='<div class="file-entry" data-name="'+escHtml(e.name)+'" data-type="'+e.type+'" data-source="'+source+'">';
-    html+='<span class="fe-icon">'+icon+'</span>';
-    html+='<span class="'+nameClass+'">'+escHtml(e.name)+'</span>';
-    html+='<span class="fe-size">'+sizeStr+'</span>';
-    html+='</div>';
-  });
-  tree.innerHTML=html;
-}
 
-/* ── File tree click — navigate dirs ───────────────────────── */
-document.getElementById('file-tree').addEventListener('click',function(e){
-  var entry=e.target.closest('.file-entry');
-  if(!entry)return;
-  var name=entry.getAttribute('data-name');
-  var type=entry.getAttribute('data-type');
-  var source=entry.getAttribute('data-source');
-  if(type==='dir'){
-    if(source==='local')loadLocalDir(currentLocalPath+'/'+name);
-    else loadS3Dir(currentS3Prefix+name+'/');
-  }
-});
-
-/* ── Context menu ──────────────────────────────────────────── */
-function closeContextMenu(){var m=document.getElementById('context-menu');if(m)m.remove()}
-document.addEventListener('click',closeContextMenu);
-
-document.getElementById('file-tree').addEventListener('contextmenu',function(e){
-  var entry=e.target.closest('.file-entry');
-  if(!entry)return;
-  e.preventDefault();
-  var name=entry.getAttribute('data-name');
-  var type=entry.getAttribute('data-type');
-  var source=entry.getAttribute('data-source');
-  showContextMenu(e.clientX,e.clientY,name,type,source);
-});
-
-function showContextMenu(x,y,name,type,source){
-  closeContextMenu();
-  var menu=document.createElement('div');
-  menu.className='context-menu';
-  menu.id='context-menu';
-
-  var items=[];
-  if(type==='file'){
-    items.push({label:'Download',action:function(){downloadFile(name,source)}});
-    if(source==='local'){
-      items.push({label:'Open in terminal',action:function(){openInTerminal(name)}});
-    }
-  }
-  if(type==='dir'&&source==='local'){
-    items.push({label:'Open in terminal',action:function(){cdInTerminal(name)}});
-  }
-  items.push({label:'Copy path',action:function(){copyPath(name,source)}});
-  if(source==='local'){
-    items.push({sep:true});
-    items.push({label:'Delete',action:function(){deleteItem(name,source)},danger:true});
-  }
-
-  items.forEach(function(item){
-    if(item.sep){
-      var sep=document.createElement('div');
-      sep.className='cm-sep';
-      menu.appendChild(sep);
-    }else{
-      var btn=document.createElement('button');
-      btn.textContent=item.label;
-      if(item.danger)btn.style.color='var(--red)';
-      btn.addEventListener('click',function(){closeContextMenu();item.action()});
-      menu.appendChild(btn);
-    }
+  // API already sorts dirs first, but ensure it
+  items.sort(function(a, b) {
+    var aDir = a.type === 'dir';
+    var bDir = b.type === 'dir';
+    if (aDir && !bDir) return -1;
+    if (!aDir && bDir) return 1;
+    return (a.name || '').localeCompare(b.name || '');
   });
 
-  document.body.appendChild(menu);
-  var rect=menu.getBoundingClientRect();
-  if(x+rect.width>window.innerWidth)x=window.innerWidth-rect.width-8;
-  if(y+rect.height>window.innerHeight)y=window.innerHeight-rect.height-8;
-  menu.style.left=x+'px';
-  menu.style.top=y+'px';
-}
+  items.forEach(function(item) {
+    var isDir = item.type === 'dir';
+    var div = document.createElement('div');
+    div.className = 'file-item';
 
-/* ── File actions ──────────────────────────────────────────── */
-function downloadFile(name,source){
-  if(source==='local'){
-    window.open('/api/fs/local/download?path='+encodeURIComponent(currentLocalPath+'/'+name),'_blank');
-  }else{
-    window.open('/api/fs/s3/download?bucket='+encodeURIComponent(currentS3Bucket)+'&key='+encodeURIComponent(currentS3Prefix+name),'_blank');
-  }
-}
+    var icon = isDir ? '\uD83D\uDCC1' : getFileIcon(item.name);
+    var nameClass = isDir ? 'fi-name dir' : 'fi-name';
+    var sizeStr = isDir ? '' : formatSize(item.size);
 
-function openInTerminal(name){
-  var fullPath=currentLocalPath+'/'+name;
-  sendInput('less '+fullPath.replace(/ /g,'\\\\ ')+'\n');
-  term.focus();
-}
+    div.innerHTML =
+      '<span class="fi-icon">' + icon + '</span>' +
+      '<span class="' + nameClass + '">' + escHtml(item.name) + '</span>' +
+      (sizeStr ? '<span class="fi-size">' + escHtml(sizeStr) + '</span>' : '');
 
-function cdInTerminal(name){
-  var fullPath=currentLocalPath+'/'+name;
-  sendInput('cd '+fullPath.replace(/ /g,'\\\\ ')+'\n');
-  term.focus();
-}
-
-function copyPath(name,source){
-  var path;
-  if(source==='local')path=currentLocalPath+'/'+name;
-  else path='s3://'+currentS3Bucket+'/'+currentS3Prefix+name;
-  navigator.clipboard.writeText(path).then(function(){showToast('Path copied')});
-}
-
-async function deleteItem(name,source){
-  if(!confirm('Delete "'+name+'"?'))return;
-  if(source==='local'){
-    var fullPath=currentLocalPath+'/'+name;
-    var res=await apiFetch('/api/fs/local/delete?path='+encodeURIComponent(fullPath),{method:'DELETE'});
-    if(res&&res.success){showToast('Deleted');refreshFileView()}
-    else showToast('Delete failed');
-  }
-}
-
-/* ── S3 browser ────────────────────────────────────────────── */
-async function loadS3Dir(prefix){
-  currentS3Prefix=prefix||'';
-  localStorage.setItem('s3Prefix',currentS3Prefix);
-  var tree=document.getElementById('file-tree');
-  tree.innerHTML='<div class="file-tree-loading">Loading\u2026</div>';
-  var url='/api/fs/s3/list?bucket='+encodeURIComponent(currentS3Bucket)+'&prefix='+encodeURIComponent(currentS3Prefix);
-  var data=await apiFetch(url);
-  if(!data){tree.innerHTML='<div class="file-tree-loading">Error loading</div>';return}
-  renderS3Breadcrumb();
-  renderFileTree(data.entries,'s3');
-}
-
-function renderS3Breadcrumb(){
-  var bc=document.getElementById('breadcrumb');
-  var parts=currentS3Prefix.split('/').filter(Boolean);
-  var html='<span onclick="loadS3Dir(\'\')">'+escHtml(currentS3Bucket)+'</span>';
-  for(var i=0;i<parts.length;i++){
-    html+='<span class="sep">/</span>';
-    var prefix=parts.slice(0,i+1).join('/')+'/';
-    if(i===parts.length-1){
-      html+='<span class="current">'+escHtml(parts[i])+'</span>';
-    }else{
-      html+='<span onclick="loadS3Dir(\''+escHtml(prefix)+'\')">'+escHtml(parts[i])+'</span>';
-    }
-  }
-  bc.innerHTML=html;
-}
-
-/* ── Upload ────────────────────────────────────────────────── */
-document.getElementById('upload-input').addEventListener('change',function(e){
-  uploadFiles(e.target.files);
-  e.target.value='';
-});
-
-document.getElementById('mkdir-btn').addEventListener('click',function(){
-  var name=prompt('Folder name:');
-  if(!name)return;
-  createFolder(name);
-});
-
-async function uploadFiles(files){
-  for(var i=0;i<files.length;i++){
-    var fd=new FormData();
-    fd.append('file',files[i]);
-    var url;
-    if(currentSource==='local'){
-      url='/api/fs/local/upload?path='+encodeURIComponent(currentLocalPath);
-    }else{
-      url='/api/fs/s3/upload?bucket='+encodeURIComponent(currentS3Bucket)+'&prefix='+encodeURIComponent(currentS3Prefix);
-    }
-    try{
-      var r=await fetch(url,{method:'POST',body:fd,credentials:'include'});
-      if(!r.ok){
-        var err=await r.json().catch(function(){return{detail:'Upload failed'}});
-        showToast(err.detail||'Upload failed');
-      }else{
-        showToast('Uploaded '+files[i].name);
+    div.addEventListener('click', function() {
+      if (isDir) {
+        if (type === 'local') {
+          loadLocalDir(localPath.replace(/\/$/, '') + '/' + item.name);
+        } else {
+          loadS3Dir(s3Prefix + item.name + '/');
+        }
       }
-    }catch(ex){showToast('Upload error')}
-  }
-  refreshFileView();
+    });
+
+    div.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      showContextMenu(e, item, type);
+    });
+
+    listEl.appendChild(div);
+  });
 }
 
-async function createFolder(name){
-  if(currentSource==='local'){
-    var fullPath=currentLocalPath+'/'+name;
-    var res=await apiFetch('/api/fs/local/mkdir?path='+encodeURIComponent(fullPath),{method:'POST'});
-    if(res&&res.success){showToast('Created '+name);refreshFileView()}
-    else showToast('Failed to create folder');
+/* ========================================
+   Context Menu
+   ======================================== */
+function showContextMenu(e, item, type) {
+  ctxTarget = { item: item, type: type };
+  var menu = document.getElementById('ctx-menu');
+  menu.innerHTML = '';
+
+  if (item.type !== 'dir') {
+    var dlItem = document.createElement('div');
+    dlItem.className = 'ctx-item';
+    dlItem.innerHTML = '<span class="ctx-icon">&#8595;</span> Download';
+    dlItem.addEventListener('click', function() { downloadFile(item, type); closeContextMenu(); });
+    menu.appendChild(dlItem);
+  }
+
+  var openItem = document.createElement('div');
+  openItem.className = 'ctx-item';
+  openItem.innerHTML = '<span class="ctx-icon">&#9654;</span> Open in terminal';
+  openItem.addEventListener('click', function() { openInTerminal(item, type); closeContextMenu(); });
+  menu.appendChild(openItem);
+
+  var copyItem = document.createElement('div');
+  copyItem.className = 'ctx-item';
+  copyItem.innerHTML = '<span class="ctx-icon">&#128203;</span> Copy path';
+  copyItem.addEventListener('click', function() { copyPath(item, type); closeContextMenu(); });
+  menu.appendChild(copyItem);
+
+  var sep = document.createElement('div');
+  sep.className = 'ctx-sep';
+  menu.appendChild(sep);
+
+  var delItem = document.createElement('div');
+  delItem.className = 'ctx-item danger';
+  delItem.innerHTML = '<span class="ctx-icon">&#128465;</span> Delete';
+  delItem.addEventListener('click', function() { deleteFile(item, type); closeContextMenu(); });
+  menu.appendChild(delItem);
+
+  // Position
+  var x = e.clientX;
+  var y = e.clientY;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  menu.classList.add('open');
+
+  // Adjust if off screen
+  requestAnimationFrame(function() {
+    var rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+    }
+  });
+}
+
+function closeContextMenu() {
+  document.getElementById('ctx-menu').classList.remove('open');
+  ctxTarget = null;
+}
+
+function downloadFile(item, type) {
+  if (type === 'local') {
+    var path = localPath.replace(/\/$/, '') + '/' + item.name;
+    window.open('/api/fs/local/download?path=' + encodeURIComponent(path), '_blank');
+  } else {
+    var key = s3Prefix + item.name;
+    window.open('/api/fs/s3/download?bucket=' + encodeURIComponent(S3_BUCKET) + '&key=' + encodeURIComponent(key), '_blank');
   }
 }
 
-/* ── Drag-and-drop ─────────────────────────────────────────── */
-var filePanel=document.getElementById('file-panel');
-filePanel.addEventListener('dragover',function(e){e.preventDefault();filePanel.classList.add('drag-over')});
-filePanel.addEventListener('dragleave',function(e){
-  if(!filePanel.contains(e.relatedTarget))filePanel.classList.remove('drag-over');
-});
-filePanel.addEventListener('drop',function(e){
-  e.preventDefault();
-  filePanel.classList.remove('drag-over');
-  if(e.dataTransfer.files.length)uploadFiles(e.dataTransfer.files);
-});
+function openInTerminal(item, type) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  var cmd;
+  var isDir = item.type === 'dir';
+  if (type === 'local') {
+    var fullPath = localPath.replace(/\/$/, '') + '/' + item.name;
+    if (isDir) {
+      cmd = 'cd ' + fullPath + '\n';
+    } else {
+      cmd = 'less ' + fullPath + '\n';
+    }
+  } else {
+    var key = s3Prefix + item.name;
+    if (isDir) {
+      cmd = 'aws s3 ls s3://' + S3_BUCKET + '/' + key + '\n';
+    } else {
+      cmd = 'aws s3 cp s3://' + S3_BUCKET + '/' + key + ' -\n';
+    }
+  }
+  var enc = new TextEncoder().encode(cmd);
+  var buf = new Uint8Array(enc.length + 1);
+  buf[0] = 0x30;
+  buf.set(enc, 1);
+  ws.send(buf);
+  showToast('Sent to terminal');
+}
 
-/* ── Resize handle ─────────────────────────────────────────── */
-(function(){
-  var handle=document.getElementById('resize-handle');
-  var panel=document.getElementById('file-panel');
-  var dragging=false;
-  handle.addEventListener('mousedown',function(e){
+function copyPath(item, type) {
+  var path;
+  if (type === 'local') {
+    path = localPath.replace(/\/$/, '') + '/' + item.name;
+  } else {
+    path = 's3://' + S3_BUCKET + '/' + s3Prefix + item.name;
+  }
+  navigator.clipboard.writeText(path).then(function() {
+    showToast('Copied: ' + path);
+  }).catch(function() {
+    showToast('Failed to copy');
+  });
+}
+
+async function deleteFile(item, type) {
+  var name = item.name;
+  if (!confirm('Delete "' + name + '"?')) return;
+
+  try {
+    if (type === 'local') {
+      var path = localPath.replace(/\/$/, '') + '/' + name;
+      await apiFetch('/api/fs/local/delete?path=' + encodeURIComponent(path), { method: 'DELETE' });
+      showToast('Deleted ' + name);
+      loadLocalDir(localPath);
+    } else {
+      showToast('S3 delete not supported from browser');
+    }
+  } catch (e) {}
+}
+
+/* ========================================
+   Upload + Mkdir
+   ======================================== */
+function triggerUpload() {
+  document.getElementById('upload-input').click();
+}
+
+async function handleUpload(files) {
+  if (!files || files.length === 0) return;
+  for (var i = 0; i < files.length; i++) {
+    var fd = new FormData();
+    fd.append('file', files[i]);
+    try {
+      await apiFetch('/api/fs/local/upload?path=' + encodeURIComponent(localPath), {
+        method: 'POST',
+        body: fd
+      });
+      showToast('Uploaded ' + files[i].name);
+    } catch (e) {}
+  }
+  document.getElementById('upload-input').value = '';
+  loadLocalDir(localPath);
+}
+
+async function promptMkdir() {
+  var name = prompt('New folder name:');
+  if (!name) return;
+  try {
+    await apiFetch('/api/fs/local/mkdir?path=' + encodeURIComponent(localPath.replace(/\/$/, '') + '/' + name), {
+      method: 'POST'
+    });
+    showToast('Created folder ' + name);
+    loadLocalDir(localPath);
+  } catch (e) {}
+}
+
+/* ---- Drag & Drop ---- */
+function initDragDrop() {
+  var browserView = document.getElementById('browser-view');
+
+  browserView.addEventListener('dragenter', function(e) {
     e.preventDefault();
-    dragging=true;
-    handle.classList.add('dragging');
-    document.addEventListener('mousemove',onMove);
-    document.addEventListener('mouseup',onUp);
+    dragCounter++;
+    if (activeStorage === 'local') {
+      browserView.classList.add('drop-zone-active');
+    }
   });
-  function onMove(e){
-    if(!dragging)return;
-    var w=Math.min(400,Math.max(200,e.clientX));
-    panel.style.width=w+'px';
-    filePanelWidth=w;
-  }
-  function onUp(){
-    dragging=false;
-    handle.classList.remove('dragging');
-    document.removeEventListener('mousemove',onMove);
-    document.removeEventListener('mouseup',onUp);
-    localStorage.setItem('filePanelWidth',filePanelWidth);
-    try{fitAddon.fit()}catch(e){}
-  }
-})();
 
-/* ── Elevation polling ─────────────────────────────────────── */
-var pendingElev=null;
-async function pollElevations(){
-  var data=await apiFetch('/api/elevation/pending');
-  var pending=Array.isArray(data)?data:[];
-  var banner=document.getElementById('elevation-banner');
-  if(pending.length>0){
-    pendingElev=pending[0];
-    var dur=pendingElev.duration_minutes?(' \u2014 '+pendingElev.duration_minutes+'m'):'';
-    document.getElementById('elev-text').textContent='\u26A0 Elevation pending: "'+
-      (pendingElev.action||'(action)')+'"'+dur;
-    banner.classList.add('visible');
-  }else{
-    pendingElev=null;
-    banner.classList.remove('visible');
-  }
-}
-document.getElementById('elev-approve').addEventListener('click',async function(){
-  if(!pendingElev)return;
-  await apiFetch('/api/elevation/approve/'+pendingElev.id,{method:'POST'});
-  showToast('Approved');pollElevations();
-});
-document.getElementById('elev-deny').addEventListener('click',async function(){
-  if(!pendingElev)return;
-  await apiFetch('/api/elevation/deny/'+pendingElev.id,{method:'POST'});
-  showToast('Denied');pollElevations();
-});
+  browserView.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      browserView.classList.remove('drop-zone-active');
+    }
+  });
 
-/* ── Health polling ────────────────────────────────────────── */
-async function pollHealth(){
-  var h=await apiFetch('/health');
-  if(h)setHealth(true);
+  browserView.addEventListener('dragover', function(e) {
+    e.preventDefault();
+  });
+
+  browserView.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dragCounter = 0;
+    browserView.classList.remove('drop-zone-active');
+    if (activeStorage === 'local' && e.dataTransfer && e.dataTransfer.files.length > 0) {
+      handleUpload(e.dataTransfer.files);
+    }
+  });
 }
 
-/* ── Poll loop ─────────────────────────────────────────────── */
-async function poll(){await Promise.allSettled([pollHealth(),pollElevations()])}
-poll();
-setInterval(poll,15000);
+/* ========================================
+   Fullscreen
+   ======================================== */
+function togglePageFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(function() {});
+  } else {
+    document.exitFullscreen().catch(function() {});
+  }
+}
 
-/* ── Keys ──────────────────────────────────────────────────── */
-document.addEventListener('keydown',function(e){
-  if(e.ctrlKey&&e.shiftKey&&e.key==='F'){e.preventDefault();toggleFullscreen()}
-  if(e.ctrlKey&&e.shiftKey&&e.key==='E'){e.preventDefault();toggleFilePanel()}
-  if(e.key==='Escape'){
+/* ========================================
+   Keyboard Shortcuts
+   ======================================== */
+document.addEventListener('keydown', function(e) {
+  // Ctrl+Shift+F — page fullscreen
+  if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+    e.preventDefault();
+    togglePageFullscreen();
+    return;
+  }
+  // Ctrl+Shift+T — maximize/restore terminal
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+    e.preventDefault();
+    toggleTerminalMaximized();
+    return;
+  }
+  // Escape — close overlays, restore terminal
+  if (e.key === 'Escape') {
+    closeDropdowns();
+    if (terminalMaximized) {
+      toggleTerminalMaximized();
+    }
+    return;
+  }
+});
+
+/* ========================================
+   Global Click Handler
+   ======================================== */
+document.addEventListener('click', function(e) {
+  // Close project dropdown if click outside
+  var dd = document.getElementById('project-dropdown');
+  var btn = document.getElementById('project-btn');
+  if (dd.classList.contains('open') && !dd.contains(e.target) && !btn.contains(e.target)) {
+    dd.classList.remove('open');
+  }
+  // Close context menu if click outside
+  var ctx = document.getElementById('ctx-menu');
+  if (ctx.classList.contains('open') && !ctx.contains(e.target)) {
     closeContextMenu();
-    if(projectSelector.classList.contains('open')){projectSelector.classList.remove('open');return}
-    if(filePanelOpen){toggleFilePanel();return}
-    if(document.getElementById('app').classList.contains('fullscreen'))toggleFullscreen();
   }
 });
 
-/* ── Restore panel state on load ───────────────────────────── */
-if(filePanelOpen){
-  document.getElementById('app').classList.add('panel-open');
-  document.getElementById('btn-files').classList.add('active');
-  document.getElementById('file-panel').style.width=filePanelWidth+'px';
-  document.querySelectorAll('.source-tab').forEach(function(t){
-    t.classList.toggle('active',t.getAttribute('data-source')===currentSource);
-  });
-  refreshFileView();
-}
+/* ========================================
+   Init
+   ======================================== */
+document.addEventListener('DOMContentLoaded', function() {
+  buildProjectDropdown();
+  initTerminal();
+  initDragDrop();
+
+  // Restore maximized state
+  if (terminalMaximized) {
+    document.getElementById('terminal-card').classList.add('maximized');
+    document.body.classList.add('terminal-maximized');
+  }
+
+  // Restore active storage browser
+  if (activeStorage === 'local' || activeStorage === 's3') {
+    openStorageBrowser(activeStorage);
+  }
+
+  // Start polling
+  pollHealth();
+  pollElevation();
+  healthTimer = setInterval(pollHealth, 15000);
+  elevTimer = setInterval(pollElevation, 15000);
+});
 </script>
 </body>
 </html>
