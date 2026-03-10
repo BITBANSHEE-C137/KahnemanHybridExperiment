@@ -28,7 +28,6 @@ html,body{
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 a{color:var(--accent);text-decoration:none}
 
-/* ── Hero background ──────────────────────────────────────── */
 body{
   background-image:url('https://bitbanshee.com/hero.png');
   background-size:cover;
@@ -44,7 +43,6 @@ body::before{
   z-index:0;
 }
 
-/* ── App — centered terminal window ───────────────────────── */
 .app{
   position:relative;
   z-index:1;
@@ -56,7 +54,6 @@ body::before{
   padding:24px;
 }
 
-/* ── Terminal window — normal terminal size ────────────────── */
 .term-window{
   display:flex;
   flex-direction:column;
@@ -69,7 +66,6 @@ body::before{
   box-shadow:0 20px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(96,165,250,.06);
 }
 
-/* ── Toast ─────────────────────────────────────────────────── */
 #toast{
   position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
   background:var(--surface);color:var(--text);border:1px solid var(--border);
@@ -86,17 +82,39 @@ body::before{
   border-radius:10px 10px 0 0;
 }
 
-/* Tmux tabs — left side */
-.tmux-tabs{display:flex;align-items:stretch;flex:1;overflow-x:auto;min-width:0}
-.tmux-tab{
-  display:flex;align-items:center;padding:0 16px;
-  font-size:.75rem;font-weight:600;color:var(--dim);
-  border-bottom:2px solid transparent;
-  cursor:pointer;white-space:nowrap;min-height:36px;
-  transition:color .15s,border-color .15s;user-select:none;
+/* Project selector — left side */
+.project-selector{display:flex;align-items:stretch;flex-shrink:0;position:relative}
+.project-btn{
+  display:flex;align-items:center;gap:6px;padding:0 14px;
+  font-size:.75rem;font-weight:700;color:var(--accent);
+  cursor:pointer;min-height:36px;border-right:1px solid var(--border);
+  transition:background .15s;
 }
-.tmux-tab:hover{color:var(--text)}
-.tmux-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.project-btn:hover{background:rgba(96,165,250,.06)}
+.project-btn .arrow{font-size:.6rem;color:var(--dim);transition:transform .15s}
+.project-selector.open .arrow{transform:rotate(180deg)}
+.project-menu{
+  display:none;position:absolute;top:100%;left:0;margin-top:1px;
+  background:var(--surface);border:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius);
+  min-width:240px;z-index:200;overflow:hidden;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+.project-selector.open .project-menu{display:block}
+.project-option{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:10px 14px;font-size:.75rem;text-align:left;
+  min-height:40px;transition:background .1s;border-bottom:1px solid var(--border);
+}
+.project-option:last-child{border-bottom:none}
+.project-option:hover{background:rgba(96,165,250,.06)}
+.project-option.active{background:rgba(96,165,250,.1)}
+.project-option .po-icon{font-size:1rem;width:20px;text-align:center;flex-shrink:0}
+.project-option .po-info{flex:1;min-width:0}
+.project-option .po-name{font-weight:700;color:var(--text)}
+.project-option .po-desc{font-size:.65rem;color:var(--dim);margin-top:1px}
+
+/* Spacer */
+.toolbar .spacer{flex:1}
 
 /* Right side buttons */
 .toolbar-right{display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0}
@@ -110,7 +128,6 @@ body::before{
 .tb-btn-ghost{color:var(--dim)}
 .tb-btn-ghost:hover{color:var(--accent)}
 
-/* ── Claude launcher dropdown ──────────────────────────────── */
 .claude-launcher{position:relative;display:inline-flex}
 .claude-dropdown{
   display:none;position:absolute;top:100%;right:0;margin-top:4px;
@@ -143,7 +160,7 @@ body::before{
 .elev-deny{background:rgba(248,113,113,.2);color:var(--red)}
 .elev-deny:hover{background:rgba(248,113,113,.35)}
 
-/* ── Terminal — fixed height for ~24 rows ─────────────────── */
+/* ── Terminal ──────────────────────────────────────────────── */
 .terminal-container{position:relative;overflow:hidden;cursor:text;height:430px}
 #terminal{width:100%;height:100%}
 
@@ -160,7 +177,7 @@ body::before{
 .health-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .brand{font-weight:700;letter-spacing:.5px;color:var(--dim)}
 
-/* ── Fullscreen — terminal window fills viewport ──────────── */
+/* ── Fullscreen ────────────────────────────────────────────── */
 .app.fullscreen{padding:0}
 .app.fullscreen .term-window{
   width:100%;max-width:100%;height:100%;border-radius:0;border:none;
@@ -169,13 +186,12 @@ body::before{
 .app.fullscreen .footer{border-radius:0}
 .app.fullscreen .terminal-container{flex:1;height:auto}
 
-/* ── Responsive ────────────────────────────────────────────── */
 @media(max-width:600px){
   .app{padding:8px}
   .term-window{width:100%}
-  .tmux-tab{padding:0 10px;font-size:.7rem}
   .tb-btn{padding:4px 8px;font-size:.7rem}
   .toolbar-right .hide-mobile{display:none}
+  .project-btn{padding:0 10px;font-size:.7rem}
 }
 </style>
 </head>
@@ -183,13 +199,47 @@ body::before{
 <div class="app" id="app">
   <div class="term-window">
 
-    <!-- Toolbar: tmux tabs left, actions right -->
     <div class="toolbar">
-      <div class="tmux-tabs" id="tab-bar">
-        <div class="tmux-tab active" data-window="0">claude-code</div>
-        <div class="tmux-tab" data-window="1">monitor</div>
-        <div class="tmux-tab" data-window="2">shell</div>
+      <!-- Project selector -->
+      <div class="project-selector" id="project-selector">
+        <div class="project-btn" id="project-btn">
+          <span id="current-project">ml-lab</span>
+          <span class="arrow">&#9660;</span>
+        </div>
+        <div class="project-menu" id="project-menu">
+          <button class="project-option active" data-project="ml-lab" data-path="/home/claude-operator/projects/ml-lab">
+            <span class="po-icon">&#9881;</span>
+            <span class="po-info">
+              <div class="po-name">ml-lab</div>
+              <div class="po-desc">Dual-process language model</div>
+            </span>
+          </button>
+          <button class="project-option" data-project="bitbanshee" data-path="/home/claude-operator/projects/bitbanshee">
+            <span class="po-icon">&#9889;</span>
+            <span class="po-info">
+              <div class="po-name">bitbanshee</div>
+              <div class="po-desc">Landing page &amp; brand</div>
+            </span>
+          </button>
+          <button class="project-option" data-project="deadcatsociety" data-path="/home/claude-operator/projects/deadcatsociety">
+            <span class="po-icon">&#128049;</span>
+            <span class="po-info">
+              <div class="po-name">deadcatsociety</div>
+              <div class="po-desc">Community platform</div>
+            </span>
+          </button>
+          <button class="project-option" data-project="shell" data-path="/home/claude-operator">
+            <span class="po-icon">&#62;</span>
+            <span class="po-info">
+              <div class="po-name">shell</div>
+              <div class="po-desc">Plain terminal</div>
+            </span>
+          </button>
+        </div>
       </div>
+
+      <div class="spacer"></div>
+
       <div class="toolbar-right">
         <div class="claude-launcher" id="claude-launcher">
           <button class="tb-btn tb-btn-accent" id="btn-claude">&#9889; Claude</button>
@@ -204,19 +254,16 @@ body::before{
       </div>
     </div>
 
-    <!-- Elevation banner — only visible when pending -->
     <div class="elevation-banner" id="elevation-banner">
       <span class="elev-text" id="elev-text"></span>
       <button class="elev-btn elev-approve" id="elev-approve">Approve</button>
       <button class="elev-btn elev-deny" id="elev-deny">Deny</button>
     </div>
 
-    <!-- Terminal — 80x24 ish -->
     <div class="terminal-container" id="terminal-container">
       <div id="terminal"></div>
     </div>
 
-    <!-- Tiny footer -->
     <div class="footer">
       <span class="health-dot" id="health-dot"></span>
       <span id="health-label">connecting</span>
@@ -277,7 +324,6 @@ function connectTerminal(){
   ws.binaryType='arraybuffer';
   ws.onopen=function(){
     fitAddon.fit();
-    // ttyd requires an initial JSON handshake with auth token and terminal size
     var initMsg=JSON.stringify({AuthToken:'',columns:term.cols,rows:term.rows});
     ws.send(new TextEncoder().encode(initMsg));
     term.focus();
@@ -287,12 +333,11 @@ function connectTerminal(){
     var d=new Uint8Array(evt.data);
     if(d.length<1)return;
     var cmd=d[0];
-    if(cmd===0x30){  // '0' = output
+    if(cmd===0x30){
       term.write(d.slice(1));
-    }else if(cmd===0x31){  // '1' = set window title
+    }else if(cmd===0x31){
       document.title=new TextDecoder().decode(d.slice(1))+' - BitBanshee Lab';
     }
-    // '2' = set preferences — ignored
   };
   ws.onclose=function(){
     setHealth(false);
@@ -306,7 +351,7 @@ function sendInput(text){
   if(!ws||ws.readyState!==WebSocket.OPEN)return;
   var e=new TextEncoder().encode(text);
   var b=new Uint8Array(e.length+1);
-  b[0]=0x30;  // ASCII '0' = input
+  b[0]=0x30;
   b.set(e,1);
   ws.send(b);
 }
@@ -316,7 +361,7 @@ function sendResize(c,r){
   var p=JSON.stringify({columns:c,rows:r});
   var e=new TextEncoder().encode(p);
   var b=new Uint8Array(e.length+1);
-  b[0]=0x31;  // ASCII '1' = resize
+  b[0]=0x31;
   b.set(e,1);
   ws.send(b);
 }
@@ -329,8 +374,6 @@ connectTerminal();
 term.onData(function(d){sendInput(d)});
 term.onResize(function(s){sendResize(s.cols,s.rows)});
 new ResizeObserver(function(){try{fitAddon.fit()}catch(e){}}).observe(termEl);
-
-// Click terminal container to refocus
 document.getElementById('terminal-container').addEventListener('click',function(){term.focus()});
 
 /* ── Health ────────────────────────────────────────────────── */
@@ -341,13 +384,44 @@ function setHealth(ok){
   lbl.textContent=ok?'connected':'reconnecting';
 }
 
-/* ── Tmux tabs ─────────────────────────────────────────────── */
-document.getElementById('tab-bar').addEventListener('click',function(e){
-  var t=e.target.closest('.tmux-tab');if(!t)return;
-  var w=parseInt(t.getAttribute('data-window'));if(isNaN(w))return;
-  sendInput('\x02'+String(w));
-  var tabs=document.querySelectorAll('.tmux-tab');
-  for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle('active',parseInt(tabs[i].getAttribute('data-window'))===w);
+/* ── Project selector ──────────────────────────────────────── */
+var activeProject='ml-lab';
+var projectSelector=document.getElementById('project-selector');
+
+document.getElementById('project-btn').addEventListener('click',function(e){
+  e.stopPropagation();
+  projectSelector.classList.toggle('open');
+});
+document.addEventListener('click',function(e){
+  if(!projectSelector.contains(e.target))projectSelector.classList.remove('open');
+});
+
+document.getElementById('project-menu').addEventListener('click',function(e){
+  var opt=e.target.closest('.project-option');
+  if(!opt)return;
+  var proj=opt.getAttribute('data-project');
+  var path=opt.getAttribute('data-path');
+  if(proj===activeProject){projectSelector.classList.remove('open');return}
+
+  activeProject=proj;
+  document.getElementById('current-project').textContent=proj;
+  document.querySelectorAll('.project-option').forEach(function(o){
+    o.classList.toggle('active',o.getAttribute('data-project')===proj);
+  });
+  projectSelector.classList.remove('open');
+
+  // Send Ctrl+C to interrupt anything, then cd + launch claude
+  if(proj==='shell'){
+    sendInput('\x03');
+    setTimeout(function(){sendInput('cd '+path+'\n')},200);
+    showToast('Switched to shell');
+  }else{
+    sendInput('\x03');
+    setTimeout(function(){
+      sendInput('cd '+path+' && claude\n');
+    },200);
+    showToast('Loading '+proj+'...');
+  }
   term.focus();
 });
 
@@ -418,7 +492,10 @@ setInterval(poll,15000);
 /* ── Keys ──────────────────────────────────────────────────── */
 document.addEventListener('keydown',function(e){
   if(e.ctrlKey&&e.shiftKey&&e.key==='F'){e.preventDefault();toggleFullscreen()}
-  if(e.key==='Escape'&&document.getElementById('app').classList.contains('fullscreen'))toggleFullscreen();
+  if(e.key==='Escape'){
+    if(projectSelector.classList.contains('open')){projectSelector.classList.remove('open');return}
+    if(document.getElementById('app').classList.contains('fullscreen'))toggleFullscreen();
+  }
 });
 </script>
 </body>
