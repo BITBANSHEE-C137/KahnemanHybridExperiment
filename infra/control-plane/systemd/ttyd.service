@@ -1,12 +1,11 @@
 [Unit]
 Description=ttyd - Terminal over WebSocket
-After=network.target cc-tmux.service
-Requires=cc-tmux.service
+After=network.target
 
 [Service]
 Type=simple
 User=claude-operator
-ExecStart=/usr/local/bin/ttyd --port 7681 --interface lo --writable tmux attach-session -t cc-control
+ExecStart=/usr/local/bin/ttyd --port 7681 --interface lo --writable --base-path /terminal bash --login
 Restart=always
 RestartSec=3
 
