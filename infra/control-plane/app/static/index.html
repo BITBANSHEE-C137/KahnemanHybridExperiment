@@ -3,93 +3,95 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lab Control Plane</title>
+<title>BitBanshee Lab</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#1a1a2e;--panel:#16213e;--header:#0f3460;--accent:#00d4ff;
   --text:#e0e0e0;--text-dim:#888;--danger:#ff4757;--success:#2ed573;
-  --warning:#ffa502;--radius:8px;--gap:12px;
+  --warning:#ffa502;--radius:8px;
 }
 html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text)}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 a{color:var(--accent);text-decoration:none}
 
-#toast{
-  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-  background:#333;color:#fff;padding:10px 24px;border-radius:var(--radius);
-  font-size:.9rem;opacity:0;transition:opacity .3s;z-index:9999;pointer-events:none;
-}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 24px;border-radius:var(--radius);font-size:.9rem;opacity:0;transition:opacity .3s;z-index:9999;pointer-events:none}
 #toast.show{opacity:1}
 
 .app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
 
-.project-bar{
-  display:flex;align-items:center;gap:0;
-  padding:0 12px;background:#0d0d1a;border-bottom:1px solid #223;
-  min-height:38px;overflow-x:auto;flex-shrink:0;
+/* ── Toolbar — thin, minimal, stays out of the way ─────────── */
+.toolbar{
+  display:flex;align-items:center;gap:8px;
+  padding:4px 12px;background:var(--header);border-bottom:1px solid #223;
+  min-height:40px;flex-shrink:0;
 }
-.project-tab{
-  padding:8px 16px;font-size:.8rem;font-weight:600;
-  color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;
-  white-space:nowrap;min-height:38px;display:flex;align-items:center;
-  transition:color .15s,border-color .15s;user-select:none;
+.toolbar .spacer{flex:1}
+.tb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.tb-item{display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--text-dim);padding:0 6px}
+.tb-item .val{color:var(--text);font-weight:600}
+.tb-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:6px 12px;border-radius:var(--radius);font-size:.8rem;font-weight:600;
+  min-height:32px;transition:background .15s;
 }
-.project-tab:hover{color:var(--text)}
-.project-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tb-btn-accent{background:var(--accent);color:#000}.tb-btn-accent:hover{background:#33e0ff}
+.tb-btn-ghost{color:var(--text-dim);border:1px solid #334}.tb-btn-ghost:hover{color:var(--accent);border-color:var(--accent)}
+.tb-btn-link{color:var(--text-dim);font-size:.75rem}.tb-btn-link:hover{color:var(--accent)}
 
-.status-bar{
-  display:flex;flex-wrap:wrap;align-items:center;gap:var(--gap);
-  padding:8px 16px;background:var(--header);border-bottom:1px solid #223;
-  min-height:44px;
-}
-.status-item{
-  display:flex;align-items:center;gap:6px;font-size:.83rem;
-  padding:4px 10px;background:var(--panel);border-radius:var(--radius);
-  white-space:nowrap;
-}
-.status-item .label{color:var(--text-dim);font-size:.73rem;text-transform:uppercase}
-.status-item .value{font-weight:600}
-.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.dot-green{background:var(--success)}.dot-red{background:var(--danger)}.dot-yellow{background:var(--warning)}
-.status-bar .spacer{flex:1}
-
-.btn-icon{
-  display:inline-flex;align-items:center;gap:6px;
-  padding:8px 14px;border-radius:var(--radius);font-size:.83rem;font-weight:600;
-  min-width:44px;min-height:44px;justify-content:center;transition:background .15s;
-}
-.btn-accent{background:var(--accent);color:#000}.btn-accent:hover{background:#33e0ff}
-.btn-outline{border:1px solid var(--accent);color:var(--accent)}.btn-outline:hover{background:rgba(0,212,255,.1)}
-.btn-link{border:1px solid #555;color:var(--text-dim);font-size:.78rem}.btn-link:hover{border-color:var(--accent);color:var(--accent)}
-
+/* ── Claude Launcher ───────────────────────────────────────── */
 .claude-launcher{position:relative;display:inline-flex}
-.claude-dropdown{
-  display:none;position:absolute;top:100%;right:0;margin-top:4px;
-  background:var(--panel);border:1px solid #334;border-radius:var(--radius);
-  min-width:200px;z-index:100;overflow:hidden;
-}
+.claude-dropdown{display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--panel);border:1px solid #334;border-radius:var(--radius);min-width:200px;z-index:100;overflow:hidden}
 .claude-launcher.open .claude-dropdown{display:block}
-.claude-dropdown button{display:block;width:100%;text-align:left;padding:10px 14px;font-size:.83rem;min-height:44px;transition:background .1s}
+.claude-dropdown button{display:block;width:100%;text-align:left;padding:10px 14px;font-size:.8rem;min-height:40px;transition:background .1s}
 .claude-dropdown button:hover{background:rgba(0,212,255,.08)}
-.claude-dropdown button .hint{color:var(--text-dim);font-size:.73rem;margin-top:2px}
+.claude-dropdown .hint{color:var(--text-dim);font-size:.7rem;margin-top:2px}
 
-.panels{display:flex;flex:1;overflow:hidden}
+/* ── Main workspace ────────────────────────────────────────── */
+.workspace{display:flex;flex:1;overflow:hidden;position:relative}
 
-.context-panel{
-  width:320px;min-width:280px;display:flex;flex-direction:column;
-  border-right:1px solid #223;background:var(--panel);overflow:hidden;
-  transition:width .2s,min-width .2s;flex-shrink:0;
+/* ── Context drawer — overlay, not layout-pushing ──────────── */
+.drawer-overlay{
+  position:absolute;top:0;left:0;bottom:0;width:340px;
+  background:var(--panel);border-right:1px solid #223;
+  z-index:40;transform:translateX(-100%);transition:transform .2s ease;
+  display:flex;flex-direction:column;
 }
-.context-panel.collapsed{width:0;min-width:0;border:none;overflow:hidden}
+.drawer-overlay.open{transform:translateX(0)}
+.drawer-scrim{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.3);z-index:39;display:none;
+}
+.drawer-scrim.visible{display:block}
 
-.view-tabs{display:flex;border-bottom:1px solid #223;background:var(--header);flex-shrink:0}
+.drawer-header{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  background:var(--header);border-bottom:1px solid #223;min-height:42px;
+}
+.drawer-header .title{font-weight:700;font-size:.85rem;flex:1}
+.drawer-close{font-size:1.1rem;padding:4px 8px;color:var(--text-dim);cursor:pointer}
+.drawer-close:hover{color:var(--text)}
+
+/* ── Project selector inside drawer ────────────────────────── */
+.project-selector{
+  display:flex;gap:0;border-bottom:1px solid #223;background:var(--header);
+  overflow-x:auto;flex-shrink:0;
+}
+.proj-tab{
+  padding:7px 14px;font-size:.75rem;font-weight:600;color:var(--text-dim);
+  cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;
+  min-height:32px;display:flex;align-items:center;transition:color .15s;user-select:none;
+}
+.proj-tab:hover{color:var(--text)}
+.proj-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── View tabs inside drawer ───────────────────────────────── */
+.view-tabs{display:flex;border-bottom:1px solid #223;background:rgba(0,0,0,.15);flex-shrink:0}
 .view-tab{
-  flex:1;padding:7px 4px;font-size:.73rem;font-weight:600;
-  color:var(--text-dim);text-align:center;cursor:pointer;
-  border-bottom:2px solid transparent;min-height:34px;
-  display:flex;align-items:center;justify-content:center;gap:4px;
+  flex:1;padding:6px 4px;font-size:.7rem;font-weight:600;color:var(--text-dim);
+  text-align:center;cursor:pointer;border-bottom:2px solid transparent;
+  min-height:30px;display:flex;align-items:center;justify-content:center;gap:3px;
   transition:color .15s;user-select:none;position:relative;
 }
 .view-tab:hover{color:var(--text)}
@@ -101,165 +103,164 @@ a{color:var(--accent);text-decoration:none}
 .view-content.active{display:flex}
 .view-scroll{flex:1;overflow-y:auto;padding:8px}
 
+/* ── Resource cards ────────────────────────────────────────── */
 .resource-section{margin-bottom:4px}
-.resource-section-header{
-  display:flex;align-items:center;gap:6px;padding:6px 8px;
-  font-size:.75rem;font-weight:700;color:var(--text-dim);
-  cursor:pointer;user-select:none;text-transform:uppercase;
-}
-.resource-section-header .chevron{font-size:.6rem;transition:transform .2s}
-.resource-section.collapsed .chevron{transform:rotate(-90deg)}
-.resource-section.collapsed .resource-list{display:none}
-.resource-section-header .rs-count{
-  margin-left:auto;background:var(--header);color:var(--accent);
-  border-radius:10px;padding:1px 7px;font-size:.65rem;font-weight:700;
-}
+.rs-header{display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:.73rem;font-weight:700;color:var(--text-dim);cursor:pointer;user-select:none;text-transform:uppercase}
+.rs-header .chv{font-size:.55rem;transition:transform .2s}
+.resource-section.collapsed .chv{transform:rotate(-90deg)}
+.resource-section.collapsed .rs-list{display:none}
+.rs-header .rs-n{margin-left:auto;background:var(--header);color:var(--accent);border-radius:10px;padding:1px 7px;font-size:.62rem;font-weight:700}
 
-.rc{background:var(--bg);border-radius:var(--radius);padding:8px 10px;margin-bottom:5px;font-size:.78rem;border-left:3px solid var(--accent)}
-.rc .rc-header{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-.rc .rc-name{font-family:monospace;font-weight:600;font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.rc .rc-badge{padding:2px 6px;border-radius:4px;font-size:.63rem;font-weight:700;text-transform:uppercase;flex-shrink:0}
-.rc-badge-running{background:rgba(46,213,115,.2);color:var(--success)}
-.rc-badge-stopped{background:rgba(255,71,87,.2);color:var(--danger)}
-.rc-badge-deployed{background:rgba(0,212,255,.15);color:var(--accent)}
-.rc .rc-detail{display:grid;grid-template-columns:auto 1fr;gap:1px 8px;font-size:.72rem;color:var(--text-dim);margin-bottom:5px}
-.rc .rc-detail .val{color:var(--text);font-family:monospace}
-.rc .rc-actions{display:flex;gap:4px}
-.rc .rc-actions button{flex:1;padding:4px 8px;border-radius:4px;font-size:.72rem;font-weight:600;min-height:30px;transition:background .15s}
-.btn-action{background:rgba(0,212,255,.15);color:var(--accent)}.btn-action:hover{background:rgba(0,212,255,.25)}
-.btn-action-primary{background:var(--accent);color:#000}.btn-action-primary:hover{background:#33e0ff}
+.rc{background:var(--bg);border-radius:var(--radius);padding:8px 10px;margin-bottom:5px;font-size:.76rem;border-left:3px solid var(--accent)}
+.rc .rc-h{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.rc .rc-name{font-family:monospace;font-weight:600;font-size:.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.rc .rc-badge{padding:2px 6px;border-radius:4px;font-size:.6rem;font-weight:700;text-transform:uppercase;flex-shrink:0}
+.badge-ok{background:rgba(46,213,115,.2);color:var(--success)}
+.badge-err{background:rgba(255,71,87,.2);color:var(--danger)}
+.badge-info{background:rgba(0,212,255,.15);color:var(--accent)}
+.rc .rc-d{display:grid;grid-template-columns:auto 1fr;gap:1px 8px;font-size:.7rem;color:var(--text-dim);margin-bottom:4px}
+.rc .rc-d .v{color:var(--text);font-family:monospace}
+.rc .rc-a{display:flex;gap:4px}
+.rc .rc-a button{flex:1;padding:3px 8px;border-radius:4px;font-size:.7rem;font-weight:600;min-height:28px;transition:background .15s}
+.btn-a{background:rgba(0,212,255,.15);color:var(--accent)}.btn-a:hover{background:rgba(0,212,255,.25)}
+.btn-ap{background:var(--accent);color:#000}.btn-ap:hover{background:#33e0ff}
 
 .summary-card{background:var(--bg);border-radius:var(--radius);padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:background .15s;border-left:3px solid var(--accent)}
 .summary-card:hover{background:#1e2545}
-.summary-card .sc-name{font-weight:600;font-size:.82rem;margin-bottom:4px}
-.summary-card .sc-counts{display:flex;flex-wrap:wrap;gap:8px;font-size:.72rem;color:var(--text-dim)}
-.summary-card .sc-counts span{display:flex;align-items:center;gap:3px}
+.summary-card .sc-name{font-weight:600;font-size:.8rem;margin-bottom:3px}
+.summary-card .sc-counts{display:flex;flex-wrap:wrap;gap:6px;font-size:.7rem;color:var(--text-dim)}
 .summary-card .sc-counts .num{color:var(--accent);font-weight:700}
 
-.elev-card{background:var(--bg);border-radius:var(--radius);padding:10px 12px;margin-bottom:6px;font-size:.78rem;border-left:3px solid var(--accent)}
-.elev-card.pending{border-left-color:var(--warning)}
-.elev-card.active{border-left-color:var(--success)}
-.elev-card.done{border-left-color:var(--text-dim);opacity:.6}
-.elev-card .elev-prompt{font-weight:600;margin-bottom:4px}
-.elev-card .elev-meta{color:var(--text-dim);font-size:.72rem}
+/* ── Elevation cards ───────────────────────────────────────── */
+.elev-card{background:var(--bg);border-radius:var(--radius);padding:10px 12px;margin-bottom:6px;font-size:.76rem;border-left:3px solid var(--accent)}
+.elev-card.pending{border-left-color:var(--warning)}.elev-card.active{border-left-color:var(--success)}.elev-card.done{border-left-color:var(--text-dim);opacity:.6}
+.elev-card .ep{font-weight:600;margin-bottom:3px}
+.elev-card .em{color:var(--text-dim);font-size:.7rem}
 
+/* ── Kanban ────────────────────────────────────────────────── */
 .kanban{display:flex;gap:6px;flex:1;overflow:hidden;padding:4px 8px}
 .kanban-col{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
-.kanban-col-header{font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--text-dim);padding:4px 6px;display:flex;align-items:center;gap:4px}
-.kanban-col-header .col-count{background:var(--header);border-radius:10px;padding:1px 6px;font-size:.6rem}
-.kanban-cards{flex:1;overflow-y:auto;min-height:0;padding:2px}
-.kanban-card{background:var(--bg);border-radius:6px;padding:7px 9px;margin-bottom:4px;font-size:.76rem;cursor:grab;border-left:3px solid var(--accent)}
-.kanban-card.dragging{opacity:0.4}
-.kanban-card .kc-title{font-weight:600;margin-bottom:2px;word-break:break-word}
-.kanban-card .kc-desc{color:var(--text-dim);font-size:.7rem;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.kanban-card .kc-meta{display:flex;align-items:center;gap:4px;font-size:.63rem;color:var(--text-dim)}
-.kanban-card .kc-project{background:rgba(0,212,255,.1);color:var(--accent);padding:1px 5px;border-radius:3px;font-size:.6rem;font-weight:600}
-.kanban-card .kc-actions{display:flex;gap:3px;margin-top:3px}
-.kanban-card .kc-actions button{padding:2px 7px;border-radius:3px;font-size:.66rem;font-weight:600;min-height:24px;transition:background .15s}
-.btn-move{background:rgba(0,212,255,.12);color:var(--accent)}.btn-move:hover{background:rgba(0,212,255,.25)}
-.btn-del{background:rgba(255,71,87,.12);color:var(--danger)}.btn-del:hover{background:rgba(255,71,87,.25)}
-.kanban-add{display:flex;gap:4px;padding:4px 2px;flex-shrink:0}
-.kanban-add input{flex:1;padding:5px 8px;border-radius:4px;border:1px solid #334;background:var(--bg);color:var(--text);font-size:.76rem;min-height:30px;font-family:inherit}
-.kanban-add input:focus{outline:none;border-color:var(--accent)}
-.kanban-add button{padding:5px 10px;border-radius:4px;background:var(--accent);color:#000;font-size:.76rem;font-weight:600;min-height:30px;white-space:nowrap}
+.kc-hdr{font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--text-dim);padding:3px 6px;display:flex;align-items:center;gap:4px}
+.kc-hdr .cnt{background:var(--header);border-radius:10px;padding:1px 6px;font-size:.58rem}
+.kc-cards{flex:1;overflow-y:auto;min-height:0;padding:2px}
+.kc{background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;font-size:.74rem;cursor:grab;border-left:3px solid var(--accent)}
+.kc.dragging{opacity:0.4}
+.kc .kc-t{font-weight:600;margin-bottom:2px;word-break:break-word}
+.kc .kc-desc{color:var(--text-dim);font-size:.68rem;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.kc .kc-m{font-size:.6rem;color:var(--text-dim)}
+.kc .kc-proj{background:rgba(0,212,255,.1);color:var(--accent);padding:1px 5px;border-radius:3px;font-size:.58rem;font-weight:600}
+.kc .kc-acts{display:flex;gap:3px;margin-top:3px}
+.kc .kc-acts button{padding:2px 6px;border-radius:3px;font-size:.63rem;font-weight:600;min-height:22px;transition:background .15s}
+.btn-mv{background:rgba(0,212,255,.12);color:var(--accent)}.btn-mv:hover{background:rgba(0,212,255,.25)}
+.btn-rm{background:rgba(255,71,87,.12);color:var(--danger)}.btn-rm:hover{background:rgba(255,71,87,.25)}
+.kc-add{display:flex;gap:4px;padding:3px 2px;flex-shrink:0}
+.kc-add input{flex:1;padding:4px 8px;border-radius:4px;border:1px solid #334;background:var(--bg);color:var(--text);font-size:.74rem;min-height:28px;font-family:inherit}
+.kc-add input:focus{outline:none;border-color:var(--accent)}
+.kc-add button{padding:4px 10px;border-radius:4px;background:var(--accent);color:#000;font-size:.74rem;font-weight:600;min-height:28px}
 
+/* ── Notes ─────────────────────────────────────────────────── */
 .notes-area{flex:1;display:flex;flex-direction:column;padding:8px}
-.notes-area textarea{flex:1;width:100%;resize:none;padding:10px;border-radius:var(--radius);border:1px solid #334;background:var(--bg);color:var(--text);font-family:'Cascadia Code','Fira Code',monospace;font-size:.8rem;line-height:1.5}
+.notes-area textarea{flex:1;width:100%;resize:none;padding:10px;border-radius:var(--radius);border:1px solid #334;background:var(--bg);color:var(--text);font-family:'Cascadia Code','Fira Code',monospace;font-size:.78rem;line-height:1.5}
 .notes-area textarea:focus{outline:none;border-color:var(--accent)}
-.notes-status{font-size:.68rem;color:var(--text-dim);padding:3px 0;text-align:right}
+.notes-status{font-size:.65rem;color:var(--text-dim);padding:2px 0;text-align:right}
 
+/* ── Terminal — THE interface ──────────────────────────────── */
 .terminal-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
-
-.tab-bar{display:flex;align-items:stretch;background:var(--header);border-bottom:1px solid #223;padding:0 8px;min-height:36px;overflow-x:auto;flex-shrink:0}
-.tab{display:flex;align-items:center;padding:6px 16px;font-size:.78rem;font-weight:600;color:var(--text-dim);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;min-width:44px;min-height:36px;justify-content:center;transition:color .15s,border-color .15s;user-select:none}
-.tab:hover{color:var(--text)}
-.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-
-.terminal-container{flex:1;position:relative;overflow:hidden}
+.tmux-bar{display:flex;align-items:stretch;background:var(--header);border-bottom:1px solid #223;padding:0 8px;min-height:32px;overflow-x:auto;flex-shrink:0}
+.tmux-tab{display:flex;align-items:center;padding:4px 14px;font-size:.75rem;font-weight:600;color:var(--text-dim);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;min-height:32px;transition:color .15s,border-color .15s;user-select:none}
+.tmux-tab:hover{color:var(--text)}
+.tmux-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.terminal-container{flex:1;position:relative;overflow:hidden;cursor:text}
 #terminal{width:100%;height:100%}
 
-.terminal-toolbar{display:flex;align-items:center;gap:8px;padding:3px 8px;background:var(--header);border-top:1px solid #223}
-.terminal-toolbar button{min-width:44px;min-height:34px}
+/* ── Fullscreen — hides everything but terminal ────────────── */
+.app.fullscreen .toolbar,.app.fullscreen .tmux-bar{display:none}
 
-.app.fullscreen .project-bar,.app.fullscreen .status-bar,.app.fullscreen .context-panel,.app.fullscreen .tab-bar,.app.fullscreen .terminal-toolbar{display:none}
-.app.fullscreen .terminal-area{flex:1}
-
-@media(max-width:768px){.context-panel{width:260px;min-width:220px}.kanban{flex-direction:column}.status-bar{padding:6px 10px;gap:8px}.status-item{font-size:.76rem;padding:3px 8px}}
-@media(max-width:600px){.panels{flex-direction:column}.context-panel{position:fixed;bottom:0;left:0;right:0;width:100%!important;min-width:100%!important;max-height:50vh;border-right:none;border-top:1px solid #223;z-index:50}.context-panel.collapsed{max-height:0;overflow:hidden}}
+/* ── Responsive ────────────────────────────────────────────── */
+@media(max-width:600px){
+  .drawer-overlay{width:100%}
+  .kanban{flex-direction:column}
+}
 </style>
 </head>
 <body>
 <div class="app" id="app">
-  <div class="project-bar" id="project-bar">
-    <div class="project-tab active" data-project="all">All</div>
-    <div class="project-tab" data-project="ml-lab">ml-lab</div>
-    <div class="project-tab" data-project="deadcatsociety">deadcatsociety</div>
-    <div class="project-tab" data-project="bitbanshee">bitbanshee</div>
-    <div class="project-tab" data-project="other">other</div>
-  </div>
 
-  <div class="status-bar">
-    <div class="status-item" title="Control plane API health">
-      <span class="status-dot dot-red" id="health-dot"></span>
-      <span class="label">API</span>
-    </div>
-    <div class="status-item"><span class="label">EC2</span><span class="value" id="ec2-count">--</span></div>
-    <div class="status-item"><span class="label">Lambda</span><span class="value" id="lambda-count">--</span></div>
-    <div class="status-item"><span class="label">$ MTD</span><span class="value" id="cost-mtd">--</span></div>
+  <!-- ── Toolbar — thin, minimal ──────────────────────────── -->
+  <div class="toolbar">
+    <span class="tb-dot dot-red" id="health-dot" style="width:8px;height:8px;border-radius:50%"></span>
+    <span class="tb-item"><span class="val" id="ec2-count"></span></span>
+    <span class="tb-item"><span class="val" id="lambda-count"></span></span>
+    <span class="tb-item"><span class="val" id="cost-mtd"></span></span>
     <div class="spacer"></div>
     <div class="claude-launcher" id="claude-launcher">
-      <button class="btn-icon btn-accent" id="btn-claude" title="Launch Claude Code">&#9889; Claude</button>
+      <button class="tb-btn tb-btn-accent" id="btn-claude">&#9889; Claude</button>
       <div class="claude-dropdown">
         <button id="btn-claude-here">Launch in current pane<div class="hint">Sends <code>claude</code> to active pane</div></button>
-        <button id="btn-claude-new">Launch in new window<div class="hint">Creates tmux window, then runs <code>claude</code></div></button>
+        <button id="btn-claude-new">Launch in new window<div class="hint">Creates tmux window + <code>claude</code></div></button>
       </div>
     </div>
-    <a href="https://train.bitbanshee.com" target="_blank" class="btn-icon btn-link" title="Training Dashboard">&#128279; Train</a>
-    <button class="btn-icon btn-outline" id="btn-panel-toggle" title="Toggle context panel">&#9776;</button>
-    <button class="btn-icon btn-outline" id="btn-fullscreen" title="Toggle fullscreen">&#x26F6;</button>
+    <a href="https://train.bitbanshee.com" target="_blank" class="tb-btn tb-btn-link" title="Training Dashboard">Train</a>
+    <button class="tb-btn tb-btn-ghost" id="btn-drawer" title="Context panel">&#9776;</button>
+    <button class="tb-btn tb-btn-ghost" id="btn-fullscreen" title="Fullscreen">&#x26F6;</button>
   </div>
 
-  <div class="panels">
-    <div class="context-panel" id="context-panel">
+  <!-- ── Workspace ────────────────────────────────────────── -->
+  <div class="workspace" id="workspace">
+
+    <!-- Scrim for drawer -->
+    <div class="drawer-scrim" id="drawer-scrim"></div>
+
+    <!-- Context drawer — slides over, doesn't push terminal -->
+    <div class="drawer-overlay" id="drawer">
+      <div class="drawer-header">
+        <span class="title">Context</span>
+        <span class="drawer-close" id="drawer-close">&#10005;</span>
+      </div>
+      <div class="project-selector" id="project-bar">
+        <div class="proj-tab active" data-project="all">All</div>
+        <div class="proj-tab" data-project="ml-lab">ml-lab</div>
+        <div class="proj-tab" data-project="deadcatsociety">dcs</div>
+        <div class="proj-tab" data-project="bitbanshee">bitbanshee</div>
+        <div class="proj-tab" data-project="other">other</div>
+      </div>
       <div class="view-tabs">
         <div class="view-tab active" data-view="resources">Resources</div>
         <div class="view-tab" data-view="tasks">Tasks</div>
         <div class="view-tab" data-view="elevations">Elevations<span class="badge-dot" id="elev-badge-dot"></span></div>
         <div class="view-tab" data-view="notes">Notes</div>
       </div>
-      <div class="view-content active" id="view-resources"><div class="view-scroll"><div id="resources-content"><div style="color:var(--text-dim);font-size:.8rem;padding:12px">Loading resources...</div></div></div></div>
+      <div class="view-content active" id="view-resources"><div class="view-scroll"><div id="resources-content"></div></div></div>
       <div class="view-content" id="view-tasks">
-        <div class="kanban" id="kanban-board">
+        <div class="kanban">
           <div class="kanban-col" data-status="todo">
-            <div class="kanban-col-header">Todo <span class="col-count" id="count-todo">0</span></div>
-            <div class="kanban-add"><input type="text" id="new-task-input" placeholder="New task..." /><button id="btn-add-task">Add</button></div>
-            <div class="kanban-cards" id="cards-todo" data-status="todo"></div>
+            <div class="kc-hdr">Todo <span class="cnt" id="count-todo">0</span></div>
+            <div class="kc-add"><input type="text" id="new-task-input" placeholder="New task..." /><button id="btn-add-task">+</button></div>
+            <div class="kc-cards" id="cards-todo" data-status="todo"></div>
           </div>
           <div class="kanban-col" data-status="in_progress">
-            <div class="kanban-col-header">In Progress <span class="col-count" id="count-in_progress">0</span></div>
-            <div class="kanban-cards" id="cards-in_progress" data-status="in_progress"></div>
+            <div class="kc-hdr">Active <span class="cnt" id="count-in_progress">0</span></div>
+            <div class="kc-cards" id="cards-in_progress" data-status="in_progress"></div>
           </div>
           <div class="kanban-col" data-status="done">
-            <div class="kanban-col-header">Done <span class="col-count" id="count-done">0</span></div>
-            <div class="kanban-cards" id="cards-done" data-status="done"></div>
+            <div class="kc-hdr">Done <span class="cnt" id="count-done">0</span></div>
+            <div class="kc-cards" id="cards-done" data-status="done"></div>
           </div>
         </div>
       </div>
       <div class="view-content" id="view-elevations"><div class="view-scroll"><div id="elev-pending"></div><div id="elev-active"></div><div id="elev-history"></div></div></div>
-      <div class="view-content" id="view-notes"><div class="notes-area"><textarea id="notes-textarea" placeholder="Freeform notes for this project..."></textarea><div class="notes-status" id="notes-status"></div></div></div>
+      <div class="view-content" id="view-notes"><div class="notes-area"><textarea id="notes-textarea" placeholder="Notes..."></textarea><div class="notes-status" id="notes-status"></div></div></div>
     </div>
 
+    <!-- Terminal — the whole point -->
     <div class="terminal-area">
-      <div class="tab-bar" id="tab-bar">
-        <div class="tab active" data-window="0">claude-code</div>
-        <div class="tab" data-window="1">monitor</div>
-        <div class="tab" data-window="2">shell</div>
+      <div class="tmux-bar" id="tab-bar">
+        <div class="tmux-tab active" data-window="0">claude-code</div>
+        <div class="tmux-tab" data-window="1">monitor</div>
+        <div class="tmux-tab" data-window="2">shell</div>
       </div>
-      <div class="terminal-container"><div id="terminal"></div></div>
-      <div class="terminal-toolbar">
-        <button class="btn-icon btn-outline" id="btn-clear" title="Send clear command">Clear</button>
-        <div style="flex:1"></div>
-        <button class="btn-icon btn-outline" id="btn-fullscreen2" title="Toggle fullscreen">&#x26F6; Fullscreen</button>
+      <div class="terminal-container" id="terminal-container">
+        <div id="terminal"></div>
       </div>
     </div>
   </div>
@@ -270,109 +271,149 @@ a{color:var(--accent);text-decoration:none}
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
 <script>
-var activeProject="all",activeView="resources",projectsData=[],resourcesData={},tasksData={todo:[],in_progress:[],done:[]},notesDirty=false;
+var activeProject="all",activeView="resources",projectsData=[],resourcesData={},tasksData={todo:[],in_progress:[],done:[]},notesDirty=false,drawerOpen=false;
 
 function escHtml(s){var d=document.createElement("div");d.textContent=s==null?"":String(s);return d.innerHTML}
 function showToast(m,dur){var t=document.getElementById("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._tid);t._tid=setTimeout(function(){t.classList.remove("show")},dur||2500)}
-async function apiFetch(path,opts){try{opts=opts||{};opts.credentials="include";var r=await fetch(path,opts);if(!r.ok)throw new Error("HTTP "+r.status);return await r.json()}catch(e){console.error("apiFetch error:",path,e);return null}}
-function shortId(id){if(!id)return"--";return id.length>12?id.slice(0,5)+"..."+id.slice(-5):id}
-function timeAgo(iso){if(!iso)return"";var d=(Date.now()-new Date(iso).getTime())/1000;if(d<60)return Math.floor(d)+"s ago";if(d<3600)return Math.floor(d/60)+"m ago";if(d<86400)return Math.floor(d/3600)+"h ago";return Math.floor(d/86400)+"d ago"}
+async function apiFetch(path,opts){try{opts=opts||{};opts.credentials="include";var r=await fetch(path,opts);if(!r.ok)throw new Error("HTTP "+r.status);return await r.json()}catch(e){console.error("apiFetch:",path,e);return null}}
+function shortId(id){return!id?"--":id.length>12?id.slice(0,5)+".."+id.slice(-4):id}
+function timeAgo(iso){if(!iso)return"";var d=(Date.now()-new Date(iso).getTime())/1000;if(d<60)return Math.floor(d)+"s";if(d<3600)return Math.floor(d/60)+"m";if(d<86400)return Math.floor(d/3600)+"h";return Math.floor(d/86400)+"d"}
 
-/* ── Terminal ──────────────────────────────────────────────── */
+/* ── Terminal — THE thing ──────────────────────────────────── */
 var term=new Terminal({cursorBlink:true,fontSize:14,fontFamily:"'Cascadia Code','Fira Code','Consolas',monospace",theme:{background:"#1a1a2e",foreground:"#e0e0e0",cursor:"#00d4ff",selectionBackground:"rgba(0,212,255,0.25)"},allowProposedApi:true});
-var fitAddon=new FitAddon.FitAddon();var webLinksAddon=new WebLinksAddon.WebLinksAddon();
+var fitAddon=new FitAddon.FitAddon(),webLinksAddon=new WebLinksAddon.WebLinksAddon();
 term.loadAddon(fitAddon);term.loadAddon(webLinksAddon);
-var ws=null,wsReconnectTimer=null;
+var ws=null,wsTimer=null;
 
 function connectTerminal(){
   var proto=location.protocol==="https:"?"wss:":"ws:";
-  var url=proto+"//"+location.host+"/terminal/ws";
-  ws=new WebSocket(url);ws.binaryType="arraybuffer";
-  ws.addEventListener("open",function(){fitAddon.fit()});
-  ws.addEventListener("message",function(evt){var data=new Uint8Array(evt.data);if(data.length>0&&data[0]===0)term.write(data.slice(1))});
-  ws.addEventListener("close",function(){clearTimeout(wsReconnectTimer);wsReconnectTimer=setTimeout(connectTerminal,3000)});
-  ws.addEventListener("error",function(){ws.close()});
+  ws=new WebSocket(proto+"//"+location.host+"/terminal/ws");
+  ws.binaryType="arraybuffer";
+  ws.onopen=function(){fitAddon.fit();term.focus()};
+  ws.onmessage=function(evt){var d=new Uint8Array(evt.data);if(d.length>0&&d[0]===0)term.write(d.slice(1))};
+  ws.onclose=function(){clearTimeout(wsTimer);wsTimer=setTimeout(connectTerminal,3000)};
+  ws.onerror=function(){ws.close()};
 }
-function sendTerminalInput(text){if(!ws||ws.readyState!==WebSocket.OPEN)return;var enc=new TextEncoder().encode(text);var buf=new Uint8Array(enc.length+1);buf[0]=0;buf.set(enc,1);ws.send(buf)}
-function sendTerminalResize(cols,rows){if(!ws||ws.readyState!==WebSocket.OPEN)return;var p=JSON.stringify({columns:cols,rows:rows});var enc=new TextEncoder().encode(p);var buf=new Uint8Array(enc.length+1);buf[0]=1;buf.set(enc,1);ws.send(buf)}
+function sendInput(text){if(!ws||ws.readyState!==WebSocket.OPEN)return;var e=new TextEncoder().encode(text);var b=new Uint8Array(e.length+1);b[0]=0;b.set(e,1);ws.send(b)}
+function sendResize(c,r){if(!ws||ws.readyState!==WebSocket.OPEN)return;var p=JSON.stringify({columns:c,rows:r});var e=new TextEncoder().encode(p);var b=new Uint8Array(e.length+1);b[0]=1;b.set(e,1);ws.send(b)}
 
 var termEl=document.getElementById("terminal");
-term.open(termEl);fitAddon.fit();connectTerminal();
-term.onData(function(data){sendTerminalInput(data)});
-term.onResize(function(size){sendTerminalResize(size.cols,size.rows)});
+term.open(termEl);
+fitAddon.fit();
+term.focus();
+connectTerminal();
+term.onData(function(d){sendInput(d)});
+term.onResize(function(s){sendResize(s.cols,s.rows)});
 new ResizeObserver(function(){try{fitAddon.fit()}catch(e){}}).observe(termEl);
 
-/* ── Tmux Tabs ─────────────────────────────────────────────── */
-var activeTab=0;
-function switchTmuxWindow(w){sendTerminalInput("\x02"+String(w));activeTab=w;var tabs=document.querySelectorAll(".tab-bar .tab");for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle("active",parseInt(tabs[i].getAttribute("data-window"))===w)}
-document.getElementById("tab-bar").addEventListener("click",function(e){var t=e.target.closest(".tab");if(!t)return;var w=parseInt(t.getAttribute("data-window"));if(!isNaN(w))switchTmuxWindow(w)});
+// Click terminal container to refocus — this is critical
+document.getElementById("terminal-container").addEventListener("click",function(){term.focus()});
 
-/* ── Claude Launcher ───────────────────────────────────────── */
+/* ── Tmux tabs ─────────────────────────────────────────────── */
+document.getElementById("tab-bar").addEventListener("click",function(e){
+  var t=e.target.closest(".tmux-tab");if(!t)return;
+  var w=parseInt(t.getAttribute("data-window"));if(isNaN(w))return;
+  sendInput("\x02"+String(w));
+  var tabs=document.querySelectorAll(".tmux-tab");
+  for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle("active",parseInt(tabs[i].getAttribute("data-window"))===w);
+  term.focus();
+});
+
+/* ── Claude launcher ───────────────────────────────────────── */
 var launcher=document.getElementById("claude-launcher");
 document.getElementById("btn-claude").addEventListener("click",function(e){e.stopPropagation();launcher.classList.toggle("open")});
 document.addEventListener("click",function(e){if(!launcher.contains(e.target))launcher.classList.remove("open")});
-document.getElementById("btn-claude-here").addEventListener("click",function(){launcher.classList.remove("open");sendTerminalInput("claude\n");showToast("Launching Claude Code...")});
-document.getElementById("btn-claude-new").addEventListener("click",function(){launcher.classList.remove("open");sendTerminalInput("\x02c");setTimeout(function(){sendTerminalInput("claude\n")},500);showToast("Launching Claude Code in new window...")});
+document.getElementById("btn-claude-here").addEventListener("click",function(){launcher.classList.remove("open");sendInput("claude\n");showToast("Launching Claude Code...");term.focus()});
+document.getElementById("btn-claude-new").addEventListener("click",function(){launcher.classList.remove("open");sendInput("\x02c");setTimeout(function(){sendInput("claude\n")},500);showToast("New window + Claude Code...");term.focus()});
 
-/* ── Toggles ───────────────────────────────────────────────── */
-function toggleFullscreen(){document.getElementById("app").classList.toggle("fullscreen");setTimeout(function(){try{fitAddon.fit()}catch(e){}},100)}
+/* ── Fullscreen ────────────────────────────────────────────── */
+function toggleFullscreen(){document.getElementById("app").classList.toggle("fullscreen");setTimeout(function(){try{fitAddon.fit()}catch(e){};term.focus()},100)}
 document.getElementById("btn-fullscreen").addEventListener("click",toggleFullscreen);
-document.getElementById("btn-fullscreen2").addEventListener("click",toggleFullscreen);
-document.getElementById("btn-panel-toggle").addEventListener("click",function(){document.getElementById("context-panel").classList.toggle("collapsed");setTimeout(function(){try{fitAddon.fit()}catch(e){}},200)});
-document.getElementById("btn-clear").addEventListener("click",function(){sendTerminalInput("clear\n")});
 
-/* ── Project Tab Switching ─────────────────────────────────── */
+/* ── Drawer ────────────────────────────────────────────────── */
+function openDrawer(){drawerOpen=true;document.getElementById("drawer").classList.add("open");document.getElementById("drawer-scrim").classList.add("visible")}
+function closeDrawer(){drawerOpen=false;document.getElementById("drawer").classList.remove("open");document.getElementById("drawer-scrim").classList.remove("visible");setTimeout(function(){term.focus()},200)}
+
+document.getElementById("btn-drawer").addEventListener("click",function(){if(drawerOpen)closeDrawer();else openDrawer()});
+document.getElementById("drawer-close").addEventListener("click",closeDrawer);
+document.getElementById("drawer-scrim").addEventListener("click",closeDrawer);
+
+/* ── Project tabs ──────────────────────────────────────────── */
 document.getElementById("project-bar").addEventListener("click",function(e){
-  var t=e.target.closest(".project-tab");if(!t)return;
-  var proj=t.getAttribute("data-project");if(proj===activeProject)return;
-  activeProject=proj;
-  var tabs=document.querySelectorAll(".project-tab");
-  for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle("active",tabs[i].getAttribute("data-project")===proj);
+  var t=e.target.closest(".proj-tab");if(!t)return;
+  var p=t.getAttribute("data-project");if(p===activeProject)return;
+  activeProject=p;
+  var tabs=document.querySelectorAll(".proj-tab");
+  for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle("active",tabs[i].getAttribute("data-project")===p);
   renderResources();loadTasks();loadNotes();
 });
 
-/* ── View Tab Switching ────────────────────────────────────── */
+/* ── View tabs ─────────────────────────────────────────────── */
 document.querySelector(".view-tabs").addEventListener("click",function(e){
   var t=e.target.closest(".view-tab");if(!t)return;
-  var view=t.getAttribute("data-view");if(view===activeView)return;
-  activeView=view;
-  var vt=document.querySelectorAll(".view-tab");for(var i=0;i<vt.length;i++)vt[i].classList.toggle("active",vt[i].getAttribute("data-view")===view);
-  var vc=document.querySelectorAll(".view-content");for(var j=0;j<vc.length;j++)vc[j].classList.toggle("active",vc[j].id==="view-"+view);
-  if(view==="tasks")loadTasks();if(view==="notes")loadNotes();
+  var v=t.getAttribute("data-view");if(v===activeView)return;
+  activeView=v;
+  document.querySelectorAll(".view-tab").forEach(function(vt){vt.classList.toggle("active",vt.getAttribute("data-view")===v)});
+  document.querySelectorAll(".view-content").forEach(function(vc){vc.classList.toggle("active",vc.id==="view-"+v)});
+  if(v==="tasks")loadTasks();if(v==="notes")loadNotes();
 });
 
-/* ── Resource Polling ──────────────────────────────────────── */
+/* ── Resource polling ──────────────────────────────────────── */
 async function pollResources(){
   var hd=document.getElementById("health-dot");
   var health=await apiFetch("/health");
-  if(!health){hd.className="status-dot dot-red";return}
-  hd.className="status-dot dot-green";
+  if(!health){hd.style.background="var(--danger)";return}
+  hd.style.background="var(--success)";
   var r=await Promise.allSettled([apiFetch("/api/projects"),apiFetch("/api/resources/ec2"),apiFetch("/api/resources/lambda"),apiFetch("/api/resources/s3"),apiFetch("/api/resources/cloudfront"),apiFetch("/api/resources/route53"),apiFetch("/api/cost/summary")]);
-  projectsData=(r[0].status==="fulfilled"&&r[0].value)?r[0].value:[];
-  resourcesData.ec2=(r[1].status==="fulfilled"&&r[1].value)?r[1].value:[];
-  resourcesData.lambda=(r[2].status==="fulfilled"&&r[2].value)?r[2].value:[];
-  resourcesData.s3=(r[3].status==="fulfilled"&&r[3].value)?r[3].value:[];
-  resourcesData.cloudfront=(r[4].status==="fulfilled"&&r[4].value)?r[4].value:[];
-  resourcesData.route53=(r[5].status==="fulfilled"&&r[5].value)?r[5].value:[];
-  var cost=(r[6].status==="fulfilled"&&r[6].value)?r[6].value:{};
-  var ec2Run=resourcesData.ec2.filter(function(i){return i.state==="running"}).length;
-  document.getElementById("ec2-count").textContent=ec2Run+"/"+resourcesData.ec2.length;
-  document.getElementById("lambda-count").textContent=resourcesData.lambda.length;
-  document.getElementById("cost-mtd").textContent=cost.mtd!=null?"$"+cost.mtd.toFixed(2):"--";
+  projectsData=(r[0].status==="fulfilled"&&r[0].value)||[];
+  resourcesData.ec2=(r[1].status==="fulfilled"&&r[1].value)||[];
+  resourcesData.lambda=(r[2].status==="fulfilled"&&r[2].value)||[];
+  resourcesData.s3=(r[3].status==="fulfilled"&&r[3].value)||[];
+  resourcesData.cloudfront=(r[4].status==="fulfilled"&&r[4].value)||[];
+  resourcesData.route53=(r[5].status==="fulfilled"&&r[5].value)||[];
+  var cost=(r[6].status==="fulfilled"&&r[6].value)||{};
+  var ec2r=resourcesData.ec2.filter(function(i){return i.state==="running"}).length;
+  document.getElementById("ec2-count").textContent=ec2r?ec2r+" EC2":"";
+  document.getElementById("lambda-count").textContent=resourcesData.lambda.length?resourcesData.lambda.length+" \u03BB":"";
+  document.getElementById("cost-mtd").textContent=cost.mtd!=null?"$"+cost.mtd.toFixed(0):"";
   renderResources();
 }
 
-function filterByProject(items){if(activeProject==="all")return items;return items.filter(function(i){return i.project===activeProject})}
+function fp(items){if(activeProject==="all")return items;return items.filter(function(i){return i.project===activeProject})}
 
 function renderResources(){
   var c=document.getElementById("resources-content");
-  if(activeProject==="all")renderProjectSummaries(c);else renderProjectResources(c);
+  if(activeProject==="all"){renderSummaries(c);return}
+  var ec2=fp(resourcesData.ec2||[]),lam=fp(resourcesData.lambda||[]),s3=fp(resourcesData.s3||[]),cf=fp(resourcesData.cloudfront||[]),r53=fp(resourcesData.route53||[]);
+  var h="";
+  h+=rsec("EC2",ec2,function(i){
+    var st=(i.state||"").toLowerCase(),ip=i.public_ip||"";
+    return'<div class="rc"><div class="rc-h"><span class="rc-name" title="'+escHtml(i.instance_id)+'">'+escHtml(i.name||shortId(i.instance_id))+'</span><span class="rc-badge '+(st==="running"?"badge-ok":"badge-err")+'">'+escHtml(st)+'</span></div>'
+      +'<div class="rc-d"><span>Type</span><span class="v">'+escHtml(i.instance_type)+'</span><span>AZ</span><span class="v">'+escHtml(i.az||"--")+'</span><span>IP</span><span class="v">'+escHtml(ip||"--")+'</span></div>'
+      +'<div class="rc-a"><button class="btn-a" onclick="copySSH(\''+escHtml(ip)+'\')"'+(ip?"":" disabled")+'>Copy SSH</button><button class="btn-ap" onclick="connectSSH(\''+escHtml(ip)+'\')"'+(ip?"":" disabled")+'>Connect</button></div></div>';
+  });
+  h+=rsec("Lambda",lam,function(f){
+    return'<div class="rc"><div class="rc-h"><span class="rc-name">'+escHtml(f.name)+'</span><span class="rc-badge badge-info">'+escHtml(f.runtime||"--")+'</span></div>'
+      +'<div class="rc-d"><span>24h</span><span class="v">'+(f.invocations_24h||0)+' inv</span><span>Err</span><span class="v"'+(f.errors_24h>0?' style="color:var(--danger)"':'')+'>'+( f.errors_24h||0)+'</span></div>'
+      +'<div class="rc-a"><button class="btn-a" onclick="tailLogs(\''+escHtml(f.name)+'\')">Tail Logs</button></div></div>';
+  });
+  h+=rsec("S3",s3,function(b){
+    return'<div class="rc"><div class="rc-h"><span class="rc-name">'+escHtml(b.name)+'</span><span class="rc-badge badge-info">'+escHtml(b.region||"--")+'</span></div>'
+      +'<div class="rc-a"><button class="btn-a" onclick="browseS3(\''+escHtml(b.name)+'\')">Browse</button></div></div>';
+  });
+  h+=rsec("CloudFront",cf,function(d){
+    var al=(d.aliases||[]).join(", ")||d.domain||"--";
+    return'<div class="rc"><div class="rc-h"><span class="rc-name" title="'+escHtml(d.id)+'">'+escHtml(al)+'</span><span class="rc-badge '+(d.enabled?"badge-ok":"badge-err")+'">'+escHtml(d.status||"--")+'</span></div></div>';
+  });
+  h+=rsec("Route53",r53,function(z){
+    return'<div class="rc"><div class="rc-h"><span class="rc-name">'+escHtml(z.name)+'</span><span class="rc-badge badge-info">'+(z.record_count||0)+'</span></div></div>';
+  });
+  c.innerHTML=h||'<div style="color:var(--text-dim);font-size:.78rem;padding:12px">No resources</div>';
 }
 
-function renderProjectSummaries(c){
-  if(!projectsData.length){c.innerHTML='<div style="color:var(--text-dim);font-size:.8rem;padding:12px">Loading resources...</div>';return}
-  var h="";
-  for(var i=0;i<projectsData.length;i++){
+function renderSummaries(c){
+  if(!projectsData.length){c.innerHTML='<div style="color:var(--text-dim);font-size:.78rem;padding:12px">Loading...</div>';return}
+  var h="";for(var i=0;i<projectsData.length;i++){
     var p=projectsData[i];
     h+='<div class="summary-card" onclick="selectProject(\''+escHtml(p.name)+'\')">'
       +'<div class="sc-name">'+escHtml(p.display_name)+'</div><div class="sc-counts">';
@@ -381,166 +422,93 @@ function renderProjectSummaries(c){
     if(p.s3)h+='<span><span class="num">'+p.s3+'</span> S3</span>';
     if(p.cloudfront)h+='<span><span class="num">'+p.cloudfront+'</span> CF</span>';
     if(p.route53)h+='<span><span class="num">'+p.route53+'</span> R53</span>';
-    var total=(p.ec2||0)+(p.lambda||0)+(p.s3||0)+(p.cloudfront||0)+(p.route53||0);
-    if(!total)h+='<span style="color:var(--text-dim)">No resources</span>';
     h+='</div></div>';
-  }
-  c.innerHTML=h;
+  }c.innerHTML=h;
 }
-
-function selectProject(proj){
-  activeProject=proj;
-  var tabs=document.querySelectorAll(".project-tab");
-  for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle("active",tabs[i].getAttribute("data-project")===proj);
-  renderResources();loadTasks();loadNotes();
-}
-
-function renderProjectResources(c){
-  var ec2=filterByProject(resourcesData.ec2||[]),lam=filterByProject(resourcesData.lambda||[]),s3=filterByProject(resourcesData.s3||[]),cf=filterByProject(resourcesData.cloudfront||[]),r53=filterByProject(resourcesData.route53||[]);
-  var h="";
-  h+=renderSection("EC2 Instances",ec2,function(inst){
-    var st=(inst.state||"").toLowerCase(),bc=st==="running"?"rc-badge-running":"rc-badge-stopped",ip=inst.public_ip||"";
-    return'<div class="rc"><div class="rc-header"><span class="rc-name" title="'+escHtml(inst.instance_id)+'">'+escHtml(inst.name||shortId(inst.instance_id))+'</span><span class="rc-badge '+bc+'">'+escHtml(st||"unknown")+'</span></div>'
-      +'<div class="rc-detail"><span>Type</span><span class="val">'+escHtml(inst.instance_type)+'</span><span>AZ</span><span class="val">'+escHtml(inst.az||"--")+'</span><span>IP</span><span class="val">'+escHtml(ip||"--")+'</span></div>'
-      +'<div class="rc-actions"><button class="btn-action" onclick="copySSH(\''+escHtml(ip)+'\')"'+(ip?"":" disabled")+'>Copy SSH</button><button class="btn-action-primary" onclick="connectSSH(\''+escHtml(ip)+'\')"'+(ip?"":" disabled")+'>Connect</button></div></div>';
-  });
-  h+=renderSection("Lambda Functions",lam,function(fn){
-    return'<div class="rc"><div class="rc-header"><span class="rc-name">'+escHtml(fn.name)+'</span><span class="rc-badge rc-badge-deployed">'+escHtml(fn.runtime||"--")+'</span></div>'
-      +'<div class="rc-detail"><span>Invocations/24h</span><span class="val">'+(fn.invocations_24h||0)+'</span><span>Errors/24h</span><span class="val"'+(fn.errors_24h>0?' style="color:var(--danger)"':'')+'>'+( fn.errors_24h||0)+'</span></div>'
-      +'<div class="rc-actions"><button class="btn-action" onclick="tailLambdaLogs(\''+escHtml(fn.name)+'\')">Tail Logs</button></div></div>';
-  });
-  h+=renderSection("S3 Buckets",s3,function(b){
-    return'<div class="rc"><div class="rc-header"><span class="rc-name">'+escHtml(b.name)+'</span><span class="rc-badge rc-badge-deployed">'+escHtml(b.region||"--")+'</span></div>'
-      +'<div class="rc-actions"><button class="btn-action" onclick="browseS3(\''+escHtml(b.name)+'\')">Browse</button></div></div>';
-  });
-  h+=renderSection("CloudFront",cf,function(d){
-    var al=(d.aliases||[]).join(", ")||d.domain||"--",sb=d.enabled?"rc-badge-running":"rc-badge-stopped";
-    return'<div class="rc"><div class="rc-header"><span class="rc-name" title="'+escHtml(d.id)+'">'+escHtml(al)+'</span><span class="rc-badge '+sb+'">'+escHtml(d.status||"--")+'</span></div>'
-      +'<div class="rc-detail"><span>Domain</span><span class="val">'+escHtml(d.domain||"--")+'</span></div></div>';
-  });
-  h+=renderSection("Route53 Zones",r53,function(z){
-    return'<div class="rc"><div class="rc-header"><span class="rc-name">'+escHtml(z.name)+'</span><span class="rc-badge rc-badge-deployed">'+(z.record_count||0)+' records</span></div></div>';
-  });
-  c.innerHTML=h||'<div style="color:var(--text-dim);font-size:.8rem;padding:12px">No resources found</div>';
-}
-
-function renderSection(title,items,renderItem){
+function selectProject(p){activeProject=p;document.querySelectorAll(".proj-tab").forEach(function(t){t.classList.toggle("active",t.getAttribute("data-project")===p)});renderResources();loadTasks();loadNotes()}
+function rsec(title,items,fn){
   if(!items||!items.length)return"";
-  var h='<div class="resource-section"><div class="resource-section-header" onclick="this.parentElement.classList.toggle(\'collapsed\')"><span class="chevron">&#9660;</span> '+escHtml(title)+'<span class="rs-count">'+items.length+'</span></div><div class="resource-list">';
-  for(var i=0;i<items.length;i++)h+=renderItem(items[i]);
-  return h+'</div></div>';
+  var h='<div class="resource-section"><div class="rs-header" onclick="this.parentElement.classList.toggle(\'collapsed\')"><span class="chv">&#9660;</span>'+escHtml(title)+'<span class="rs-n">'+items.length+'</span></div><div class="rs-list">';
+  for(var i=0;i<items.length;i++)h+=fn(items[i]);return h+'</div></div>';
 }
 
-/* ── Resource Actions ──────────────────────────────────────── */
-function copySSH(ip){if(!ip)return;navigator.clipboard.writeText("ssh -i ~/.ssh/gpu-key.pem ubuntu@"+ip).then(function(){showToast("SSH command copied")},function(){showToast("Failed to copy")})}
-function connectSSH(ip){if(!ip)return;sendTerminalInput("ssh -i ~/.ssh/gpu-key.pem ubuntu@"+ip+"\n");showToast("Connecting to "+ip+"...")}
-function tailLambdaLogs(fn){sendTerminalInput("aws logs tail /aws/lambda/"+fn+" --follow\n");showToast("Tailing logs for "+fn+"...")}
-function browseS3(b){sendTerminalInput("aws s3 ls s3://"+b+"/\n");showToast("Browsing "+b+"...")}
+/* ── Resource actions — feed the terminal ──────────────────── */
+function copySSH(ip){if(!ip)return;navigator.clipboard.writeText("ssh -i ~/.ssh/gpu-key.pem ubuntu@"+ip).then(function(){showToast("Copied")});closeDrawer()}
+function connectSSH(ip){if(!ip)return;sendInput("ssh -i ~/.ssh/gpu-key.pem ubuntu@"+ip+"\n");closeDrawer();showToast("Connecting...")}
+function tailLogs(fn){sendInput("aws logs tail /aws/lambda/"+fn+" --follow\n");closeDrawer();showToast("Tailing "+fn)}
+function browseS3(b){sendInput("aws s3 ls s3://"+b+"/\n");closeDrawer();showToast("Browsing "+b)}
 
-/* ── Task Board ────────────────────────────────────────────── */
+/* ── Tasks ─────────────────────────────────────────────────── */
 async function loadTasks(){var d=await apiFetch("/api/tasks/"+encodeURIComponent(activeProject));if(d){tasksData=d;renderTasks()}}
-
 function renderTasks(){
-  ["todo","in_progress","done"].forEach(function(status){
-    var cards=tasksData[status]||[];
-    document.getElementById("count-"+status).textContent=cards.length;
-    var h="";for(var i=0;i<cards.length;i++)h+=renderTaskCard(cards[i],status);
-    document.getElementById("cards-"+status).innerHTML=h;
+  ["todo","in_progress","done"].forEach(function(s){
+    var cards=tasksData[s]||[];document.getElementById("count-"+s).textContent=cards.length;
+    var h="";for(var i=0;i<cards.length;i++)h+=renderKC(cards[i],s);
+    document.getElementById("cards-"+s).innerHTML=h;
   });
 }
-
-function renderTaskCard(task,status){
-  var actions="";
-  if(status==="todo")actions='<button class="btn-move" onclick="moveTask(\''+task.id+'\',\'in_progress\')">Start</button><button class="btn-del" onclick="deleteTask(\''+task.id+'\')">&#10005;</button>';
-  else if(status==="in_progress")actions='<button class="btn-move" onclick="moveTask(\''+task.id+'\',\'done\')">Done</button><button class="btn-move" onclick="moveTask(\''+task.id+'\',\'todo\')">Reopen</button>';
-  else actions='<button class="btn-move" onclick="moveTask(\''+task.id+'\',\'todo\')">Reopen</button><button class="btn-del" onclick="deleteTask(\''+task.id+'\')">&#10005;</button>';
-  var pb=activeProject==="all"&&task.project?'<span class="kc-project">'+escHtml(task.project)+'</span> ':"";
-  return'<div class="kanban-card" draggable="true" data-task-id="'+escHtml(task.id)+'" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)">'
-    +'<div class="kc-title">'+escHtml(task.title)+'</div>'
-    +(task.description?'<div class="kc-desc">'+escHtml(task.description)+'</div>':'')
-    +'<div class="kc-meta">'+pb+timeAgo(task.created_at)+'</div>'
-    +'<div class="kc-actions">'+actions+'</div></div>';
+function renderKC(t,s){
+  var acts="";
+  if(s==="todo")acts='<button class="btn-mv" onclick="mvTask(\''+t.id+'\',\'in_progress\')">Start</button><button class="btn-rm" onclick="rmTask(\''+t.id+'\')">&#10005;</button>';
+  else if(s==="in_progress")acts='<button class="btn-mv" onclick="mvTask(\''+t.id+'\',\'done\')">Done</button><button class="btn-mv" onclick="mvTask(\''+t.id+'\',\'todo\')">Back</button>';
+  else acts='<button class="btn-mv" onclick="mvTask(\''+t.id+'\',\'todo\')">Reopen</button><button class="btn-rm" onclick="rmTask(\''+t.id+'\')">&#10005;</button>';
+  var pb=activeProject==="all"&&t.project?'<span class="kc-proj">'+escHtml(t.project)+'</span> ':"";
+  return'<div class="kc" draggable="true" data-task-id="'+escHtml(t.id)+'" ondragstart="onDS(event)" ondragend="onDE(event)">'
+    +'<div class="kc-t">'+escHtml(t.title)+'</div>'+(t.description?'<div class="kc-desc">'+escHtml(t.description)+'</div>':'')
+    +'<div class="kc-m">'+pb+timeAgo(t.created_at)+'</div><div class="kc-acts">'+acts+'</div></div>';
 }
-
 document.getElementById("btn-add-task").addEventListener("click",addTask);
 document.getElementById("new-task-input").addEventListener("keydown",function(e){if(e.key==="Enter")addTask()});
+async function addTask(){var inp=document.getElementById("new-task-input"),t=inp.value.trim();if(!t)return;var p=activeProject==="all"?"ml-lab":activeProject;var r=await apiFetch("/api/tasks/"+encodeURIComponent(p),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:t})});if(r){inp.value="";showToast("Added");loadTasks()}}
+async function mvTask(id,st){var p=activeProject==="all"?"all":activeProject;await apiFetch("/api/tasks/"+encodeURIComponent(p)+"/"+id,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:st})});loadTasks()}
+async function rmTask(id){if(!confirm("Delete?"))return;var p=activeProject==="all"?"all":activeProject;await apiFetch("/api/tasks/"+encodeURIComponent(p)+"/"+id,{method:"DELETE"});loadTasks()}
 
-async function addTask(){
-  var input=document.getElementById("new-task-input"),title=input.value.trim();if(!title)return;
-  var proj=activeProject==="all"?"ml-lab":activeProject;
-  var res=await apiFetch("/api/tasks/"+encodeURIComponent(proj),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:title,description:""})});
-  if(res){input.value="";showToast("Task created");loadTasks()}
-}
-async function moveTask(id,st){
-  var proj=activeProject==="all"?"all":activeProject;
-  await apiFetch("/api/tasks/"+encodeURIComponent(proj)+"/"+id,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:st})});
-  loadTasks();
-}
-async function deleteTask(id){
-  if(!confirm("Delete this task?"))return;
-  var proj=activeProject==="all"?"all":activeProject;
-  await apiFetch("/api/tasks/"+encodeURIComponent(proj)+"/"+id,{method:"DELETE"});
-  showToast("Task deleted");loadTasks();
-}
-
-/* ── Drag and Drop ─────────────────────────────────────────── */
-var draggedTaskId=null;
-function onDragStart(e){draggedTaskId=e.target.getAttribute("data-task-id");e.target.classList.add("dragging");e.dataTransfer.effectAllowed="move"}
-function onDragEnd(e){e.target.classList.remove("dragging");draggedTaskId=null;var cols=document.querySelectorAll(".kanban-cards");for(var i=0;i<cols.length;i++)cols[i].style.outline=""}
-var kanbanCols=document.querySelectorAll(".kanban-cards");
-for(var k=0;k<kanbanCols.length;k++){(function(col){
+/* ── Drag & drop ───────────────────────────────────────────── */
+var dragId=null;
+function onDS(e){dragId=e.target.getAttribute("data-task-id");e.target.classList.add("dragging");e.dataTransfer.effectAllowed="move"}
+function onDE(e){e.target.classList.remove("dragging");dragId=null;document.querySelectorAll(".kc-cards").forEach(function(c){c.style.outline=""})}
+document.querySelectorAll(".kc-cards").forEach(function(col){
   col.addEventListener("dragover",function(e){e.preventDefault();e.dataTransfer.dropEffect="move";col.style.outline="2px solid var(--accent)"});
   col.addEventListener("dragleave",function(){col.style.outline=""});
-  col.addEventListener("drop",function(e){e.preventDefault();col.style.outline="";if(!draggedTaskId)return;moveTask(draggedTaskId,col.getAttribute("data-status"))});
-})(kanbanCols[k])}
+  col.addEventListener("drop",function(e){e.preventDefault();col.style.outline="";if(dragId)mvTask(dragId,col.getAttribute("data-status"))});
+});
 
 /* ── Notes ─────────────────────────────────────────────────── */
-async function loadNotes(){
-  var proj=activeProject==="all"?"ml-lab":activeProject;
-  var d=await apiFetch("/api/notes/"+encodeURIComponent(proj));
-  if(d){document.getElementById("notes-textarea").value=d.content||"";document.getElementById("notes-status").textContent=d.updated_at?"Saved "+timeAgo(d.updated_at):"";notesDirty=false}
-}
-document.getElementById("notes-textarea").addEventListener("input",function(){notesDirty=true;document.getElementById("notes-status").textContent="Unsaved changes"});
+async function loadNotes(){var p=activeProject==="all"?"ml-lab":activeProject;var d=await apiFetch("/api/notes/"+encodeURIComponent(p));if(d){document.getElementById("notes-textarea").value=d.content||"";document.getElementById("notes-status").textContent=d.updated_at?"Saved "+timeAgo(d.updated_at):"";notesDirty=false}}
+document.getElementById("notes-textarea").addEventListener("input",function(){notesDirty=true;document.getElementById("notes-status").textContent="Unsaved"});
 document.getElementById("notes-textarea").addEventListener("blur",saveNotes);
-async function saveNotes(){
-  if(!notesDirty)return;var proj=activeProject==="all"?"ml-lab":activeProject;
-  var res=await apiFetch("/api/notes/"+encodeURIComponent(proj),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:document.getElementById("notes-textarea").value})});
-  if(res){notesDirty=false;document.getElementById("notes-status").textContent="Saved just now"}
-}
+async function saveNotes(){if(!notesDirty)return;var p=activeProject==="all"?"ml-lab":activeProject;var r=await apiFetch("/api/notes/"+encodeURIComponent(p),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:document.getElementById("notes-textarea").value})});if(r){notesDirty=false;document.getElementById("notes-status").textContent="Saved"}}
 
-/* ── Elevation Polling ─────────────────────────────────────── */
+/* ── Elevations ────────────────────────────────────────────── */
 async function pollElevations(){
   var r=await Promise.allSettled([apiFetch("/api/elevation/pending"),apiFetch("/api/elevation/active"),apiFetch("/api/elevation/history")]);
   var pending=(r[0].status==="fulfilled"&&Array.isArray(r[0].value))?r[0].value:[];
-  var ad=(r[1].status==="fulfilled"&&r[1].value)?r[1].value:{};
-  var active=ad.id?[ad]:[];
-  var history=(r[2].status==="fulfilled"&&Array.isArray(r[2].value))?r[2].value.slice(0,10):[];
+  var ad=(r[1].status==="fulfilled"&&r[1].value)||{};var active=ad.id?[ad]:[];
+  var hist=(r[2].status==="fulfilled"&&Array.isArray(r[2].value))?r[2].value.slice(0,10):[];
   document.getElementById("elev-badge-dot").classList.toggle("visible",pending.length>0);
-  document.getElementById("elev-pending").innerHTML=pending.length?'<div style="color:var(--text-dim);font-size:.68rem;padding:0 0 4px;text-transform:uppercase">Pending</div>'+pending.map(function(e){return elevCard(e,"pending")}).join(""):"";
-  document.getElementById("elev-active").innerHTML=active.length?'<div style="color:var(--text-dim);font-size:.68rem;padding:4px 0;text-transform:uppercase">Active</div>'+active.map(function(e){return elevCard(e,"active")}).join(""):"";
-  document.getElementById("elev-history").innerHTML=history.length?'<div style="color:var(--text-dim);font-size:.68rem;padding:4px 0;text-transform:uppercase">History</div>'+history.map(function(e){return elevCard(e,"done")}).join(""):"";
+  document.getElementById("elev-pending").innerHTML=pending.length?'<div style="color:var(--text-dim);font-size:.65rem;padding:0 0 4px;text-transform:uppercase">Pending</div>'+pending.map(function(e){return eCard(e,"pending")}).join(""):"";
+  document.getElementById("elev-active").innerHTML=active.length?'<div style="color:var(--text-dim);font-size:.65rem;padding:4px 0;text-transform:uppercase">Active</div>'+active.map(function(e){return eCard(e,"active")}).join(""):"";
+  document.getElementById("elev-history").innerHTML=hist.length?'<div style="color:var(--text-dim);font-size:.65rem;padding:4px 0;text-transform:uppercase">History</div>'+hist.map(function(e){return eCard(e,"done")}).join(""):"";
 }
-function elevCard(elev,cls){
-  var action=escHtml(elev.action||""),just=escHtml(elev.justification||""),dur=elev.duration_minutes?elev.duration_minutes+"m":"",by=elev.decided_by?"by "+escHtml(elev.decided_by):"";
+function eCard(el,cls){
   var extra="";
-  if(cls==="active"&&elev.expires_at){var rem=Math.max(0,(new Date(elev.expires_at).getTime()-Date.now())/1000);extra=' <span style="color:var(--warning);font-weight:600">'+Math.floor(rem/60)+"m "+Math.floor(rem%60)+"s left</span>"}
+  if(cls==="active"&&el.expires_at){var rem=Math.max(0,(new Date(el.expires_at)-Date.now())/1000);extra=' <span style="color:var(--warning);font-weight:600">'+Math.floor(rem/60)+"m "+Math.floor(rem%60)+"s</span>"}
   var btns="";
-  if(cls==="pending"&&elev.id)btns='<div style="display:flex;gap:6px;margin-top:6px"><button style="flex:1;padding:6px 10px;border-radius:4px;font-size:.73rem;font-weight:600;min-height:34px;background:rgba(46,213,115,.3);color:var(--success);border:none;cursor:pointer" onclick="approveElev(\''+escHtml(elev.id)+'\')">Approve</button><button style="flex:1;padding:6px 10px;border-radius:4px;font-size:.73rem;font-weight:600;min-height:34px;background:rgba(255,71,87,.3);color:var(--danger);border:none;cursor:pointer" onclick="denyElev(\''+escHtml(elev.id)+'\')">Deny</button></div>';
-  return'<div class="elev-card '+cls+'"><div class="elev-prompt">'+(action||"(no action)")+(dur?' <span style="color:var(--text-dim)">('+dur+")</span>":"")+'</div><div class="elev-meta">'+just+" "+by+extra+"</div>"+btns+"</div>";
+  if(cls==="pending"&&el.id)btns='<div style="display:flex;gap:6px;margin-top:5px"><button style="flex:1;padding:5px;border-radius:4px;font-size:.7rem;font-weight:600;min-height:30px;background:rgba(46,213,115,.3);color:var(--success);border:none;cursor:pointer" onclick="approveE(\''+escHtml(el.id)+'\')">Approve</button><button style="flex:1;padding:5px;border-radius:4px;font-size:.7rem;font-weight:600;min-height:30px;background:rgba(255,71,87,.3);color:var(--danger);border:none;cursor:pointer" onclick="denyE(\''+escHtml(el.id)+'\')">Deny</button></div>';
+  return'<div class="elev-card '+cls+'"><div class="ep">'+escHtml(el.action||"(action)")+(el.duration_minutes?' <span style="color:var(--text-dim)">('+el.duration_minutes+'m)</span>':'')+'</div><div class="em">'+escHtml(el.justification||"")+(el.decided_by?" by "+escHtml(el.decided_by):"")+extra+'</div>'+btns+'</div>';
 }
-async function approveElev(id){var r=await apiFetch("/api/elevation/approve/"+id,{method:"POST"});if(r){showToast("Elevation approved");pollElevations()}}
-async function denyElev(id){var r=await apiFetch("/api/elevation/deny/"+id,{method:"POST"});if(r){showToast("Elevation denied");pollElevations()}}
+async function approveE(id){var r=await apiFetch("/api/elevation/approve/"+id,{method:"POST"});if(r){showToast("Approved");pollElevations()}}
+async function denyE(id){var r=await apiFetch("/api/elevation/deny/"+id,{method:"POST"});if(r){showToast("Denied");pollElevations()}}
 
-/* ── Poll Loop ─────────────────────────────────────────────── */
+/* ── Poll loop ─────────────────────────────────────────────── */
 async function poll(){await Promise.allSettled([pollResources(),pollElevations()])}
 poll();loadTasks();loadNotes();
 setInterval(poll,15000);
-setInterval(function(){if(activeView==="tasks")loadTasks()},30000);
 
-/* ── Keyboard Shortcuts ────────────────────────────────────── */
+/* ── Keys ──────────────────────────────────────────────────── */
 document.addEventListener("keydown",function(e){
   if(e.ctrlKey&&e.shiftKey&&e.key==="F"){e.preventDefault();toggleFullscreen()}
-  if(e.key==="Escape"&&document.getElementById("app").classList.contains("fullscreen"))toggleFullscreen();
+  if(e.key==="Escape"){if(drawerOpen)closeDrawer();else if(document.getElementById("app").classList.contains("fullscreen"))toggleFullscreen()}
 });
 </script>
 </body>
