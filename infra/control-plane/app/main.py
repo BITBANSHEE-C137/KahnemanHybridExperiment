@@ -26,6 +26,7 @@ from notes import router as notes_router
 from tasks import router as tasks_router
 from claude_sessions import router as sessions_router
 from lab_status import LabStatus
+from telegram_chat import router as telegram_router
 from taskboard import TaskBoard
 
 logger = logging.getLogger("control-plane")
@@ -153,6 +154,7 @@ app.include_router(icloud_router)
 app.include_router(notes_router)
 app.include_router(tasks_router)
 app.include_router(sessions_router)
+app.include_router(telegram_router)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
