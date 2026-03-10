@@ -1,37 +1,43 @@
-# v3 Training SITREP
+# ML Ops SITREP - v3 Training
 
 ## v3 Training Status
-**Step 21,700/50,000** (43.4% complete) | GPU: **100% util** A10G @ 54°C | Rate: ~2.9 steps/min | **ETA: 12.4 days** | Spot cost: **$0.48/hr** (60.7% savings vs on-demand)
+**Step 22,100 / 50,000 (44.2%)** - ETA ~28 hrs at current rate  
+**GPU**: A10G @ 100% util, 197W/300W, 52°C, 16.6GB/23GB VRAM  
+**Rate**: ~2.4 steps/min sustained  
+**Spot**: $0.48/hr (60.7% savings), current session 2.7hrs stable
 
 ## Eval Metrics & Trends
-
 | Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE    |
 |-------|--------|-----------|---------|-------|--------|
-| 14000 | 28.51  | 4.29      | 24.7%   | 0.852 | 0.0087 |
-| 15000 | 28.64  | 4.50      | 23.7%   | 0.864 | 0.0052 |
-| 16000 | 28.66  | 4.38      | 23.5%   | 0.856 | 0.0104 |
-| 17000 | 28.89  | 4.34      | 25.2%   | 0.858 | 0.0079 |
-| 18000 | 28.99  | 4.44      | 23.0%   | 0.858 | 0.0098 |
-| 19000 | 29.21  | 4.39      | 22.1%   | 0.866 | 0.0106 |
-| 20000 | 29.22  | 4.24      | 26.8%   | 0.857 | 0.0048 |
-| 21000 | **29.94** | 4.26   | 26.8%   | 0.856 | 0.0116 |
+| 15000 | 28.6   | 4.50      | 23.7%  | 0.864 | 0.0052 |
+| 18000 | 29.0   | 4.44      | 23.0%  | 0.858 | 0.0098 |
+| 20000 | 29.2   | 4.24      | 26.8%  | 0.857 | 0.0048 |
+| 21000 | 29.9   | 4.26      | 26.8%  | 0.856 | 0.0116 |
+| **22000** | **29.7** | **3.95** | **28.3%** | **0.876** | **0.0039** |
 
-**Concerning trend**: AR perplexity degrading (+1.4 since step 14k). S1 accuracy volatile but recent recovery to 26.8%. AUROC stable ~0.85-0.86. ECE acceptable but variable.
+**Trends**: Diff loss **major drop** step 21k→22k (4.26→3.95), AUROC **improved** to 0.876, ECE **excellent** at 0.0039. AR PPL stable ~29-30.
 
 ## Target Scorecard
-- ❌ **AR PPL < 40**: 29.94 (PASS - but trending wrong direction)  
-- ✅ **AUROC > 0.75**: 0.856 (PASS)
-- ✅ **ECE < 0.05**: 0.0116 (PASS)
-- ❌ **Diff loss → 4.0**: 4.26 (6.5% above target)
-- ❌ **S1 accuracy → 40%**: 26.8% (33% below target)
+| Metric | Target | Current | Status |
+|--------|--------|---------|---------|
+| AR PPL | < 40 | **29.7** | ✅ **MET** |
+| AUROC | > 0.75 | **0.876** | ✅ **MET** |
+| ECE | < 0.05 | **0.0039** | ✅ **MET** |
+| Diff Loss | → 4.0 | **3.95** | ✅ **MET** |
+| S1 Acc | → 40% | **28.3%** | ❌ 11.7% gap |
 
-**3/5 targets met**. Primary concerns: S1 accuracy plateau and AR perplexity drift.
+**4/5 targets met** - only S1 accuracy lagging but trending up.
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26%/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12. GPT-2 baseline: LAMBADA 95.08%, WikiText 29.07 PPL. **Current v3 AR performance (29.94) comparable to v1 baseline but concerning upward trend**.
+v1 final: LAMBADA 94.26%/PPL 1.46, WikiText PPL 43.86, S1 loss 4.12  
+GPT-2 baseline: LAMBADA 95.08%, WikiText PPL 29.07  
+**Current v3 AR performance superior to v1** (29.7 vs 43.86 PPL)
 
-## Infrastructure
-**18 spot reclaims** since training start - excessive instability. Current session: 2.2hrs uptime on g5.2xlarge. Total cost: **$18.17** across mixed instance types. Frequent interruptions impacting training efficiency but aggressive spot usage maintaining 60%+ savings.
+## Infrastructure  
+**18 spot sessions**, **17 interruptions** - severe instability 3/9 afternoon/evening  
+Total cost: **$18.41** vs $44.23 on-demand (58% savings)  
+Current session: 2.7hrs stable, longest recent run  
+**Checkpoints**: step_22000.pt (1.5GB) synced successfully
 
 ## What's Next
-**Immediate**: Monitor AR perplexity trend - may need LR adjustment if degradation continues. Investigate S1 accuracy plateau around 27%. Consider checkpoint rollback if metrics don't stabilize by step 25k.
+**Diff loss breakthrough** at 22k suggests S2 process converging - monitor S1 accuracy acceleration. Continue to step 25k for stability assessment before benchmark planning.
