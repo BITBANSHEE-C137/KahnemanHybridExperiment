@@ -1263,6 +1263,7 @@ var terminalMaximized = localStorage.getItem('terminalMaximized') === 'true';
 var activeStorage = localStorage.getItem('activeStorage') || null;
 var localPath = localStorage.getItem('localPath') || '/home/claude-operator/projects';
 var s3Prefix = localStorage.getItem('s3Prefix') || '';
+var icloudPath = localStorage.getItem('icloudPath') || '';
 var ws = null;
 var wsTimer = null;
 var wsRetries = 0;
@@ -1800,8 +1801,7 @@ function openStorageModal(type) {
   } else if (type === 'icloud') {
     title.textContent = 'iCloud Drive';
     footer.style.display = 'none';
-    localPath = '/home/claude-operator/icloud';
-    loadLocalDir(localPath);
+    loadICloudDir(icloudPath);
   } else {
     title.textContent = 'Local Files';
     footer.style.display = '';
@@ -1818,8 +1818,8 @@ function closeStorageModal() {
 // Keep closeBrowser for breadcrumb back-to-root
 function closeBrowser() {
   if (activeStorage === 'icloud') {
-    localPath = '/home/claude-operator/icloud';
-    loadLocalDir(localPath);
+    icloudPath = '';
+    loadICloudDir(icloudPath);
   } else if (activeStorage === 'local') {
     localPath = '/home/claude-operator/projects';
     loadLocalDir(localPath);
@@ -1861,6 +1861,26 @@ async function loadS3Dir(prefix) {
     renderFileList(data, 's3');
   } catch (e) {
     listEl.innerHTML = '<div class="file-empty">Failed to load bucket</div>';
+  }
+}
+
+/* ---- iCloud Drive Browser ---- */
+async function loadICloudDir(path) {
+  icloudPath = path;
+  localStorage.setItem('icloudPath', path);
+  renderBreadcrumb('icloud', path);
+  var listEl = document.getElementById('file-list');
+  listEl.innerHTML = '<div class="file-empty loading">Loading...</div>';
+
+  try {
+    var data = await apiFetch('/api/icloud/drive/list?path=' + encodeURIComponent(path));
+    renderFileList(data, 'icloud');
+  } catch (e) {
+    if (e.message && e.message.indexOf('401') !== -1) {
+      listEl.innerHTML = '<div class="file-empty">Session expired. Close and re-authenticate.</div>';
+    } else {
+      listEl.innerHTML = '<div class="file-empty">Failed to load iCloud Drive</div>';
+    }
   }
 }
 
@@ -1911,6 +1931,31 @@ function renderBreadcrumb(type, pathOrPrefix) {
       el.className = 'bc-seg';
       el.textContent = seg.label;
       el.addEventListener('click', function() { loadLocalDir(seg.path); });
+      bc.appendChild(el);
+    });
+  } else if (type === 'icloud') {
+    // iCloud Drive
+    var segsIC = [];
+    segsIC.push({ label: 'iCloud Drive', path: '' });
+    if (pathOrPrefix) {
+      var icParts = pathOrPrefix.split('/').filter(Boolean);
+      var accIC = '';
+      icParts.forEach(function(p) {
+        accIC = accIC ? accIC + '/' + p : p;
+        segsIC.push({ label: p, path: accIC });
+      });
+    }
+    segsIC.forEach(function(seg, idx) {
+      if (idx > 0) {
+        var sep = document.createElement('span');
+        sep.className = 'bc-sep';
+        sep.textContent = '/';
+        bc.appendChild(sep);
+      }
+      var el = document.createElement('span');
+      el.className = 'bc-seg';
+      el.textContent = seg.label;
+      el.addEventListener('click', function() { loadICloudDir(seg.path); });
       bc.appendChild(el);
     });
   } else {
@@ -1979,7 +2024,9 @@ function renderFileList(data, type) {
 
     div.addEventListener('click', function() {
       if (isDir) {
-        if (type === 'local') {
+        if (type === 'icloud') {
+          loadICloudDir(icloudPath ? icloudPath + '/' + item.name : item.name);
+        } else if (type === 'local') {
           loadLocalDir(localPath.replace(/\/$/, '') + '/' + item.name);
         } else {
           loadS3Dir(s3Prefix + item.name + '/');
@@ -2001,7 +2048,7 @@ function renderFileList(data, type) {
    ======================================== */
 function openICloudAuth() {
   apiFetch('/api/icloud/status').then(function(data) {
-    if (data.mounted) {
+    if (data.authenticated) {
       openStorageModal('icloud');
     } else {
       var modal = document.getElementById('icloud-auth-modal');
@@ -2082,8 +2129,8 @@ function icloudVerify() {
     setTimeout(function() {
       closeICloudAuth();
       openStorageModal('icloud');
-      showToast('iCloud Drive mounted', 3000);
-    }, 1500);
+      showToast('iCloud Drive connected', 3000);
+    }, 1000);
   }).catch(function(err) {
     document.getElementById('icloud-error-2').textContent = err.message;
     btn.disabled = false;
