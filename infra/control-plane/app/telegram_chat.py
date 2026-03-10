@@ -1,14 +1,17 @@
 """Telegram Bot API proxy for the lab control plane.
 
 Provides endpoints to send/receive messages through the Telegram Bot API,
-enabling a chat interface in the lab dashboard. Messages are fetched via
-long-polling (getUpdates) and sent via sendMessage.
+enabling a chat interface in the lab dashboard. Messages are stored locally
+so both sent and received messages persist across page refreshes.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import time
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -23,8 +26,15 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-# Track last update_id to avoid re-fetching old messages
+# Persistent message store
+DATA_DIR = Path("/home/claude-operator/.telegram")
+MESSAGES_FILE = DATA_DIR / "messages.json"
+STATE_FILE = DATA_DIR / "state.json"
+
+# In-memory cache
+_messages: list[dict] = []
 _last_update_id: int = 0
+_loaded: bool = False
 
 
 class SendRequest(BaseModel):
@@ -32,9 +42,61 @@ class SendRequest(BaseModel):
 
 
 def _check_config() -> None:
-    """Raise 503 if bot token or chat ID is not configured."""
     if not BOT_TOKEN or not CHAT_ID:
         raise HTTPException(503, detail="Telegram bot not configured")
+
+
+def _load_store() -> None:
+    """Load messages and state from disk on first access."""
+    global _messages, _last_update_id, _loaded
+    if _loaded:
+        return
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if MESSAGES_FILE.exists():
+        try:
+            _messages = json.loads(MESSAGES_FILE.read_text())
+        except Exception:
+            _messages = []
+    if STATE_FILE.exists():
+        try:
+            state = json.loads(STATE_FILE.read_text())
+            _last_update_id = state.get("last_update_id", 0)
+        except Exception:
+            pass
+    _loaded = True
+
+
+def _save_store() -> None:
+    """Persist messages and state to disk."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # Keep last 500 messages max
+    trimmed = _messages[-500:] if len(_messages) > 500 else _messages
+    MESSAGES_FILE.write_text(json.dumps(trimmed))
+    STATE_FILE.write_text(json.dumps({"last_update_id": _last_update_id}))
+
+
+def _add_message(msg: dict) -> None:
+    """Add a message to the store if not already present."""
+    # Deduplicate by message_id
+    existing_ids = {m["id"] for m in _messages}
+    if msg["id"] not in existing_ids:
+        _messages.append(msg)
+        _save_store()
+
+
+def _format_update(msg: dict) -> dict:
+    """Convert a Telegram message object to our format."""
+    sender = msg.get("from", {})
+    return {
+        "id": msg["message_id"],
+        "from": sender.get("first_name", sender.get("username", "Unknown")),
+        "is_bot": sender.get("is_bot", False),
+        "text": msg.get("text", ""),
+        "date": msg.get("date", 0),
+        "has_photo": bool(msg.get("photo")),
+        "has_document": bool(msg.get("document")),
+        "caption": msg.get("caption", ""),
+    }
 
 
 @router.get("/status")
@@ -60,18 +122,20 @@ async def telegram_status() -> dict[str, Any]:
 
 
 @router.get("/messages")
-async def get_messages(limit: int = 50) -> dict[str, Any]:
-    """Fetch recent messages from the bot's chat.
-
-    Uses getUpdates with offset to fetch new messages since last check.
-    Returns messages in chronological order.
-    """
+async def get_messages() -> dict[str, Any]:
+    """Poll for new messages and return any new ones since last check."""
     global _last_update_id
     _check_config()
+    _load_store()
 
+    new_messages: list[dict] = []
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            params: dict[str, Any] = {"allowed_updates": '["message"]', "limit": min(limit, 100)}
+            params: dict[str, Any] = {
+                "allowed_updates": '["message"]',
+                "limit": 100,
+                "timeout": 1,
+            }
             if _last_update_id > 0:
                 params["offset"] = _last_update_id + 1
 
@@ -81,29 +145,20 @@ async def get_messages(limit: int = 50) -> dict[str, Any]:
             if not data.get("ok"):
                 raise HTTPException(502, detail="Telegram API error")
 
-            messages = []
             for update in data.get("result", []):
                 _last_update_id = max(_last_update_id, update["update_id"])
                 msg = update.get("message")
                 if not msg:
                     continue
-                # Only include messages from our chat
                 chat = msg.get("chat", {})
                 if str(chat.get("id")) != CHAT_ID:
                     continue
-                sender = msg.get("from", {})
-                messages.append({
-                    "id": msg["message_id"],
-                    "from": sender.get("first_name", sender.get("username", "Unknown")),
-                    "is_bot": sender.get("is_bot", False),
-                    "text": msg.get("text", ""),
-                    "date": msg.get("date", 0),
-                    "has_photo": bool(msg.get("photo")),
-                    "has_document": bool(msg.get("document")),
-                    "caption": msg.get("caption", ""),
-                })
+                formatted = _format_update(msg)
+                _add_message(formatted)
+                new_messages.append(formatted)
 
-            return {"messages": messages, "last_update_id": _last_update_id}
+            if data.get("result"):
+                _save_store()
 
     except HTTPException:
         raise
@@ -111,64 +166,55 @@ async def get_messages(limit: int = 50) -> dict[str, Any]:
         logger.exception("Failed to fetch Telegram messages")
         raise HTTPException(502, detail=f"Telegram fetch failed: {exc}")
 
+    return {"new_messages": new_messages}
+
 
 @router.get("/history")
-async def get_history(limit: int = 50) -> dict[str, Any]:
-    """Fetch message history without advancing the offset.
-
-    On first load, fetches the most recent messages regardless of offset.
-    Useful for populating the chat on page load.
-    """
+async def get_history(limit: int = 100) -> dict[str, Any]:
+    """Return stored message history (both sent and received)."""
     _check_config()
+    _load_store()
 
+    # Also poll for any new messages to catch up
+    global _last_update_id
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # Fetch without offset to get recent messages
-            params: dict[str, Any] = {"allowed_updates": '["message"]', "limit": min(limit, 100)}
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            params: dict[str, Any] = {
+                "allowed_updates": '["message"]',
+                "limit": 100,
+                "timeout": 0,
+            }
+            if _last_update_id > 0:
+                params["offset"] = _last_update_id + 1
+
             resp = await client.get(f"{API_BASE}/getUpdates", params=params)
             data = resp.json()
 
-            if not data.get("ok"):
-                raise HTTPException(502, detail="Telegram API error")
+            if data.get("ok"):
+                for update in data.get("result", []):
+                    _last_update_id = max(_last_update_id, update["update_id"])
+                    msg = update.get("message")
+                    if not msg:
+                        continue
+                    chat = msg.get("chat", {})
+                    if str(chat.get("id")) != CHAT_ID:
+                        continue
+                    _add_message(_format_update(msg))
 
-            messages = []
-            for update in data.get("result", []):
-                msg = update.get("message")
-                if not msg:
-                    continue
-                chat = msg.get("chat", {})
-                if str(chat.get("id")) != CHAT_ID:
-                    continue
-                sender = msg.get("from", {})
-                messages.append({
-                    "id": msg["message_id"],
-                    "from": sender.get("first_name", sender.get("username", "Unknown")),
-                    "is_bot": sender.get("is_bot", False),
-                    "text": msg.get("text", ""),
-                    "date": msg.get("date", 0),
-                    "has_photo": bool(msg.get("photo")),
-                    "has_document": bool(msg.get("document")),
-                    "caption": msg.get("caption", ""),
-                })
+                if data.get("result"):
+                    _save_store()
+    except Exception:
+        pass  # History still returns stored messages even if poll fails
 
-            # Update global offset
-            global _last_update_id
-            if data.get("result"):
-                _last_update_id = max(u["update_id"] for u in data["result"])
-
-            return {"messages": messages, "last_update_id": _last_update_id}
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Failed to fetch Telegram history")
-        raise HTTPException(502, detail=f"Telegram history failed: {exc}")
+    messages = _messages[-limit:]
+    return {"messages": messages}
 
 
 @router.post("/send")
 async def send_message(req: SendRequest) -> dict[str, Any]:
-    """Send a message to the configured Telegram chat."""
+    """Send a message to the configured Telegram chat and store it."""
     _check_config()
+    _load_store()
 
     if not req.text.strip():
         raise HTTPException(400, detail="Message text is required")
@@ -186,9 +232,25 @@ async def send_message(req: SendRequest) -> dict[str, Any]:
             data = resp.json()
 
             if not data.get("ok"):
-                raise HTTPException(502, detail=f"Telegram send failed: {data.get('description', 'Unknown error')}")
+                raise HTTPException(
+                    502,
+                    detail=f"Telegram send failed: {data.get('description', 'Unknown error')}",
+                )
 
             msg = data["result"]
+            # Store the sent message (bot's own message)
+            stored = {
+                "id": msg["message_id"],
+                "from": msg.get("from", {}).get("first_name", "Bot"),
+                "is_bot": True,
+                "text": msg.get("text", req.text),
+                "date": msg["date"],
+                "has_photo": False,
+                "has_document": False,
+                "caption": "",
+            }
+            _add_message(stored)
+
             return {
                 "ok": True,
                 "message_id": msg["message_id"],
