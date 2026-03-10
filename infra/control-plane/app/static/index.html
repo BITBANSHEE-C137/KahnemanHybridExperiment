@@ -1282,6 +1282,8 @@ body.terminal-maximized #terminal-card {
       <span id="footer-uptime"></span>
     </div>
     <div class="footer-right">
+      <span style="opacity:0.4">v5.4</span>
+      <span class="footer-dot"></span>
       <a href="https://github.com/BITBANSHEE-C137" target="_blank">GitHub</a>
     </div>
   </div>
@@ -2949,9 +2951,10 @@ document.addEventListener('click', function(e) {
    Init
    ======================================== */
 document.addEventListener('DOMContentLoaded', function() {
-  initTerminal();
-  initShell();
-  initDragDrop();
+  console.log('[lab] init v5.4');
+  try { initTerminal(); } catch(e) { console.error('[lab] initTerminal failed:', e); }
+  try { initShell(); } catch(e) { console.error('[lab] initShell failed:', e); }
+  try { initDragDrop(); } catch(e) { console.error('[lab] initDragDrop failed:', e); }
 
   // Restore maximized state
   if (terminalMaximized) {
@@ -2965,10 +2968,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Load new card data
-  loadNotes();
-  loadTasks();
-  loadProfile();
-  loadSessions();
+  try { loadNotes(); } catch(e) { console.error('[lab] loadNotes failed:', e); }
+  try { loadTasks(); } catch(e) { console.error('[lab] loadTasks failed:', e); }
+  try { loadProfile(); } catch(e) { console.error('[lab] loadProfile failed:', e); }
+  try { loadSessions(); } catch(e) { console.error('[lab] loadSessions failed:', e); }
 
   // Start polling
   pollHealth();
@@ -2978,6 +2981,12 @@ document.addEventListener('DOMContentLoaded', function() {
   sessionsTimer = setInterval(loadSessions, 30000);
   setInterval(pollAuthStatus, 30000);
 });
+
+// Fallback: run auth badges independently after 3s regardless of init chain
+setTimeout(function() {
+  console.log('[lab] fallback pollAuthStatus');
+  try { pollAuthStatus(); } catch(e) { console.error('[lab] pollAuthStatus failed:', e); }
+}, 3000);
 </script>
 </body>
 </html>
