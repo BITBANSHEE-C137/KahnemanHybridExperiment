@@ -1,69 +1,50 @@
-"""iCloud Drive authentication and mount management.
+"""iCloud Drive authentication and file browsing via pyicloud.
 
-Drives rclone's iCloud auth flow via pseudo-terminal so the web UI
-can collect Apple ID + password + 2FA code and feed them to rclone.
-On success the trust token is saved to rclone.conf and the FUSE mount
-is (re)started.
+Uses pyicloud to authenticate with Apple (including 2FA) and browse
+iCloud Drive contents. Sessions persist via pyicloud's cookie jar
+(~2 months before re-auth needed).
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
+import mimetypes
 import os
-import pty
-import select
-import signal
-import subprocess
-import time
+import tempfile
 from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger("control-plane.icloud")
 
 router = APIRouter(prefix="/api/icloud", tags=["icloud"])
 
-RCLONE_CONFIG = Path("/home/claude-operator/.config/rclone/rclone.conf")
-MOUNT_POINT = Path("/home/claude-operator/icloud")
-RCLONE_BIN = "/usr/bin/rclone"
-# Apple throttles/blocks requests based on user-agent; use a browser UA
-RCLONE_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
-
+COOKIE_DIR = Path("/home/claude-operator/.pyicloud")
 
 # ---------------------------------------------------------------------------
-# Auth session state (singleton — one auth at a time)
+# Global pyicloud session
 # ---------------------------------------------------------------------------
 
-class _AuthSession:
-    """Manages a single rclone interactive auth process."""
-
-    def __init__(self) -> None:
-        self.master_fd: int | None = None
-        self.child_pid: int | None = None
-        self.output: bytes = b""
-        self.state: str = "idle"  # idle | awaiting_2fa | authenticated | error
-
-    def cleanup(self) -> None:
-        """Kill child process and close pty."""
-        if self.child_pid:
-            try:
-                os.kill(self.child_pid, signal.SIGTERM)
-                os.waitpid(self.child_pid, os.WNOHANG)
-            except (OSError, ChildProcessError):
-                pass
-        if self.master_fd is not None:
-            try:
-                os.close(self.master_fd)
-            except OSError:
-                pass
-        self.master_fd = None
-        self.child_pid = None
-        self.output = b""
+_api = None  # PyiCloudService instance
+_state: str = "idle"  # idle | awaiting_2fa | authenticated | error
 
 
-_session = _AuthSession()
+def _get_api():
+    """Return the current pyicloud API instance or None."""
+    global _api, _state
+    if _api is None:
+        return None
+    # Check if session is still valid by testing a lightweight call
+    try:
+        _api.is_trusted_session
+        return _api
+    except Exception:
+        _api = None
+        _state = "idle"
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -80,265 +61,203 @@ class VerifyRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Helper: walk iCloud Drive path
 # ---------------------------------------------------------------------------
 
-def _read_pty(fd: int, timeout: float) -> bytes:
-    """Read from *fd* until *timeout* seconds elapse."""
-    buf = b""
-    end = time.monotonic() + timeout
-    while time.monotonic() < end:
-        remaining = end - time.monotonic()
-        if remaining <= 0:
-            break
-        r, _, _ = select.select([fd], [], [], min(remaining, 0.5))
-        if r:
-            try:
-                chunk = os.read(fd, 4096)
-                if not chunk:
-                    break
-                buf += chunk
-            except OSError:
-                break
-    return buf
+def _resolve_drive_path(path: str):
+    """Navigate to a path in iCloud Drive, return the node.
 
-
-def _start_rclone_auth() -> str:
-    """Fork ``rclone config reconnect icloud:`` with a pty, wait for 2FA.
-
-    Returns the resulting auth state string.
+    Path is slash-separated, e.g. '' (root), 'Documents', 'Documents/Notes'.
     """
-    _session.cleanup()
+    if _api is None:
+        raise HTTPException(401, detail="Not authenticated with iCloud")
 
-    pid, fd = pty.fork()
-    if pid == 0:
-        # Child — exec rclone config reconnect with custom UA
-        os.execvp(RCLONE_BIN, [
-            RCLONE_BIN, "config", "reconnect", "icloud:",
-            "--config", str(RCLONE_CONFIG),
-            "--user-agent", RCLONE_UA,
-        ])
-        os._exit(1)
+    node = _api.drive
+    if not path or path == "/":
+        return node
 
-    _session.child_pid = pid
-    _session.master_fd = fd
-    _session.output = b""
-
-    # Read output for up to 30 s looking for a 2FA prompt or error
-    end = time.monotonic() + 30
-    while time.monotonic() < end:
-        remaining = end - time.monotonic()
-        r, _, _ = select.select([fd], [], [], min(remaining, 0.5))
-        if r:
-            try:
-                chunk = os.read(fd, 4096)
-                _session.output += chunk
-                logger.info("rclone pty: %s", chunk.decode(errors="replace").strip())
-            except OSError:
-                break
-
-            lower = _session.output.lower()
-            # Detect 2FA prompt (rclone asks for verification code)
-            if b"code" in lower or b"2fa" in lower or b"verification" in lower:
-                _session.state = "awaiting_2fa"
-                return "awaiting_2fa"
-
-            # Detect known errors early
-            if b"error" in lower or b"fatal" in lower or b"failed" in lower:
-                # Drain a bit more output
-                time.sleep(1)
-                try:
-                    extra = os.read(fd, 4096)
-                    _session.output += extra
-                except OSError:
-                    pass
-                _session.state = "error"
-                return "error"
-
-        # Check if child already exited (auth error / bad creds)
+    parts = [p for p in path.strip("/").split("/") if p]
+    for part in parts:
         try:
-            wpid, status = os.waitpid(pid, os.WNOHANG)
-            if wpid != 0:
-                # Drain remaining output
-                try:
-                    tail = _read_pty(fd, timeout=2)
-                    _session.output += tail
-                except Exception:
-                    pass
-                _session.state = "error"
-                return "error"
-        except ChildProcessError:
-            _session.state = "error"
-            return "error"
-
-    # Timeout — no prompt detected, no error detected
-    # Check if process is still alive
-    try:
-        os.kill(pid, 0)
-        # Still alive — might be waiting for input
-        _session.state = "awaiting_2fa"
-        return "awaiting_2fa"
-    except OSError:
-        _session.state = "error"
-        return "error"
+            node = node[part]
+        except (KeyError, IndexError):
+            raise HTTPException(404, detail=f"Path not found: {path}")
+    return node
 
 
-def _submit_2fa_code(code: str) -> tuple[bool, str]:
-    """Write *code* to the rclone pty and wait for completion.
-
-    Returns ``(success, combined_output)``.
-    """
-    if _session.master_fd is None:
-        return False, "No active auth session"
-
-    try:
-        os.write(_session.master_fd, f"{code}\n".encode())
-    except OSError as exc:
-        _session.cleanup()
-        return False, f"Failed to send code: {exc}"
-
-    # Wait for the child to exit (up to 30 s)
-    try:
-        for _ in range(60):
-            try:
-                wpid, status = os.waitpid(_session.child_pid, os.WNOHANG)
-            except ChildProcessError:
-                break
-            if wpid != 0:
-                exit_code = os.WEXITSTATUS(status) if os.WIFEXITED(status) else -1
-                # Drain remaining output
-                try:
-                    tail = _read_pty(_session.master_fd, timeout=2)
-                    _session.output += tail
-                except Exception:
-                    pass
-                fd = _session.master_fd
-                _session.master_fd = None
-                _session.child_pid = None
-                try:
-                    os.close(fd)
-                except OSError:
-                    pass
-                return exit_code == 0, _session.output.decode(errors="replace")
-            time.sleep(0.5)
-    except Exception:
-        pass
-
-    # Timeout
-    _session.cleanup()
-    return False, "Timed out waiting for rclone to finish"
+def _node_to_dict(node) -> dict[str, Any]:
+    """Convert a pyicloud drive node to a JSON-serializable dict."""
+    data = node.data or {}
+    is_dir = node.type in ("folder", "app_library")
+    name = node.name or data.get("drivewsid", "unknown")
+    result = {
+        "name": name,
+        "type": "dir" if is_dir else "file",
+    }
+    if not is_dir:
+        result["size"] = data.get("size", 0)
+        result["modified"] = data.get("dateModified", "")
+        result["extension"] = data.get("extension", "")
+    return result
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Routes: Auth
 # ---------------------------------------------------------------------------
 
 @router.get("/status")
 async def icloud_status() -> dict:
-    """Return current iCloud mount status."""
-    mounted = os.path.ismount(str(MOUNT_POINT))
-    has_token = False
-    if RCLONE_CONFIG.exists():
-        try:
-            text = RCLONE_CONFIG.read_text()
-            has_token = "trust_token" in text and len(
-                [l for l in text.splitlines() if l.strip().startswith("trust_token") and "=" in l and l.split("=", 1)[1].strip()]
-            ) > 0
-        except Exception:
-            pass
+    """Check if we have a valid iCloud session."""
+    api = _get_api()
     return {
-        "mounted": mounted,
-        "has_token": has_token,
-        "auth_state": _session.state,
+        "authenticated": api is not None,
+        "auth_state": _state,
+        "trusted": api.is_trusted_session if api else False,
     }
 
 
 @router.post("/auth/start")
 async def start_auth(req: SignInRequest) -> dict:
-    """Write rclone config and kick off Apple auth (triggers 2FA push)."""
-    # Obscure the password using rclone's encoding
+    """Sign in with Apple ID + password. Triggers 2FA push."""
+    global _api, _state
+
     try:
-        result = subprocess.run(
-            [RCLONE_BIN, "obscure", req.password],
-            capture_output=True, text=True, timeout=10,
+        from pyicloud import PyiCloudService
+
+        COOKIE_DIR.mkdir(parents=True, exist_ok=True)
+        _api = PyiCloudService(
+            req.apple_id,
+            req.password,
+            cookie_directory=str(COOKIE_DIR),
         )
-        if result.returncode != 0:
-            raise HTTPException(500, detail="Failed to obscure password")
-        obscured_pw = result.stdout.strip()
-    except subprocess.TimeoutExpired:
-        raise HTTPException(500, detail="rclone obscure timed out")
+    except Exception as exc:
+        _api = None
+        _state = "error"
+        logger.exception("iCloud sign-in failed")
+        raise HTTPException(401, detail=f"Sign-in failed: {exc}")
 
-    # Write rclone config with obscured password
-    RCLONE_CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    RCLONE_CONFIG.write_text(
-        "[icloud]\n"
-        "type = iclouddrive\n"
-        f"apple_id = {req.apple_id}\n"
-        f"password = {obscured_pw}\n"
-    )
-    os.chmod(str(RCLONE_CONFIG), 0o600)
-
-    # Stop any existing mount
-    proc = await asyncio.create_subprocess_exec(
-        "sudo", "systemctl", "stop", "rclone-icloud",
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
-    )
-    await proc.wait()
-
-    # Start rclone auth (blocking pty ops) in a thread
-    state = await asyncio.to_thread(_start_rclone_auth)
-
-    if state == "error":
-        output = _session.output.decode(errors="replace")
-        _session.cleanup()
-        raise HTTPException(401, detail=f"Sign-in failed: {output}")
-
-    return {
-        "status": "2fa_required",
-        "message": "Enter the verification code from your Apple device",
-    }
+    if _api.requires_2fa:
+        _state = "awaiting_2fa"
+        return {
+            "status": "2fa_required",
+            "message": "Enter the verification code from your Apple device",
+        }
+    elif _api.requires_2sa:
+        _state = "awaiting_2fa"
+        return {
+            "status": "2fa_required",
+            "message": "Enter the verification code (2SA)",
+        }
+    else:
+        # No 2FA needed — already trusted session
+        _state = "authenticated"
+        return {"status": "authenticated"}
 
 
 @router.post("/auth/verify")
 async def verify_2fa(req: VerifyRequest) -> dict:
-    """Submit the 2FA code, wait for rclone to complete, start mount."""
-    if _session.state != "awaiting_2fa":
+    """Submit the 2FA/2SA code."""
+    global _state
+
+    if _api is None or _state != "awaiting_2fa":
         raise HTTPException(400, detail="No active auth session awaiting 2FA")
 
-    success, output = await asyncio.to_thread(_submit_2fa_code, req.code)
+    try:
+        if _api.requires_2fa:
+            ok = _api.validate_2fa_code(req.code)
+            if not ok:
+                raise HTTPException(401, detail="Invalid verification code")
+            # Trust the session so we don't get challenged again
+            if not _api.is_trusted_session:
+                _api.trust_session()
+        elif _api.requires_2sa:
+            devices = _api.trusted_devices
+            # Use first device for 2SA
+            device = devices[0] if devices else None
+            if device:
+                _api.validate_verification_code(device, req.code)
+            else:
+                raise HTTPException(400, detail="No trusted devices found for 2SA")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _state = "error"
+        logger.exception("2FA verification failed")
+        raise HTTPException(401, detail=f"Verification failed: {exc}")
 
-    if not success:
-        _session.state = "error"
-        raise HTTPException(401, detail=f"Verification failed: {output}")
-
-    _session.state = "authenticated"
-
-    # Start the FUSE mount
-    proc = await asyncio.create_subprocess_exec(
-        "sudo", "systemctl", "start", "rclone-icloud",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    await proc.communicate()
-
-    # Wait for mount to appear (up to 10 s)
-    for _ in range(10):
-        if os.path.ismount(str(MOUNT_POINT)):
-            return {"status": "mounted"}
-        await asyncio.sleep(1)
-
-    return {"status": "auth_ok", "message": "Authenticated. Mount may take a moment."}
+    _state = "authenticated"
+    return {"status": "authenticated"}
 
 
-@router.post("/unmount")
-async def unmount() -> dict:
-    """Unmount iCloud drive."""
-    proc = await asyncio.create_subprocess_exec(
-        "sudo", "systemctl", "stop", "rclone-icloud",
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
-    )
-    await proc.wait()
-    _session.state = "idle"
-    return {"status": "unmounted"}
+@router.post("/auth/logout")
+async def logout() -> dict:
+    """Clear the iCloud session."""
+    global _api, _state
+    _api = None
+    _state = "idle"
+    return {"status": "logged_out"}
+
+
+# ---------------------------------------------------------------------------
+# Routes: Drive browsing
+# ---------------------------------------------------------------------------
+
+@router.get("/drive/list")
+async def drive_list(path: str = Query("", description="Slash-separated path")) -> dict:
+    """List contents of an iCloud Drive directory."""
+    if _api is None or _state != "authenticated":
+        raise HTTPException(401, detail="Not authenticated with iCloud")
+
+    try:
+        node = _resolve_drive_path(path)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, detail=f"Failed to resolve path: {exc}")
+
+    try:
+        children = node.dir()
+    except Exception:
+        children = []
+
+    entries = []
+    for name in children:
+        try:
+            child = node[name]
+            entries.append(_node_to_dict(child))
+        except Exception:
+            entries.append({"name": name, "type": "file", "size": 0})
+
+    # Sort: dirs first, then alphabetical
+    entries.sort(key=lambda e: (0 if e["type"] == "dir" else 1, e["name"].lower()))
+
+    return {
+        "path": path or "/",
+        "entries": entries[:500],
+    }
+
+
+@router.get("/drive/download")
+async def drive_download(path: str = Query(..., description="Slash-separated path to file")):
+    """Download a file from iCloud Drive."""
+    if _api is None or _state != "authenticated":
+        raise HTTPException(401, detail="Not authenticated with iCloud")
+
+    node = _resolve_drive_path(path)
+
+    if node.type in ("folder", "app_library"):
+        raise HTTPException(400, detail="Cannot download a folder")
+
+    try:
+        response = node.open(stream=True)
+        content_type = mimetypes.guess_type(node.name or "file")[0] or "application/octet-stream"
+        filename = node.name or "download"
+
+        return StreamingResponse(
+            response.iter_content(chunk_size=65536),
+            media_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        logger.exception("iCloud download failed")
+        raise HTTPException(500, detail=f"Download failed: {exc}")
