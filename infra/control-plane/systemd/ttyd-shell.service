@@ -1,11 +1,11 @@
 [Unit]
-Description=ttyd - Shell Terminal
+Description=ttyd - Shell Terminal (htop)
 After=network.target
 
 [Service]
 Type=simple
 User=claude-operator
-ExecStart=/usr/local/bin/ttyd --port 7682 --interface lo --writable --base-path /shell bash --login
+ExecStart=/usr/local/bin/ttyd --port 7682 --interface lo --writable --base-path /shell /home/claude-operator/bin/htop-shell.sh
 Restart=always
 RestartSec=3
 
