@@ -255,6 +255,23 @@ done
 CSHELL
     chmod 755 "/home/${OPERATOR_USER}/bin/claude-shell.sh"
 
+    # Shell terminal wrapper: launches htop, drops to shell on exit, loops
+    cat > "/home/${OPERATOR_USER}/bin/htop-shell.sh" << 'HSHELL'
+#!/bin/bash
+export PATH=/home/claude-operator/.local/bin:$PATH
+
+while true; do
+    htop
+    echo ""
+    echo "htop exited. Shell active. Type exit to restart htop."
+    echo ""
+    bash --login
+    echo "Restarting htop..."
+    echo ""
+done
+HSHELL
+    chmod 755 "/home/${OPERATOR_USER}/bin/htop-shell.sh"
+
     chown -R "${OPERATOR_USER}:${OPERATOR_USER}" "/home/${OPERATOR_USER}/"
     chown -R "${OPERATOR_USER}:${OPERATOR_USER}" "${CONTROL_PLANE_DIR}/"
 }
