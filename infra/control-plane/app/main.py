@@ -21,6 +21,9 @@ from auth import CloudflareAuth
 from aws_discovery import AWSDiscovery
 from elevation import ElevationManager
 from filesystem import router as fs_router, set_elevation_manager
+from notes import router as notes_router
+from tasks import router as tasks_router
+from claude_sessions import router as sessions_router
 from lab_status import LabStatus
 from taskboard import TaskBoard
 
@@ -145,6 +148,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="ML Lab Control Plane", lifespan=lifespan)
 app.include_router(fs_router)
+app.include_router(notes_router)
+app.include_router(tasks_router)
+app.include_router(sessions_router)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -167,6 +173,50 @@ async def health() -> dict[str, Any]:
         "status": "ok",
         "role": "LabOperatorRole",
         "uptime": round(time.time() - _start_time, 1),
+    }
+
+
+@app.get("/api/profile")
+async def get_profile() -> dict[str, Any]:
+    """Return basic profile and system info."""
+    import socket
+    import subprocess as _sp
+
+    hostname = socket.gethostname()
+    try:
+        uptime = _sp.run(
+            ["uptime", "-p"], capture_output=True, text=True, timeout=5
+        ).stdout.strip()
+    except Exception:
+        uptime = "unknown"
+    try:
+        ip = _sp.run(
+            ["hostname", "-I"], capture_output=True, text=True, timeout=5
+        ).stdout.strip().split()[0]
+    except Exception:
+        ip = "unknown"
+    try:
+        import httpx as _httpx
+
+        token_resp = _httpx.put(
+            "http://169.254.169.254/latest/api/token",
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
+            timeout=2,
+        )
+        itype_resp = _httpx.get(
+            "http://169.254.169.254/latest/meta-data/instance-type",
+            headers={"X-aws-ec2-metadata-token": token_resp.text},
+            timeout=2,
+        )
+        instance_type = itype_resp.text
+    except Exception:
+        instance_type = "unknown"
+    return {
+        "username": "claude-operator",
+        "hostname": hostname,
+        "uptime": uptime,
+        "ip": ip,
+        "instance_type": instance_type,
     }
 
 
