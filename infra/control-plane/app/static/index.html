@@ -242,9 +242,12 @@ input { font-family: var(--font-ui); }
 /* ===== 5b. Shell Card ===== */
 #shell-row {
   flex-shrink: 0;
+  display: flex;
+  gap: 24px;
+  height: 800px;
 }
 #shell-card {
-  height: 800px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -928,6 +931,112 @@ input { font-family: var(--font-ui); }
 }
 .elev-btn.deny:hover { background: rgba(248,113,113,0.25); }
 
+/* ===== 12a. Telegram Card ===== */
+#telegram-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  overflow: hidden;
+  min-width: 0;
+}
+#tg-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tg-msg {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+.tg-msg.incoming {
+  align-self: flex-start;
+  background: rgba(255,255,255,0.06);
+  border-bottom-left-radius: 4px;
+}
+.tg-msg.outgoing {
+  align-self: flex-end;
+  background: rgba(96,165,250,0.15);
+  border-bottom-right-radius: 4px;
+}
+.tg-msg .tg-sender {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+.tg-msg.outgoing .tg-sender { color: var(--green); }
+.tg-msg .tg-text { color: var(--text); }
+.tg-msg .tg-time {
+  font-size: 9px;
+  color: var(--dim);
+  margin-top: 4px;
+  text-align: right;
+}
+.tg-msg .tg-attachment {
+  font-size: 11px;
+  color: var(--dim);
+  font-style: italic;
+  margin-top: 2px;
+}
+#tg-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+#tg-input {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  font-family: var(--font-ui);
+}
+#tg-input:focus { border-color: rgba(96,165,250,0.4); }
+#tg-send-btn {
+  padding: 8px 16px;
+  background: rgba(96,165,250,0.15);
+  border: 1px solid rgba(96,165,250,0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+#tg-send-btn:hover { background: rgba(96,165,250,0.25); }
+.tg-empty {
+  display: flex; align-items: center; justify-content: center;
+  flex: 1; color: var(--dim); font-size: 13px; text-align: center;
+}
+.tg-status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--dim);
+  transition: all var(--transition);
+}
+.tg-status-dot.online {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(52,211,153,0.5);
+}
+
 /* ===== 12. Page Footer ===== */
 #page-footer {
   flex-shrink: 0;
@@ -1108,7 +1217,9 @@ body.terminal-maximized #terminal-card {
     flex: none !important;
     min-height: 160px;
   }
+  #shell-row { flex-direction: column; height: auto; }
   #shell-card { height: 40vh; }
+  #telegram-card { height: 50vh; }
   #terminal-card.maximized {
     height: calc(100vh - 56px - 24px);
   }
@@ -1301,6 +1412,23 @@ body.terminal-maximized #terminal-card {
           <div style="font-size:13px;color:var(--dim)">Shell connection was lost.</div>
           <button id="shell-overlay-btn" onclick="restartShell()" style="padding:10px 24px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.3);border-radius:10px;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer">New Session</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Telegram Card -->
+    <div id="telegram-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="tg-status-dot" id="tg-dot"></span>
+          <span>Telegram</span>
+        </div>
+      </div>
+      <div id="tg-messages">
+        <div class="tg-empty" id="tg-empty">Connecting to Telegram...</div>
+      </div>
+      <div id="tg-input-row">
+        <input id="tg-input" placeholder="Send a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();tgSend();}">
+        <button id="tg-send-btn" onclick="tgSend()">Send</button>
       </div>
     </div>
   </div><!-- /shell-row -->
@@ -2759,6 +2887,140 @@ function deleteTask(id) {
 }
 
 /* ========================================
+   Telegram Chat
+   ======================================== */
+var tgMessages = [];
+var tgTimer = null;
+var tgBotOnline = false;
+
+function tgInit() {
+  quietFetch('/api/telegram/status').then(function(data) {
+    tgBotOnline = data && data.ok;
+    var dot = document.getElementById('tg-dot');
+    if (dot) dot.classList.toggle('online', tgBotOnline);
+    if (tgBotOnline) {
+      tgLoadHistory();
+      tgTimer = setInterval(tgPoll, 5000);
+    } else {
+      document.getElementById('tg-empty').textContent = data && data.configured ? 'Bot offline' : 'Telegram not configured';
+    }
+  }).catch(function() {
+    document.getElementById('tg-empty').textContent = 'Telegram not configured';
+  });
+}
+
+function tgLoadHistory() {
+  quietFetch('/api/telegram/history?limit=50').then(function(data) {
+    if (data && data.messages) {
+      tgMessages = data.messages;
+      tgRender();
+    }
+  }).catch(function() {});
+}
+
+function tgPoll() {
+  quietFetch('/api/telegram/messages?limit=20').then(function(data) {
+    if (data && data.messages && data.messages.length > 0) {
+      // Add only new messages (by id)
+      var existingIds = {};
+      tgMessages.forEach(function(m) { existingIds[m.id] = true; });
+      var added = false;
+      data.messages.forEach(function(m) {
+        if (!existingIds[m.id]) {
+          tgMessages.push(m);
+          added = true;
+        }
+      });
+      if (added) tgRender();
+    }
+  }).catch(function() {});
+}
+
+function tgRender() {
+  var container = document.getElementById('tg-messages');
+  var empty = document.getElementById('tg-empty');
+  if (tgMessages.length === 0) {
+    empty.style.display = '';
+    empty.textContent = 'No messages yet';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Remove old message elements (keep empty div)
+  var children = container.querySelectorAll('.tg-msg');
+  children.forEach(function(el) { el.remove(); });
+
+  tgMessages.forEach(function(msg) {
+    var div = document.createElement('div');
+    div.className = 'tg-msg ' + (msg.is_bot ? 'incoming' : 'outgoing');
+
+    var sender = document.createElement('div');
+    sender.className = 'tg-sender';
+    sender.textContent = msg.from;
+    div.appendChild(sender);
+
+    if (msg.text) {
+      var text = document.createElement('div');
+      text.className = 'tg-text';
+      text.textContent = msg.text;
+      div.appendChild(text);
+    }
+
+    if (msg.has_photo || msg.has_document) {
+      var att = document.createElement('div');
+      att.className = 'tg-attachment';
+      att.textContent = msg.has_photo ? '[Photo]' : '[Document]';
+      if (msg.caption) att.textContent += ' ' + msg.caption;
+      div.appendChild(att);
+    }
+
+    var time = document.createElement('div');
+    time.className = 'tg-time';
+    var d = new Date(msg.date * 1000);
+    time.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    div.appendChild(time);
+
+    container.appendChild(div);
+  });
+
+  // Scroll to bottom
+  container.scrollTop = container.scrollHeight;
+}
+
+function tgSend() {
+  var input = document.getElementById('tg-input');
+  var text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  var btn = document.getElementById('tg-send-btn');
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  apiFetch('/api/telegram/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: text })
+  }).then(function(data) {
+    // Add sent message to local list immediately
+    tgMessages.push({
+      id: data.message_id,
+      from: 'Bitbanshee',
+      is_bot: false,
+      text: text,
+      date: data.date || Math.floor(Date.now() / 1000),
+      has_photo: false,
+      has_document: false,
+      caption: ''
+    });
+    tgRender();
+  }).catch(function() {}).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Send';
+  });
+}
+
+/* ========================================
    Profile & Auth Status
    ======================================== */
 function setAuthBadge(id, active, cls) {
@@ -3013,6 +3275,7 @@ document.addEventListener('DOMContentLoaded', function() {
   try { loadTasks(); } catch(e) { console.error('[lab] loadTasks failed:', e); }
   try { loadProfile(); } catch(e) { console.error('[lab] loadProfile failed:', e); }
   try { loadSessions(); } catch(e) { console.error('[lab] loadSessions failed:', e); }
+  try { tgInit(); } catch(e) { console.error('[lab] tgInit failed:', e); }
 
   // Start polling
   pollHealth();
