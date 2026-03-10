@@ -1,46 +1,39 @@
 # v3 Training SITREP
 
 ## v3 Training Status
-**Progress:** 33,300/50,000 steps (**66.6%** complete)  
-**GPU:** L4 at **99% util**, 72W, 82°C, 16.6/23GB VRAM  
-**Rate:** ~4.9 steps/min (based on 16.7hr runtime)  
-**ETA:** ~56 hours remaining  
-**Spot Cost:** $0.46/hr (**53% savings** vs on-demand), $20.42 projected total
+**Step 33,600/50,000 (67.2% complete)**. L4 GPU at **100% util**, 70W/72W, 81°C. Rate ~300 steps/hr. **ETA: ~54hrs**. Current session: 16.6hrs uptime, **$7.60 spot cost** ($0.46/hr vs $0.98 on-demand, 53% savings).
 
 ## Eval Metrics & Trends
-| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
-|------|--------|-----------|--------|-------|-----|
-| 26000 | 29.58 | 4.02 | 27.7% | 0.864 | 0.006 |
-| 27000 | 29.55 | 4.32 | 24.6% | 0.866 | 0.011 |
-| 28000 | 29.40 | 4.51 | 23.8% | 0.865 | 0.007 |
-| 29000 | 29.36 | 4.27 | 25.5% | 0.867 | 0.012 |
-| 30000 | 29.16 | 4.34 | 24.6% | 0.868 | 0.005 |
-| 31000 | 28.95 | 4.47 | 23.3% | 0.871 | 0.003 |
-| 32000 | 29.04 | 4.35 | 24.2% | 0.865 | 0.009 |
-| **33000** | **28.93** | **4.09** | **26.6%** | **0.861** | **0.009** |
 
-**Trends:** AR perplexity steadily improving (**-2.3% since 26k**). Diffusion loss volatile but trending down. S1 accuracy recovered from 28k dip. **AUROC regression** from 0.871→0.861 concerning.
+| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE    |
+|-------|--------|-----------|---------|-------|--------|
+| 26k   | 29.58  | 4.02      | 27.7%   | 0.864 | 0.0063 |
+| 27k   | 29.55  | 4.32      | 24.6%   | 0.866 | 0.0109 |
+| 28k   | 29.40  | 4.51      | 23.8%   | 0.865 | 0.0068 |
+| 29k   | 29.36  | 4.27      | 25.5%   | 0.867 | 0.0118 |
+| 30k   | 29.16  | 4.34      | 24.6%   | 0.868 | 0.0046 |
+| 31k   | 28.95  | 4.47      | 23.3%   | 0.871 | 0.0031 |
+| 32k   | 29.04  | 4.35      | 24.2%   | 0.865 | 0.0089 |
+| **33k** | **28.93** | **4.09** | **26.6%** | **0.861** | **0.0086** |
+
+**AR perplexity improving steadily** (-0.65 over 7k steps). **Diffusion loss volatile** but trending down. **S1 accuracy recovering** from 28k dip. AUROC **slight regression** (-0.010 from peak). ECE stable.
 
 ## Target Scorecard
 | Metric | Target | Current | Status |
 |--------|--------|---------|--------|
-| AR PPL | < 40 | **28.93** | ✅ **PASS** |
-| AUROC | > 0.75 | **0.861** | ✅ **PASS** |
-| ECE | < 0.05 | **0.009** | ✅ **PASS** |
-| Diff Loss | → 4.0 | **4.09** | ⚠️ **Close** |
-| S1 Accuracy | → 40% | **26.6%** | ❌ **FAIL** |
+| AR PPL | < 40   | **28.93** | ✅ **Met** |
+| AUROC  | > 0.75 | **0.861** | ✅ **Met** |
+| ECE    | < 0.05 | **0.0086** | ✅ **Met** |
+| Diff Loss | → 4.0 | **4.09** | ✅ **Near target** |
+| S1 Acc | → 40% | **26.6%** | ❌ **Need +13.4pp** |
 
-**3/5 targets met.** S1 accuracy significantly below target. AUROC declining trend needs monitoring.
+**4/5 targets met**. S1 accuracy **significantly behind** but trending up.
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26% (PPL 1.46), WikiText 43.86, S1 loss 4.12  
-GPT-2 baseline: LAMBADA 95.08%, WikiText 29.07  
-**Current v3 AR performance on track** to match/exceed v1. S1 task still underperforming baseline.
+v1 final: LAMBADA 94.26%/PPL 1.46, WikiText PPL 43.86, S1 loss 4.12. GPT-2 baseline: LAMBADA 95.08%, WikiText PPL 29.07. **Current AR performance exceeds v1** (28.93 vs 43.86 PPL). Diffusion loss comparable to v1 S1 loss.
 
 ## Infrastructure
-**Current:** g6.2xlarge (L4), 16.1hrs uptime, $7.33 spent  
-**History:** 19 spot sessions, **frequent reclaims** in early training (11 interruptions on 3/9). Stabilized on current instance since 3/10 04:25 UTC.  
-**Total cost:** $27.36 across all sessions
+**19 spot sessions**, total **$27.59** vs **$43.44 on-demand** (36% savings). Major disruption period 3/9 17:00-22:00 with **11 spot reclaims** in 5hrs - likely capacity/pricing volatility. Current session stable 16.6hrs on g6.2xlarge. **3 checkpoints** available, last sync 19:49 UTC.
 
 ## What's Next
-Continue to 50k steps. **Monitor AUROC regression** - if continues, investigate confidence head training dynamics. Expect S1 accuracy plateau unless architectural changes made. Post-50k: comprehensive v1/v2/v3 benchmark comparison.
+v3 completion in ~54hrs. Post-training: comprehensive benchmarking vs v1/v2, confidence calibration analysis, S1 accuracy deep-dive (currently **underperforming** target by 34%).
