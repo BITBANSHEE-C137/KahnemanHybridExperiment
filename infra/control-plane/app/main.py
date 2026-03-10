@@ -1,8 +1,8 @@
 """FastAPI application for the ML Lab Control Plane.
 
 Serves the control plane dashboard and API for lab status queries,
-multi-project AWS resource discovery, task management, and privilege
-elevation management. Runs behind cloudflared and ttyd's WebSocket
+multi-project AWS resource discovery, task management, privilege
+elevation management, and file browsing. Runs behind cloudflared and ttyd's WebSocket
 proxy on the control plane instance.
 """
 
@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from auth import CloudflareAuth
 from aws_discovery import AWSDiscovery
 from elevation import ElevationManager
+from filesystem import router as fs_router, set_elevation_manager
 from lab_status import LabStatus
 from taskboard import TaskBoard
 
@@ -120,6 +121,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     discovery = AWSDiscovery()
     taskboard = TaskBoard()
 
+    # Share the elevation manager with the filesystem module.
+    set_elevation_manager(elevation)
+
     logger.info("ML Lab Control Plane starting up")
     logger.info("Elevation DB: %s", elevation.db_path)
     logger.info("TaskBoard DB: %s", taskboard.db_path)
@@ -140,6 +144,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # --- App ---
 
 app = FastAPI(title="ML Lab Control Plane", lifespan=lifespan)
+app.include_router(fs_router)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
