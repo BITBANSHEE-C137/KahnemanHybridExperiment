@@ -99,6 +99,102 @@ def _format_update(msg: dict) -> dict:
     }
 
 
+async def _handle_command(text: str) -> str | None:
+    """Check if text is a bot command and return a reply, or None."""
+    cmd = text.strip().split()[0].lower() if text.strip() else ""
+
+    if cmd == "/status":
+        try:
+            import socket
+            import subprocess as sp
+
+            hostname = socket.gethostname()
+            uptime = sp.run(["uptime", "-p"], capture_output=True, text=True, timeout=5).stdout.strip()
+            load = sp.run(["uptime"], capture_output=True, text=True, timeout=5).stdout.strip()
+            load_part = load.split("load average:")[-1].strip() if "load average:" in load else "?"
+            disk = sp.run(["df", "-h", "/"], capture_output=True, text=True, timeout=5).stdout.strip().split("\n")[-1].split()
+            disk_info = f"{disk[2]}/{disk[1]} ({disk[4]})" if len(disk) >= 5 else "?"
+            mem = sp.run(["free", "-h"], capture_output=True, text=True, timeout=5).stdout.strip().split("\n")
+            mem_info = "?"
+            if len(mem) >= 2:
+                parts = mem[1].split()
+                if len(parts) >= 3:
+                    mem_info = f"{parts[2]}/{parts[1]}"
+
+            return (
+                f"*Control Plane Status*\n"
+                f"Host: `{hostname}`\n"
+                f"Uptime: {uptime}\n"
+                f"Load: {load_part}\n"
+                f"Memory: {mem_info}\n"
+                f"Disk: {disk_info}"
+            )
+        except Exception as exc:
+            return f"Status check failed: {exc}"
+
+    elif cmd == "/sitrep":
+        try:
+            import subprocess as sp
+
+            lines = ["*Situation Report*\n"]
+
+            # Control plane services
+            for svc in ["controlplane-api", "cloudflared", "ttyd", "ttyd-shell"]:
+                result = sp.run(
+                    ["systemctl", "is-active", svc],
+                    capture_output=True, text=True, timeout=5,
+                )
+                state = result.stdout.strip()
+                icon = "+" if state == "active" else "-"
+                lines.append(f"`[{icon}]` {svc}: {state}")
+
+            # Uptime
+            uptime = sp.run(["uptime", "-p"], capture_output=True, text=True, timeout=5).stdout.strip()
+            lines.append(f"\nUptime: {uptime}")
+
+            return "\n".join(lines)
+        except Exception as exc:
+            return f"Sitrep failed: {exc}"
+
+    elif cmd == "/help":
+        return (
+            "*Available Commands*\n"
+            "/status — System status (host, load, memory, disk)\n"
+            "/sitrep — Service health check\n"
+            "/help — This message"
+        )
+
+    return None
+
+
+async def _auto_reply(text: str) -> None:
+    """If text is a command, send an auto-reply via the bot."""
+    reply = await _handle_command(text)
+    if reply is None:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{API_BASE}/sendMessage",
+                json={"chat_id": CHAT_ID, "text": reply, "parse_mode": "Markdown"},
+            )
+            data = resp.json()
+            if data.get("ok"):
+                msg = data["result"]
+                _add_message({
+                    "id": msg["message_id"],
+                    "from": msg.get("from", {}).get("first_name", "Bot"),
+                    "is_bot": True,
+                    "text": msg.get("text", reply),
+                    "date": msg["date"],
+                    "has_photo": False,
+                    "has_document": False,
+                    "caption": "",
+                })
+    except Exception as exc:
+        logger.warning("Auto-reply failed: %s", exc)
+
+
 @router.get("/status")
 async def telegram_status() -> dict[str, Any]:
     """Check Telegram bot connectivity."""
@@ -156,6 +252,10 @@ async def get_messages() -> dict[str, Any]:
                 formatted = _format_update(msg)
                 _add_message(formatted)
                 new_messages.append(formatted)
+
+                # Auto-reply to commands from non-bot users
+                if not formatted["is_bot"] and formatted["text"].startswith("/"):
+                    await _auto_reply(formatted["text"])
 
             if data.get("result"):
                 _save_store()
@@ -250,6 +350,10 @@ async def send_message(req: SendRequest) -> dict[str, Any]:
                 "caption": "",
             }
             _add_message(stored)
+
+            # Handle commands sent from the lab card
+            if req.text.strip().startswith("/"):
+                await _auto_reply(req.text)
 
             return {
                 "ok": True,
