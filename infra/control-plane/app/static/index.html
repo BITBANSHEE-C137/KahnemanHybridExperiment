@@ -59,15 +59,21 @@ input { font-family: var(--font-ui); }
   height: var(--header-h);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 160px;
-  background: url('https://bitbanshee.com/hero.png') center 25% / 600px auto no-repeat, var(--bg);
+  background: var(--bg);
   overflow: hidden;
+}
+#header .header-bg {
+  position: absolute; inset: 0;
+  background: url('https://bitbanshee.com/hero.png') center 20% / 400px auto no-repeat;
+  -webkit-mask-image: radial-gradient(ellipse 220px 60px at center, rgba(0,0,0,0.7) 0%, transparent 100%);
+  mask-image: radial-gradient(ellipse 220px 60px at center, rgba(0,0,0,0.7) 0%, transparent 100%);
 }
 #header::before {
   content: '';
   position: absolute; inset: 0;
-  background: rgba(12,14,20,0.45);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(12,14,20,0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 #header::after {
   content: '';
@@ -1116,6 +1122,7 @@ body.terminal-maximized #terminal-card {
 
 <!-- Header -->
 <header id="header">
+  <div class="header-bg"></div>
   <div id="header-left">
     <div class="header-brand">
       <span class="header-subtitle">bitbanshee.com</span>
