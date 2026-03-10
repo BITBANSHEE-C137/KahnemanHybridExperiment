@@ -165,10 +165,17 @@ input { font-family: var(--font-ui); }
   flex: 1;
   min-height: 0;
 }
+#right-col {
+  flex: 40 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
 
 /* ===== 5. Terminal Card ===== */
 #terminal-card {
-  flex: 65 0 0;
+  flex: 60 0 0;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -222,9 +229,52 @@ input { font-family: var(--font-ui); }
   border: none;
 }
 
+/* ===== 5b. Shell Card ===== */
+#shell-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  overflow: hidden;
+  transition: all var(--transition);
+  position: relative;
+}
+#shell-body {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#shell-container {
+  position: absolute; inset: 0;
+  padding: 4px;
+}
+#shell-container .xterm { height: 100%; }
+#shell-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+  background: rgba(15,17,23,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+#shell-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* ===== 6. Storage Card ===== */
 #storage-card {
-  flex: 35 0 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -548,7 +598,7 @@ input { font-family: var(--font-ui); }
 .loading { animation: pulse 1.5s ease infinite; }
 
 /* ===== 12. Fullscreen / Maximized States ===== */
-body.terminal-maximized #storage-card,
+body.terminal-maximized #right-col,
 body.terminal-maximized #elevation-card {
   display: none !important;
 }
@@ -563,13 +613,20 @@ body.terminal-maximized #cards-row {
   #cards-row {
     flex-direction: column;
   }
+  #right-col {
+    flex: none;
+    flex-direction: row;
+    height: 35vh;
+  }
   #terminal-card {
     flex: none;
-    height: 70vh;
+    height: 60vh;
+  }
+  #shell-card {
+    flex: 1;
   }
   #storage-card {
-    flex: none;
-    height: 30vh;
+    flex: 1;
   }
   .tiles-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -647,6 +704,27 @@ body.terminal-maximized #cards-row {
       </div>
     </div>
 
+    <!-- Right Column: Shell + Storage -->
+    <div id="right-col">
+
+    <!-- Shell Card -->
+    <div id="shell-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="dot" id="shell-dot"></span>
+          <span>Shell</span>
+        </div>
+      </div>
+      <div id="shell-body">
+        <div id="shell-container"></div>
+        <div id="shell-overlay">
+          <div style="font-size:16px;font-weight:600">Session ended</div>
+          <div style="font-size:13px;color:var(--dim)">Shell connection was lost.</div>
+          <button id="shell-overlay-btn" onclick="restartShell()" style="padding:10px 24px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.3);border-radius:10px;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer">New Session</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Storage Card -->
     <div id="storage-card">
       <div class="card-header">
@@ -696,6 +774,7 @@ body.terminal-maximized #cards-row {
         </div>
       </div>
     </div>
+    </div><!-- /right-col -->
   </div>
 
   <!-- Elevation Card -->
@@ -742,8 +821,7 @@ var S3_BUCKET = 'ml-lab-004507070771';
 var projects = [
   { id: 'ml-lab', path: '/home/claude-operator/projects/ml-lab', desc: 'Dual-process language model', icon: '\u2699\uFE0F' },
   { id: 'bitbanshee', path: '/home/claude-operator/projects/bitbanshee', desc: 'Landing page & brand', icon: '\u26A1' },
-  { id: 'deadcatsociety', path: '/home/claude-operator/projects/deadcatsociety', desc: 'Community platform', icon: '\uD83D\uDC31' },
-  { id: 'shell', path: '/home/claude-operator', desc: 'Plain terminal', icon: '>' }
+  { id: 'deadcatsociety', path: '/home/claude-operator/projects/deadcatsociety', desc: 'Community platform', icon: '\uD83D\uDC31' }
 ];
 
 /* ========================================
@@ -877,19 +955,14 @@ function selectProject(id) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(new Uint8Array([0x30, 0x03]));
     setTimeout(function() {
-      var cmd;
-      if (id === 'shell') {
-        cmd = 'cd ' + proj.path + '\n';
-      } else {
-        cmd = 'cd ' + proj.path + ' && claude\n';
-      }
+      var cmd = 'cd ' + proj.path + ' && claude\n';
       var enc = new TextEncoder().encode(cmd);
       var buf = new Uint8Array(enc.length + 1);
       buf[0] = 0x30;
       buf.set(enc, 1);
       ws.send(buf);
     }, 200);
-    showToast(id === 'shell' ? 'Switched to shell' : 'Loading ' + id + '...');
+    showToast('Loading ' + id + '...');
   }
 
   if (activeStorage === 'local') {
@@ -1060,7 +1133,136 @@ function toggleTerminalMaximized() {
     document.body.classList.remove('terminal-maximized');
   }
   saveState();
-  setTimeout(function() { try { fitAddon.fit(); } catch (e) {} }, 350);
+  setTimeout(function() {
+    try { fitAddon.fit(); } catch (e) {}
+    try { shellFitAddon.fit(); } catch (e) {}
+  }, 350);
+}
+
+/* ========================================
+   Shell Terminal (xterm.js + WebSocket proxy)
+   ======================================== */
+var shellTerm = null;
+var shellFitAddon = null;
+var shellWs = null;
+var shellWsTimer = null;
+var shellWsRetries = 0;
+
+function initShell() {
+  shellTerm = new Terminal({
+    cursorBlink: true,
+    fontSize: 13,
+    fontFamily: "'SF Mono','Fira Code','Consolas',monospace",
+    theme: {
+      background: '#0f1117',
+      foreground: '#e0e0e0',
+      cursor: '#34d399',
+      selectionBackground: 'rgba(52,211,153,0.25)',
+      black: '#1a1d27',
+      red: '#f87171',
+      green: '#34d399',
+      yellow: '#fbbf24',
+      blue: '#60a5fa',
+      magenta: '#c084fc',
+      cyan: '#22d3ee',
+      white: '#e0e0e0',
+      brightBlack: '#4b5563',
+      brightRed: '#fca5a5',
+      brightGreen: '#6ee7b7',
+      brightYellow: '#fde68a',
+      brightBlue: '#93bbfd',
+      brightMagenta: '#d8b4fe',
+      brightCyan: '#67e8f9',
+      brightWhite: '#f9fafb'
+    },
+    allowProposedApi: true
+  });
+
+  shellFitAddon = new FitAddon.FitAddon();
+  shellTerm.loadAddon(shellFitAddon);
+  shellTerm.loadAddon(new WebLinksAddon.WebLinksAddon());
+  shellTerm.open(document.getElementById('shell-container'));
+  shellFitAddon.fit();
+
+  var ro = new ResizeObserver(function() {
+    try { shellFitAddon.fit(); } catch (e) {}
+    if (shellWs && shellWs.readyState === WebSocket.OPEN && shellTerm.cols && shellTerm.rows) {
+      var msg = JSON.stringify({ columns: shellTerm.cols, rows: shellTerm.rows });
+      var enc = new TextEncoder().encode(msg);
+      var buf = new Uint8Array(enc.length + 1);
+      buf[0] = 0x31;
+      buf.set(enc, 1);
+      shellWs.send(buf);
+    }
+  });
+  ro.observe(document.getElementById('shell-body'));
+
+  shellTerm.onData(function(data) {
+    if (shellWs && shellWs.readyState === WebSocket.OPEN) {
+      var enc = new TextEncoder().encode(data);
+      var buf = new Uint8Array(enc.length + 1);
+      buf[0] = 0x30;
+      buf.set(enc, 1);
+      shellWs.send(buf);
+    }
+  });
+
+  shellTerm.onBinary(function(data) {
+    if (shellWs && shellWs.readyState === WebSocket.OPEN) {
+      var buf = new Uint8Array(data.length + 1);
+      buf[0] = 0x30;
+      for (var i = 0; i < data.length; i++) {
+        buf[i + 1] = data.charCodeAt(i) & 0xFF;
+      }
+      shellWs.send(buf);
+    }
+  });
+
+  connectShell();
+}
+
+function connectShell() {
+  if (shellWs) { try { shellWs.close(); } catch (e) {} }
+  var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  var url = protocol + '//' + location.host + '/api/shell/ws';
+  shellWs = new WebSocket(url, ['tty']);
+  shellWs.binaryType = 'arraybuffer';
+
+  shellWs.onopen = function() {
+    shellWsRetries = 0;
+    document.getElementById('shell-overlay').classList.remove('visible');
+    document.getElementById('shell-dot').style.background = 'var(--green)';
+    var authMsg = JSON.stringify({ AuthToken: '', columns: shellTerm.cols, rows: shellTerm.rows });
+    shellWs.send(new TextEncoder().encode(authMsg));
+  };
+
+  shellWs.onmessage = function(ev) {
+    if (typeof ev.data === 'string') { shellTerm.write(ev.data); return; }
+    var data = new Uint8Array(ev.data);
+    if (data.length < 1) return;
+    if (data[0] === 0x30) { shellTerm.write(data.slice(1)); }
+  };
+
+  shellWs.onclose = function() {
+    document.getElementById('shell-dot').style.background = 'var(--red)';
+    shellWsRetries++;
+    if (shellWsRetries <= 3) {
+      clearTimeout(shellWsTimer);
+      shellWsTimer = setTimeout(connectShell, 3000);
+    } else {
+      document.getElementById('shell-overlay').classList.add('visible');
+    }
+  };
+
+  shellWs.onerror = function() {};
+}
+
+async function restartShell() {
+  try {
+    await apiFetch('/api/shell/restart', { method: 'POST' });
+  } catch (e) {}
+  shellWsRetries = 0;
+  setTimeout(connectShell, 2000);
 }
 
 /* ========================================
@@ -1575,6 +1777,7 @@ document.addEventListener('click', function(e) {
 document.addEventListener('DOMContentLoaded', function() {
   buildProjectDropdown();
   initTerminal();
+  initShell();
   initDragDrop();
 
   // Restore maximized state
