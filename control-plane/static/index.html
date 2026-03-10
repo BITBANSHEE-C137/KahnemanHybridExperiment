@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BitBanshee — ML Lab</title>
+<title>Bitbanshee's AI Playground</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <style>
 /* ===== 1. Reset + Variables ===== */
@@ -21,7 +21,7 @@
   --dim: #6b7280;
   --font-ui: 'SF Pro Display','SF Pro',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
   --font-mono: 'SF Mono','Fira Code','Consolas',monospace;
-  --header-h: 48px;
+  --header-h: 80px;
   --radius: 16px;
   --radius-sm: 10px;
   --transition: 0.3s ease;
@@ -57,86 +57,53 @@ input { font-family: var(--font-ui); }
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
   height: var(--header-h);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px;
-  background: rgba(20,22,30,0.75);
+  padding: 0 48px;
+  background: rgba(15,17,23,0.85);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-bottom: 1px solid var(--glass-border);
 }
 #header-left {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 15px; font-weight: 600; letter-spacing: -0.2px;
+  display: flex; align-items: center; gap: 16px;
   white-space: nowrap;
 }
-#header-left .brand-logo {
+.header-brand {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.header-subtitle {
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  color: var(--accent);
-  background: rgba(96,165,250,0.1);
-  border: 1px solid rgba(96,165,250,0.25);
-  border-radius: 4px;
-  padding: 2px 7px;
-  line-height: 1;
+  color: var(--dim);
 }
-#header-left .brand-text {
+.header-title {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 600;
+  color: var(--text);
   letter-spacing: -0.3px;
-  color: var(--text);
 }
-#header-left .brand-accent {
-  color: var(--accent);
+.header-title .hl { color: var(--accent); }
+#header-center {
+  display: flex; align-items: center; gap: 12px;
 }
-#header-center { position: relative; }
-#project-btn {
+.project-label {
   display: flex; align-items: center; gap: 8px;
-  padding: 5px 14px 5px 12px;
-  background: rgba(255,255,255,0.06);
+  padding: 5px 14px;
+  background: rgba(255,255,255,0.04);
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  font-size: 13px; font-weight: 500;
-  color: var(--text);
-  transition: background var(--transition), border-color var(--transition);
-  cursor: pointer;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px; font-weight: 500;
+  color: var(--dim);
 }
-#project-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--glass-border-hover); }
-#project-btn .proj-icon { font-size: 14px; }
-#project-btn .proj-name { font-weight: 600; }
-#project-btn .caret { font-size: 10px; color: var(--dim); margin-left: 2px; }
-#project-dropdown {
-  display: none; position: absolute; top: calc(100% + 8px); left: 50%;
-  transform: translateX(-50%);
-  min-width: 280px;
-  background: var(--glass);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-  overflow: hidden; z-index: 200;
-  animation: dropdownIn 0.2s ease;
+.project-label .pl-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green);
 }
-@keyframes dropdownIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-#project-dropdown.open { display: block; }
-.proj-option {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 16px;
-  cursor: pointer;
-  transition: background var(--transition);
-}
-.proj-option:hover { background: rgba(255,255,255,0.06); }
-.proj-option.active { background: rgba(96,165,250,0.1); }
-.proj-option .po-icon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
-.proj-option .po-info { display: flex; flex-direction: column; }
-.proj-option .po-name { font-size: 13px; font-weight: 600; }
-.proj-option .po-desc { font-size: 11px; color: var(--dim); }
+.project-label .pl-name { color: var(--text); font-weight: 600; }
 
 #header-right {
   display: flex; align-items: center; gap: 14px;
@@ -156,7 +123,7 @@ input { font-family: var(--font-ui); }
   box-shadow: 0 0 6px rgba(248,113,113,0.5);
 }
 .header-btn {
-  width: 30px; height: 30px;
+  width: 32px; height: 32px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 8px;
   font-size: 14px;
@@ -171,10 +138,12 @@ input { font-family: var(--font-ui); }
   left: 0; right: 0; bottom: 0;
   z-index: 10;
   display: flex;
-  padding: 32px 48px;
-  gap: 24px;
+  padding: 24px 48px;
+  gap: 20px;
   flex-direction: column;
   overflow-y: auto;
+  max-width: 1800px;
+  margin: 0 auto;
 }
 #top-row {
   display: flex;
@@ -302,18 +271,19 @@ input { font-family: var(--font-ui); }
 #storage-card {
   display: flex;
   flex-direction: column;
-  height: 160px;
+  height: 80px;
   background: var(--glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
   overflow: hidden;
   transition: all var(--transition);
 }
 #storage-card.browsing {
   height: 320px;
+  border-radius: var(--radius);
 }
 #storage-body {
   flex: 1;
@@ -335,22 +305,24 @@ input { font-family: var(--font-ui); }
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px 24px;
+  padding: 0 20px;
 }
 .tiles-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  display: flex;
+  gap: 12px;
   width: 100%;
   max-width: 600px;
+  justify-content: center;
 }
 .storage-tile {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 24px 12px;
+  gap: 8px;
+  padding: 8px 20px;
+  flex: 1;
+  max-width: 180px;
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
@@ -368,9 +340,9 @@ input { font-family: var(--font-ui); }
   cursor: default;
   pointer-events: none;
 }
-.tile-icon { font-size: 32px; line-height: 1; }
-.tile-label { font-size: 13px; font-weight: 600; }
-.tile-sub { font-size: 11px; color: var(--dim); }
+.tile-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
+.tile-label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tile-sub { display: none; }
 
 .browser-view {
   width: 50%;
@@ -918,7 +890,8 @@ body.terminal-maximized #top-row {
 
 /* ===== 13. Mobile Responsive ===== */
 @media (max-width: 767px) {
-  #header-left .brand-text { display: none; }
+  .header-subtitle { display: none; }
+  .header-title { font-size: 14px; }
   #main {
     padding: 12px;
     gap: 12px;
@@ -978,16 +951,16 @@ body.terminal-maximized #top-row {
 <!-- Header -->
 <header id="header">
   <div id="header-left">
-    <span class="brand-logo">BB</span>
-    <span class="brand-text">bitbanshee<span class="brand-accent">.lab</span></span>
+    <div class="header-brand">
+      <span class="header-subtitle">bitbanshee.com</span>
+      <span class="header-title">Bitbanshee's <span class="hl">AI Playground</span></span>
+    </div>
   </div>
   <div id="header-center">
-    <button id="project-btn" onclick="toggleProjectDropdown()">
-      <span class="proj-icon" id="proj-btn-icon">&#9881;&#65039;</span>
-      <span class="proj-name" id="proj-btn-name">ml-lab</span>
-      <span class="caret">&#9660;</span>
-    </button>
-    <div id="project-dropdown"></div>
+    <div class="project-label">
+      <span class="pl-dot"></span>
+      <span class="pl-name" id="proj-btn-name">ml-lab</span>
+    </div>
   </div>
   <div id="header-right">
     <div id="health-indicator">
@@ -1109,9 +1082,6 @@ body.terminal-maximized #top-row {
   <!-- Storage Row -->
   <div id="storage-row">
     <div id="storage-card">
-      <div class="card-header">
-        <div class="card-title"><span>Storage</span></div>
-      </div>
       <div id="storage-body">
         <div class="storage-inner" id="storage-inner">
           <!-- Tiles View -->
@@ -1284,41 +1254,9 @@ function saveState() {
 }
 
 /* ========================================
-   Header / Project Selector
+   Header / Project Label
    ======================================== */
-function buildProjectDropdown() {
-  var dd = document.getElementById('project-dropdown');
-  dd.innerHTML = '';
-  projects.forEach(function(p) {
-    var div = document.createElement('div');
-    div.className = 'proj-option' + (p.id === currentProject ? ' active' : '');
-    div.innerHTML = '<div class="po-icon">' + escHtml(p.icon) + '</div>' +
-      '<div class="po-info"><div class="po-name">' + escHtml(p.id) + '</div>' +
-      '<div class="po-desc">' + escHtml(p.desc) + '</div></div>';
-    div.addEventListener('click', function() { selectProject(p.id); });
-    dd.appendChild(div);
-  });
-  var sep = document.createElement('div');
-  sep.style.height = '1px';
-  sep.style.background = 'var(--glass-border)';
-  sep.style.margin = '4px 0';
-  dd.appendChild(sep);
-  var logout = document.createElement('div');
-  logout.className = 'proj-option';
-  logout.innerHTML = '<div class="po-icon">\uD83D\uDEAA</div>' +
-    '<div class="po-info"><div class="po-name" style="color:var(--red)">Logout</div>' +
-    '<div class="po-desc">Sign out of Cloudflare Access</div></div>';
-  logout.addEventListener('click', function() { window.location.href = '/cdn-cgi/access/logout'; });
-  dd.appendChild(logout);
-}
-
-function toggleProjectDropdown() {
-  var dd = document.getElementById('project-dropdown');
-  dd.classList.toggle('open');
-}
-
 function closeDropdowns() {
-  document.getElementById('project-dropdown').classList.remove('open');
   closeContextMenu();
 }
 
@@ -1326,10 +1264,7 @@ function selectProject(id) {
   var proj = projects.find(function(p) { return p.id === id; });
   if (!proj) return;
   currentProject = id;
-  document.getElementById('proj-btn-icon').textContent = proj.icon;
   document.getElementById('proj-btn-name').textContent = proj.id;
-  closeDropdowns();
-  buildProjectDropdown();
 
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(new Uint8Array([0x30, 0x03]));
@@ -1458,7 +1393,7 @@ function connectTerminal() {
       term.write(payload);
     } else if (cmd === 0x31) {
       var titleStr = new TextDecoder().decode(payload);
-      document.title = titleStr || "BitBanshee \u2014 ML Lab";
+      document.title = titleStr || "Bitbanshee's AI Playground";
     }
   };
 
@@ -2405,12 +2340,6 @@ document.addEventListener('keydown', function(e) {
    Global Click Handler
    ======================================== */
 document.addEventListener('click', function(e) {
-  // Close project dropdown if click outside
-  var dd = document.getElementById('project-dropdown');
-  var btn = document.getElementById('project-btn');
-  if (dd.classList.contains('open') && !dd.contains(e.target) && !btn.contains(e.target)) {
-    dd.classList.remove('open');
-  }
   // Close context menu if click outside
   var ctx = document.getElementById('ctx-menu');
   if (ctx.classList.contains('open') && !ctx.contains(e.target)) {
@@ -2422,7 +2351,6 @@ document.addEventListener('click', function(e) {
    Init
    ======================================== */
 document.addEventListener('DOMContentLoaded', function() {
-  buildProjectDropdown();
   initTerminal();
   initShell();
   initDragDrop();
