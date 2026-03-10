@@ -340,7 +340,59 @@ input { font-family: var(--font-ui); }
 .tile-label { font-size: 12px; font-weight: 600; white-space: nowrap; }
 .tile-sub { font-size: 10px; color: var(--dim); }
 
-/* ===== 6b. Storage Modal ===== */
+/* ===== 6b. iCloud Auth Modal ===== */
+#icloud-auth-modal {
+  display: none; position: fixed; inset: 0; z-index: 300;
+  align-items: center; justify-content: center;
+}
+#icloud-auth-modal.open { display: flex; }
+#icloud-auth-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#icloud-auth-content {
+  position: relative; width: 380px; max-width: 90vw;
+  background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border); border-radius: var(--radius);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5); overflow: hidden;
+  animation: modalIn 0.2s ease;
+}
+.icloud-step { }
+.icloud-form {
+  padding: 32px 28px; display: flex; flex-direction: column;
+  align-items: center; gap: 16px;
+}
+.icloud-icon { font-size: 48px; line-height: 1; }
+.icloud-desc { font-size: 13px; color: var(--dim); text-align: center; line-height: 1.5; }
+.icloud-form input {
+  width: 100%; padding: 10px 14px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
+  border-radius: 8px; color: var(--text); font-size: 14px;
+  font-family: var(--font-ui); outline: none; transition: border-color 0.2s;
+}
+.icloud-form input:focus { border-color: var(--accent); }
+.icloud-form input#icloud-2fa-code {
+  text-align: center; font-size: 24px; letter-spacing: 8px;
+  font-family: var(--font-mono);
+}
+.icloud-btn {
+  width: 100%; padding: 10px; background: var(--accent); color: #000;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+  cursor: pointer; font-family: var(--font-ui); transition: opacity 0.2s;
+}
+.icloud-btn:hover { opacity: 0.9; }
+.icloud-btn:disabled { opacity: 0.5; cursor: default; }
+.icloud-error { font-size: 12px; color: var(--red); text-align: center; min-height: 16px; margin: 0; }
+.icloud-spinner {
+  width: 32px; height: 32px; border: 3px solid var(--glass-border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 6c. Storage Modal ===== */
 #storage-modal {
   display: none;
   position: fixed;
@@ -1016,10 +1068,10 @@ body.terminal-maximized #terminal-card {
                 <div class="tile-label">Amazon S3</div>
               </div>
             </div>
-            <div class="storage-tile disabled">
+            <div class="storage-tile" onclick="openICloudAuth()">
               <div class="tile-icon">&#9729;</div>
               <div class="tile-info">
-                <div class="tile-label">iCloud</div>
+                <div class="tile-label">iCloud Drive</div>
               </div>
             </div>
           </div>
@@ -1146,6 +1198,47 @@ body.terminal-maximized #terminal-card {
       <button class="browser-footer-btn" onclick="promptMkdir()">
         <span>&#43;</span> New Folder
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- iCloud Auth Modal -->
+<div id="icloud-auth-modal">
+  <div id="icloud-auth-backdrop" onclick="closeICloudAuth()"></div>
+  <div id="icloud-auth-content">
+    <div class="card-header">
+      <div class="card-title"><span id="icloud-auth-title">Sign in with Apple</span></div>
+      <div class="card-actions">
+        <button class="card-btn" onclick="closeICloudAuth()" title="Close">&#x2715;</button>
+      </div>
+    </div>
+    <!-- Step 1: Credentials -->
+    <div id="icloud-step-1" class="icloud-step">
+      <div class="icloud-form">
+        <div class="icloud-icon">&#9729;</div>
+        <p class="icloud-desc">Sign in to mount your iCloud Drive</p>
+        <input type="email" id="icloud-apple-id" placeholder="Apple ID" autocomplete="email">
+        <input type="password" id="icloud-password" placeholder="Password" autocomplete="current-password">
+        <button onclick="icloudSignIn()" id="icloud-signin-btn" class="icloud-btn">Sign In</button>
+        <p id="icloud-error-1" class="icloud-error"></p>
+      </div>
+    </div>
+    <!-- Step 2: 2FA Code -->
+    <div id="icloud-step-2" class="icloud-step" style="display:none">
+      <div class="icloud-form">
+        <div class="icloud-icon">&#128274;</div>
+        <p class="icloud-desc">Enter the verification code sent to your Apple devices</p>
+        <input type="text" id="icloud-2fa-code" placeholder="000000" maxlength="6" autocomplete="one-time-code" inputmode="numeric">
+        <button onclick="icloudVerify()" id="icloud-verify-btn" class="icloud-btn">Verify</button>
+        <p id="icloud-error-2" class="icloud-error"></p>
+      </div>
+    </div>
+    <!-- Step 3: Mounting -->
+    <div id="icloud-step-3" class="icloud-step" style="display:none">
+      <div class="icloud-form">
+        <div class="icloud-spinner"></div>
+        <p class="icloud-desc">Mounting iCloud Drive...</p>
+      </div>
     </div>
   </div>
 </div>
@@ -1704,6 +1797,11 @@ function openStorageModal(type) {
     title.textContent = 'Amazon S3';
     footer.style.display = 'none';
     loadS3Dir(s3Prefix);
+  } else if (type === 'icloud') {
+    title.textContent = 'iCloud Drive';
+    footer.style.display = 'none';
+    localPath = '/home/claude-operator/icloud';
+    loadLocalDir(localPath);
   } else {
     title.textContent = 'Local Files';
     footer.style.display = '';
@@ -1719,7 +1817,10 @@ function closeStorageModal() {
 
 // Keep closeBrowser for breadcrumb back-to-root
 function closeBrowser() {
-  if (activeStorage === 'local') {
+  if (activeStorage === 'icloud') {
+    localPath = '/home/claude-operator/icloud';
+    loadLocalDir(localPath);
+  } else if (activeStorage === 'local') {
     localPath = '/home/claude-operator/projects';
     loadLocalDir(localPath);
   } else if (activeStorage === 's3') {
@@ -1894,6 +1995,111 @@ function renderFileList(data, type) {
     listEl.appendChild(div);
   });
 }
+
+/* ========================================
+   iCloud Auth
+   ======================================== */
+function openICloudAuth() {
+  apiFetch('/api/icloud/status').then(function(data) {
+    if (data.mounted) {
+      openStorageModal('icloud');
+    } else {
+      var modal = document.getElementById('icloud-auth-modal');
+      modal.classList.add('open');
+      document.getElementById('icloud-step-1').style.display = '';
+      document.getElementById('icloud-step-2').style.display = 'none';
+      document.getElementById('icloud-step-3').style.display = 'none';
+      document.getElementById('icloud-error-1').textContent = '';
+      document.getElementById('icloud-error-2').textContent = '';
+      document.getElementById('icloud-auth-title').textContent = 'Sign in with Apple';
+      document.getElementById('icloud-password').value = '';
+      var saved = localStorage.getItem('icloud_apple_id');
+      if (saved) document.getElementById('icloud-apple-id').value = saved;
+      document.getElementById('icloud-apple-id').focus();
+    }
+  }).catch(function() {
+    showToast('Failed to check iCloud status', 3000);
+  });
+}
+
+function closeICloudAuth() {
+  document.getElementById('icloud-auth-modal').classList.remove('open');
+}
+
+function icloudSignIn() {
+  var appleId = document.getElementById('icloud-apple-id').value.trim();
+  var password = document.getElementById('icloud-password').value;
+  if (!appleId || !password) return;
+
+  var btn = document.getElementById('icloud-signin-btn');
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+  document.getElementById('icloud-error-1').textContent = '';
+
+  localStorage.setItem('icloud_apple_id', appleId);
+
+  fetch('/api/icloud/auth/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({apple_id: appleId, password: password})
+  }).then(function(r) {
+    if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Sign-in failed'); });
+    return r.json();
+  }).then(function(data) {
+    document.getElementById('icloud-step-1').style.display = 'none';
+    document.getElementById('icloud-step-2').style.display = '';
+    document.getElementById('icloud-auth-title').textContent = 'Two-Factor Authentication';
+    document.getElementById('icloud-2fa-code').value = '';
+    document.getElementById('icloud-2fa-code').focus();
+  }).catch(function(err) {
+    document.getElementById('icloud-error-1').textContent = err.message;
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  });
+}
+
+function icloudVerify() {
+  var code = document.getElementById('icloud-2fa-code').value.trim();
+  if (!code || code.length < 4) return;
+
+  var btn = document.getElementById('icloud-verify-btn');
+  btn.disabled = true;
+  btn.textContent = 'Verifying...';
+  document.getElementById('icloud-error-2').textContent = '';
+
+  fetch('/api/icloud/auth/verify', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({code: code})
+  }).then(function(r) {
+    if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Verification failed'); });
+    return r.json();
+  }).then(function(data) {
+    document.getElementById('icloud-step-2').style.display = 'none';
+    document.getElementById('icloud-step-3').style.display = '';
+    document.getElementById('icloud-auth-title').textContent = 'iCloud Drive';
+    setTimeout(function() {
+      closeICloudAuth();
+      openStorageModal('icloud');
+      showToast('iCloud Drive mounted', 3000);
+    }, 1500);
+  }).catch(function(err) {
+    document.getElementById('icloud-error-2').textContent = err.message;
+    btn.disabled = false;
+    btn.textContent = 'Verify';
+  });
+}
+
+// iCloud auth keyboard handlers
+document.addEventListener('keydown', function(e) {
+  if (!document.getElementById('icloud-auth-modal').classList.contains('open')) return;
+  if (e.key === 'Enter') {
+    if (document.getElementById('icloud-step-1').style.display !== 'none') icloudSignIn();
+    else if (document.getElementById('icloud-step-2').style.display !== 'none') icloudVerify();
+  }
+  if (e.key === 'Escape') closeICloudAuth();
+});
 
 /* ========================================
    Context Menu
