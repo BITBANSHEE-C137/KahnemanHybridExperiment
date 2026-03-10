@@ -123,24 +123,9 @@ body::before{
   padding:5px 10px;border-radius:var(--radius);font-size:.75rem;font-weight:600;
   min-height:28px;transition:all .15s;
 }
-.tb-btn-accent{background:var(--accent);color:#0f1117}
-.tb-btn-accent:hover{background:#93bbfd}
 .tb-btn-ghost{color:var(--dim)}
 .tb-btn-ghost:hover{color:var(--accent)}
-
-.claude-launcher{position:relative;display:inline-flex}
-.claude-dropdown{
-  display:none;position:absolute;top:100%;right:0;margin-top:4px;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  min-width:200px;z-index:100;overflow:hidden;
-}
-.claude-launcher.open .claude-dropdown{display:block}
-.claude-dropdown button{
-  display:block;width:100%;text-align:left;padding:10px 14px;font-size:.75rem;
-  min-height:36px;transition:background .1s;
-}
-.claude-dropdown button:hover{background:rgba(96,165,250,.08)}
-.claude-dropdown .hint{color:var(--dim);font-size:.65rem;margin-top:2px}
+.tb-btn-ghost.active{color:var(--accent);background:rgba(96,165,250,.1)}
 
 /* ── Elevation banner ──────────────────────────────────────── */
 .elevation-banner{
@@ -160,9 +145,112 @@ body::before{
 .elev-deny{background:rgba(248,113,113,.2);color:var(--red)}
 .elev-deny:hover{background:rgba(248,113,113,.35)}
 
+/* ── Workspace body ────────────────────────────────────────── */
+.workspace-body{
+  display:flex;flex:1;overflow:hidden;min-height:0;
+}
+.terminal-wrapper{
+  flex:1;display:flex;flex-direction:column;min-width:0;
+}
+
 /* ── Terminal ──────────────────────────────────────────────── */
 .terminal-container{position:relative;overflow:hidden;cursor:text;height:602px}
 #terminal{width:100%;height:100%}
+
+/* ── File panel — hidden by default ────────────────────────── */
+.file-panel{
+  width:260px;min-width:200px;max-width:400px;
+  background:var(--surface);border-right:1px solid var(--border);
+  display:none;flex-direction:column;flex-shrink:0;overflow:hidden;
+  position:relative;
+}
+.resize-handle{
+  width:4px;cursor:col-resize;background:transparent;
+  transition:background .15s;flex-shrink:0;display:none;
+}
+.resize-handle:hover,.resize-handle.dragging{background:var(--accent)}
+
+/* Source tabs */
+.source-tabs{display:flex;border-bottom:1px solid var(--border)}
+.source-tab{
+  flex:1;padding:8px;font-size:.7rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--dim);
+  border-bottom:2px solid transparent;transition:all .15s;
+  background:none;cursor:pointer;
+}
+.source-tab:hover{color:var(--text)}
+.source-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Breadcrumb */
+.breadcrumb{
+  padding:8px 12px;font-size:.7rem;color:var(--dim);
+  border-bottom:1px solid var(--border);white-space:nowrap;overflow-x:auto;
+}
+.breadcrumb span{cursor:pointer;color:var(--dim)}
+.breadcrumb span:hover{color:var(--accent)}
+.breadcrumb .sep{margin:0 2px;color:var(--border);cursor:default}
+.breadcrumb .sep:hover{color:var(--border)}
+.breadcrumb .current{color:var(--text);cursor:default}
+.breadcrumb .current:hover{color:var(--text)}
+
+/* File tree */
+.file-tree{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0}
+.file-entry{
+  display:flex;align-items:center;gap:8px;padding:5px 12px;
+  font-size:.75rem;cursor:pointer;transition:background .1s;position:relative;
+}
+.file-entry:hover{background:rgba(96,165,250,.06)}
+.file-entry .fe-icon{width:16px;text-align:center;flex-shrink:0;font-size:.8rem}
+.file-entry .fe-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-entry .fe-size{font-size:.6rem;color:var(--dim);flex-shrink:0}
+.file-entry .fe-dir{color:var(--accent);font-weight:600}
+.file-tree-loading{
+  display:flex;justify-content:center;padding:20px;
+  color:var(--dim);font-size:.75rem;
+}
+
+/* Panel actions */
+.panel-actions{display:flex;gap:4px;padding:8px;border-top:1px solid var(--border)}
+.panel-action-btn{
+  flex:1;padding:6px;font-size:.7rem;font-weight:600;text-align:center;
+  background:rgba(96,165,250,.08);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text);cursor:pointer;transition:all .15s;
+}
+.panel-action-btn:hover{background:rgba(96,165,250,.15);border-color:var(--accent)}
+
+/* Upload zone */
+.upload-zone{
+  display:none;position:absolute;inset:0;
+  background:rgba(96,165,250,.1);border:2px dashed var(--accent);
+  color:var(--accent);font-size:.9rem;font-weight:700;
+  justify-content:center;align-items:center;z-index:50;
+}
+.file-panel.drag-over .upload-zone{display:flex}
+
+/* Context menu */
+.context-menu{
+  position:fixed;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:4px 0;min-width:160px;z-index:300;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);
+}
+.context-menu button{
+  display:block;width:100%;text-align:left;padding:8px 14px;
+  font-size:.75rem;transition:background .1s;background:none;border:none;
+  color:var(--text);cursor:pointer;font-family:inherit;
+}
+.context-menu button:hover{background:rgba(96,165,250,.08)}
+.context-menu .cm-sep{height:1px;background:var(--border);margin:4px 0}
+
+/* ── Panel OPEN — workspace mode ───────────────────────────── */
+.app.panel-open{padding:0}
+.app.panel-open .term-window{
+  width:100%;max-width:100%;height:100%;border-radius:0;border:none;
+}
+.app.panel-open .toolbar{border-radius:0}
+.app.panel-open .footer{border-radius:0}
+.app.panel-open .file-panel{display:flex;flex-direction:column}
+.app.panel-open .resize-handle{display:block}
+.app.panel-open .terminal-container{height:auto;flex:1}
 
 /* ── Footer ────────────────────────────────────────────────── */
 .footer{
@@ -192,6 +280,8 @@ body::before{
   .tb-btn{padding:4px 8px;font-size:.7rem}
   .toolbar-right .hide-mobile{display:none}
   .project-btn{padding:0 10px;font-size:.7rem}
+  .file-panel{display:none !important}
+  .resize-handle{display:none !important}
 }
 </style>
 </head>
@@ -241,14 +331,7 @@ body::before{
       <div class="spacer"></div>
 
       <div class="toolbar-right">
-        <div class="claude-launcher" id="claude-launcher">
-          <button class="tb-btn tb-btn-accent" id="btn-claude">&#9889; Claude</button>
-          <div class="claude-dropdown">
-            <button id="btn-claude-here">Launch in current pane<div class="hint">Sends <code>claude</code> to active pane</div></button>
-            <button id="btn-claude-new">Launch in new window<div class="hint">Creates tmux window + <code>claude</code></div></button>
-          </div>
-        </div>
-        
+        <button class="tb-btn tb-btn-ghost" id="btn-files" title="File Browser (Ctrl+Shift+E)">&#128193;</button>
         <button class="tb-btn tb-btn-ghost" id="btn-fullscreen" title="Fullscreen (Ctrl+Shift+F)">&#x26F6;</button>
         <a href="/cdn-cgi/access/logout" class="tb-btn tb-btn-ghost hide-mobile" title="Logout">Logout</a>
       </div>
@@ -260,8 +343,29 @@ body::before{
       <button class="elev-btn elev-deny" id="elev-deny">Deny</button>
     </div>
 
-    <div class="terminal-container" id="terminal-container">
-      <div id="terminal"></div>
+    <div class="workspace-body">
+      <div class="file-panel" id="file-panel">
+        <div class="source-tabs">
+          <button class="source-tab active" data-source="local">Local</button>
+          <button class="source-tab" data-source="s3">S3</button>
+        </div>
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="file-tree" id="file-tree"></div>
+        <div class="panel-actions">
+          <label class="panel-action-btn" id="upload-btn">
+            Upload
+            <input type="file" id="upload-input" style="display:none" multiple>
+          </label>
+          <button class="panel-action-btn" id="mkdir-btn">New Folder</button>
+        </div>
+        <div class="upload-zone" id="upload-zone">Drop files here</div>
+      </div>
+      <div class="resize-handle" id="resize-handle"></div>
+      <div class="terminal-wrapper">
+        <div class="terminal-container" id="terminal-container">
+          <div id="terminal"></div>
+        </div>
+      </div>
     </div>
 
     <div class="footer">
@@ -422,24 +526,12 @@ document.getElementById('project-menu').addEventListener('click',function(e){
     },200);
     showToast('Loading '+proj+'...');
   }
-  term.focus();
-});
 
-/* ── Claude launcher ───────────────────────────────────────── */
-var launcher=document.getElementById('claude-launcher');
-document.getElementById('btn-claude').addEventListener('click',function(e){e.stopPropagation();launcher.classList.toggle('open')});
-document.addEventListener('click',function(e){if(!launcher.contains(e.target))launcher.classList.remove('open')});
-document.getElementById('btn-claude-here').addEventListener('click',function(){
-  launcher.classList.remove('open');
-  sendInput('claude\n');
-  showToast('Launching Claude Code...');
-  term.focus();
-});
-document.getElementById('btn-claude-new').addEventListener('click',function(){
-  launcher.classList.remove('open');
-  sendInput('\x02c');
-  setTimeout(function(){sendInput('claude\n')},500);
-  showToast('New window + Claude Code...');
+  // Navigate file panel if open
+  if(filePanelOpen && currentSource==='local'){
+    loadLocalDir(path);
+  }
+
   term.focus();
 });
 
@@ -449,6 +541,352 @@ function toggleFullscreen(){
   setTimeout(function(){try{fitAddon.fit()}catch(e){};term.focus()},100);
 }
 document.getElementById('btn-fullscreen').addEventListener('click',toggleFullscreen);
+
+/* ── File panel state ──────────────────────────────────────── */
+var filePanelOpen=localStorage.getItem('filePanelOpen')==='true';
+var filePanelWidth=parseInt(localStorage.getItem('filePanelWidth'))||260;
+var currentSource=localStorage.getItem('fileSource')||'local';
+var currentLocalPath=localStorage.getItem('localPath')||'/home/claude-operator/projects';
+var currentS3Bucket='ml-lab-004507070771';
+var currentS3Prefix=localStorage.getItem('s3Prefix')||'';
+
+/* ── File panel toggle ─────────────────────────────────────── */
+function toggleFilePanel(){
+  filePanelOpen=!filePanelOpen;
+  var app=document.getElementById('app');
+  var btn=document.getElementById('btn-files');
+  app.classList.toggle('panel-open',filePanelOpen);
+  btn.classList.toggle('active',filePanelOpen);
+  localStorage.setItem('filePanelOpen',filePanelOpen);
+  if(filePanelOpen){
+    document.getElementById('file-panel').style.width=filePanelWidth+'px';
+    refreshFileView();
+  }
+  setTimeout(function(){try{fitAddon.fit()}catch(e){};term.focus()},150);
+}
+document.getElementById('btn-files').addEventListener('click',toggleFilePanel);
+
+/* ── File helpers ──────────────────────────────────────────── */
+function getFileIcon(name){
+  var ext=(name.split('.').pop()||'').toLowerCase();
+  var icons={py:'\uD83D\uDC0D',js:'\uD83D\uDCDC',ts:'\uD83D\uDCDC',json:'\uD83D\uDCCB',yaml:'\uD83D\uDCCB',yml:'\uD83D\uDCCB',md:'\uD83D\uDCDD',txt:'\uD83D\uDCC4',sh:'\u2699\uFE0F',css:'\uD83C\uDFA8',html:'\uD83C\uDF10'};
+  return icons[ext]||'\uD83D\uDCC4';
+}
+
+function formatSize(bytes){
+  if(!bytes)return '';
+  if(bytes<1024)return bytes+' B';
+  if(bytes<1048576)return (bytes/1024).toFixed(1)+' KB';
+  if(bytes<1073741824)return (bytes/1048576).toFixed(1)+' MB';
+  return (bytes/1073741824).toFixed(1)+' GB';
+}
+
+/* ── Source tab switching ──────────────────────────────────── */
+document.querySelectorAll('.source-tab').forEach(function(tab){
+  tab.addEventListener('click',function(){
+    document.querySelectorAll('.source-tab').forEach(function(t){t.classList.remove('active')});
+    tab.classList.add('active');
+    currentSource=tab.getAttribute('data-source');
+    localStorage.setItem('fileSource',currentSource);
+    refreshFileView();
+  });
+});
+
+function refreshFileView(){
+  if(currentSource==='local')loadLocalDir(currentLocalPath);
+  else loadS3Dir(currentS3Prefix);
+}
+
+/* ── Local file browser ────────────────────────────────────── */
+async function loadLocalDir(path){
+  currentLocalPath=path;
+  localStorage.setItem('localPath',path);
+  var tree=document.getElementById('file-tree');
+  tree.innerHTML='<div class="file-tree-loading">Loading\u2026</div>';
+  var data=await apiFetch('/api/fs/local/list?path='+encodeURIComponent(path));
+  if(!data){tree.innerHTML='<div class="file-tree-loading">Error loading</div>';return}
+  renderLocalBreadcrumb(data.path);
+  renderFileTree(data.entries,'local');
+}
+
+function renderLocalBreadcrumb(path){
+  var bc=document.getElementById('breadcrumb');
+  var homePrefix='/home/claude-operator';
+  var parts=path.split('/').filter(Boolean);
+  var html='';
+
+  // Build clickable segments, abbreviating home as ~
+  var isHome=path.startsWith(homePrefix);
+  if(isHome){
+    var afterHome=path.slice(homePrefix.length);
+    var segs=['~'].concat(afterHome.split('/').filter(Boolean));
+    for(var i=0;i<segs.length;i++){
+      if(i>0)html+='<span class="sep">/</span>';
+      // Build the real path for this segment
+      var clickPath;
+      if(i===0)clickPath=homePrefix;
+      else clickPath=homePrefix+'/'+afterHome.split('/').filter(Boolean).slice(0,i).join('/');
+      if(i===segs.length-1){
+        html+='<span class="current">'+escHtml(segs[i])+'</span>';
+      }else{
+        html+='<span onclick="loadLocalDir(\''+clickPath.replace(/'/g,"\\'")+'\')">'+escHtml(segs[i])+'</span>';
+      }
+    }
+  }else{
+    for(var j=0;j<parts.length;j++){
+      if(j>0)html+='<span class="sep">/</span>';
+      var cp='/'+parts.slice(0,j+1).join('/');
+      if(j===parts.length-1){
+        html+='<span class="current">'+escHtml(parts[j])+'</span>';
+      }else{
+        html+='<span onclick="loadLocalDir(\''+cp.replace(/'/g,"\\'")+'\')">'+escHtml(parts[j])+'</span>';
+      }
+    }
+  }
+  bc.innerHTML=html;
+}
+
+function renderFileTree(entries,source){
+  var tree=document.getElementById('file-tree');
+  if(!entries||entries.length===0){
+    tree.innerHTML='<div class="file-tree-loading">Empty</div>';
+    return;
+  }
+  var html='';
+  entries.forEach(function(e){
+    var icon=e.type==='dir'?'\uD83D\uDCC1':getFileIcon(e.name);
+    var sizeStr=e.type==='file'?formatSize(e.size):'';
+    var nameClass=e.type==='dir'?'fe-name fe-dir':'fe-name';
+    html+='<div class="file-entry" data-name="'+escHtml(e.name)+'" data-type="'+e.type+'" data-source="'+source+'">';
+    html+='<span class="fe-icon">'+icon+'</span>';
+    html+='<span class="'+nameClass+'">'+escHtml(e.name)+'</span>';
+    html+='<span class="fe-size">'+sizeStr+'</span>';
+    html+='</div>';
+  });
+  tree.innerHTML=html;
+}
+
+/* ── File tree click — navigate dirs ───────────────────────── */
+document.getElementById('file-tree').addEventListener('click',function(e){
+  var entry=e.target.closest('.file-entry');
+  if(!entry)return;
+  var name=entry.getAttribute('data-name');
+  var type=entry.getAttribute('data-type');
+  var source=entry.getAttribute('data-source');
+  if(type==='dir'){
+    if(source==='local')loadLocalDir(currentLocalPath+'/'+name);
+    else loadS3Dir(currentS3Prefix+name+'/');
+  }
+});
+
+/* ── Context menu ──────────────────────────────────────────── */
+function closeContextMenu(){var m=document.getElementById('context-menu');if(m)m.remove()}
+document.addEventListener('click',closeContextMenu);
+
+document.getElementById('file-tree').addEventListener('contextmenu',function(e){
+  var entry=e.target.closest('.file-entry');
+  if(!entry)return;
+  e.preventDefault();
+  var name=entry.getAttribute('data-name');
+  var type=entry.getAttribute('data-type');
+  var source=entry.getAttribute('data-source');
+  showContextMenu(e.clientX,e.clientY,name,type,source);
+});
+
+function showContextMenu(x,y,name,type,source){
+  closeContextMenu();
+  var menu=document.createElement('div');
+  menu.className='context-menu';
+  menu.id='context-menu';
+
+  var items=[];
+  if(type==='file'){
+    items.push({label:'Download',action:function(){downloadFile(name,source)}});
+    if(source==='local'){
+      items.push({label:'Open in terminal',action:function(){openInTerminal(name)}});
+    }
+  }
+  if(type==='dir'&&source==='local'){
+    items.push({label:'Open in terminal',action:function(){cdInTerminal(name)}});
+  }
+  items.push({label:'Copy path',action:function(){copyPath(name,source)}});
+  if(source==='local'){
+    items.push({sep:true});
+    items.push({label:'Delete',action:function(){deleteItem(name,source)},danger:true});
+  }
+
+  items.forEach(function(item){
+    if(item.sep){
+      var sep=document.createElement('div');
+      sep.className='cm-sep';
+      menu.appendChild(sep);
+    }else{
+      var btn=document.createElement('button');
+      btn.textContent=item.label;
+      if(item.danger)btn.style.color='var(--red)';
+      btn.addEventListener('click',function(){closeContextMenu();item.action()});
+      menu.appendChild(btn);
+    }
+  });
+
+  document.body.appendChild(menu);
+  var rect=menu.getBoundingClientRect();
+  if(x+rect.width>window.innerWidth)x=window.innerWidth-rect.width-8;
+  if(y+rect.height>window.innerHeight)y=window.innerHeight-rect.height-8;
+  menu.style.left=x+'px';
+  menu.style.top=y+'px';
+}
+
+/* ── File actions ──────────────────────────────────────────── */
+function downloadFile(name,source){
+  if(source==='local'){
+    window.open('/api/fs/local/download?path='+encodeURIComponent(currentLocalPath+'/'+name),'_blank');
+  }else{
+    window.open('/api/fs/s3/download?bucket='+encodeURIComponent(currentS3Bucket)+'&key='+encodeURIComponent(currentS3Prefix+name),'_blank');
+  }
+}
+
+function openInTerminal(name){
+  var fullPath=currentLocalPath+'/'+name;
+  sendInput('less '+fullPath.replace(/ /g,'\\\\ ')+'\n');
+  term.focus();
+}
+
+function cdInTerminal(name){
+  var fullPath=currentLocalPath+'/'+name;
+  sendInput('cd '+fullPath.replace(/ /g,'\\\\ ')+'\n');
+  term.focus();
+}
+
+function copyPath(name,source){
+  var path;
+  if(source==='local')path=currentLocalPath+'/'+name;
+  else path='s3://'+currentS3Bucket+'/'+currentS3Prefix+name;
+  navigator.clipboard.writeText(path).then(function(){showToast('Path copied')});
+}
+
+async function deleteItem(name,source){
+  if(!confirm('Delete "'+name+'"?'))return;
+  if(source==='local'){
+    var fullPath=currentLocalPath+'/'+name;
+    var res=await apiFetch('/api/fs/local/delete?path='+encodeURIComponent(fullPath),{method:'DELETE'});
+    if(res&&res.success){showToast('Deleted');refreshFileView()}
+    else showToast('Delete failed');
+  }
+}
+
+/* ── S3 browser ────────────────────────────────────────────── */
+async function loadS3Dir(prefix){
+  currentS3Prefix=prefix||'';
+  localStorage.setItem('s3Prefix',currentS3Prefix);
+  var tree=document.getElementById('file-tree');
+  tree.innerHTML='<div class="file-tree-loading">Loading\u2026</div>';
+  var url='/api/fs/s3/list?bucket='+encodeURIComponent(currentS3Bucket)+'&prefix='+encodeURIComponent(currentS3Prefix);
+  var data=await apiFetch(url);
+  if(!data){tree.innerHTML='<div class="file-tree-loading">Error loading</div>';return}
+  renderS3Breadcrumb();
+  renderFileTree(data.entries,'s3');
+}
+
+function renderS3Breadcrumb(){
+  var bc=document.getElementById('breadcrumb');
+  var parts=currentS3Prefix.split('/').filter(Boolean);
+  var html='<span onclick="loadS3Dir(\'\')">'+escHtml(currentS3Bucket)+'</span>';
+  for(var i=0;i<parts.length;i++){
+    html+='<span class="sep">/</span>';
+    var prefix=parts.slice(0,i+1).join('/')+'/';
+    if(i===parts.length-1){
+      html+='<span class="current">'+escHtml(parts[i])+'</span>';
+    }else{
+      html+='<span onclick="loadS3Dir(\''+escHtml(prefix)+'\')">'+escHtml(parts[i])+'</span>';
+    }
+  }
+  bc.innerHTML=html;
+}
+
+/* ── Upload ────────────────────────────────────────────────── */
+document.getElementById('upload-input').addEventListener('change',function(e){
+  uploadFiles(e.target.files);
+  e.target.value='';
+});
+
+document.getElementById('mkdir-btn').addEventListener('click',function(){
+  var name=prompt('Folder name:');
+  if(!name)return;
+  createFolder(name);
+});
+
+async function uploadFiles(files){
+  for(var i=0;i<files.length;i++){
+    var fd=new FormData();
+    fd.append('file',files[i]);
+    var url;
+    if(currentSource==='local'){
+      url='/api/fs/local/upload?path='+encodeURIComponent(currentLocalPath);
+    }else{
+      url='/api/fs/s3/upload?bucket='+encodeURIComponent(currentS3Bucket)+'&prefix='+encodeURIComponent(currentS3Prefix);
+    }
+    try{
+      var r=await fetch(url,{method:'POST',body:fd,credentials:'include'});
+      if(!r.ok){
+        var err=await r.json().catch(function(){return{detail:'Upload failed'}});
+        showToast(err.detail||'Upload failed');
+      }else{
+        showToast('Uploaded '+files[i].name);
+      }
+    }catch(ex){showToast('Upload error')}
+  }
+  refreshFileView();
+}
+
+async function createFolder(name){
+  if(currentSource==='local'){
+    var fullPath=currentLocalPath+'/'+name;
+    var res=await apiFetch('/api/fs/local/mkdir?path='+encodeURIComponent(fullPath),{method:'POST'});
+    if(res&&res.success){showToast('Created '+name);refreshFileView()}
+    else showToast('Failed to create folder');
+  }
+}
+
+/* ── Drag-and-drop ─────────────────────────────────────────── */
+var filePanel=document.getElementById('file-panel');
+filePanel.addEventListener('dragover',function(e){e.preventDefault();filePanel.classList.add('drag-over')});
+filePanel.addEventListener('dragleave',function(e){
+  if(!filePanel.contains(e.relatedTarget))filePanel.classList.remove('drag-over');
+});
+filePanel.addEventListener('drop',function(e){
+  e.preventDefault();
+  filePanel.classList.remove('drag-over');
+  if(e.dataTransfer.files.length)uploadFiles(e.dataTransfer.files);
+});
+
+/* ── Resize handle ─────────────────────────────────────────── */
+(function(){
+  var handle=document.getElementById('resize-handle');
+  var panel=document.getElementById('file-panel');
+  var dragging=false;
+  handle.addEventListener('mousedown',function(e){
+    e.preventDefault();
+    dragging=true;
+    handle.classList.add('dragging');
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+  function onMove(e){
+    if(!dragging)return;
+    var w=Math.min(400,Math.max(200,e.clientX));
+    panel.style.width=w+'px';
+    filePanelWidth=w;
+  }
+  function onUp(){
+    dragging=false;
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove',onMove);
+    document.removeEventListener('mouseup',onUp);
+    localStorage.setItem('filePanelWidth',filePanelWidth);
+    try{fitAddon.fit()}catch(e){}
+  }
+})();
 
 /* ── Elevation polling ─────────────────────────────────────── */
 var pendingElev=null;
@@ -492,11 +930,25 @@ setInterval(poll,15000);
 /* ── Keys ──────────────────────────────────────────────────── */
 document.addEventListener('keydown',function(e){
   if(e.ctrlKey&&e.shiftKey&&e.key==='F'){e.preventDefault();toggleFullscreen()}
+  if(e.ctrlKey&&e.shiftKey&&e.key==='E'){e.preventDefault();toggleFilePanel()}
   if(e.key==='Escape'){
+    closeContextMenu();
     if(projectSelector.classList.contains('open')){projectSelector.classList.remove('open');return}
+    if(filePanelOpen){toggleFilePanel();return}
     if(document.getElementById('app').classList.contains('fullscreen'))toggleFullscreen();
   }
 });
+
+/* ── Restore panel state on load ───────────────────────────── */
+if(filePanelOpen){
+  document.getElementById('app').classList.add('panel-open');
+  document.getElementById('btn-files').classList.add('active');
+  document.getElementById('file-panel').style.width=filePanelWidth+'px';
+  document.querySelectorAll('.source-tab').forEach(function(t){
+    t.classList.toggle('active',t.getAttribute('data-source')===currentSource);
+  });
+  refreshFileView();
+}
 </script>
 </body>
 </html>
