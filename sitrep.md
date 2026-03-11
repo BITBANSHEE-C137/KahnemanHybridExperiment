@@ -1,43 +1,40 @@
 # v3 Training SITREP
 
 ## v3 Training Status
-**Step 48,400/50,000 (96.8%)** - ETA: ~1h 30m at current rate  
-GPU: **100% util**, L4 running hot at 80°C, 72W VRAM: 16.6/23GB  
-Spot rate: **$0.463/hr** (53% savings vs on-demand $0.98/hr)  
-Current session cost: **$2.76**, projected total: **$4.01**
+**Step 48,700/50,000** (97.4% complete). L4 GPU at **98% util**, 71W/72W power, 75°C. Training rate ~164 steps/hr. **ETA: 8 hours**. Current spot cost **$0.463/hr** (53% savings vs on-demand). Projected total: **$4.01**.
 
 ## Eval Metrics & Trends
-| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE   |
-|-------|--------|-----------|--------|-------|-------|
-| 41000 | 28.30  | 3.949     | 27.8%  | 0.866 | 0.011 |
-| 42000 | 28.33  | 3.892     | 29.1%  | 0.870 | 0.013 |
-| 43000 | 28.14  | 4.196     | 25.9%  | 0.869 | 0.010 |
-| 44000 | 28.07  | 4.404     | 24.9%  | 0.867 | 0.010 |
-| 45000 | 27.95  | 4.159     | 26.5%  | 0.870 | 0.011 |
-| 46000 | 28.13  | 3.943     | 28.1%  | 0.866 | 0.016 |
-| 47000 | 28.09  | 3.883     | 29.3%  | 0.870 | 0.014 |
-| **48000** | **28.04** | **4.192** | **26.1%** | **0.870** | **0.012** |
 
-**Trends:** AR PPL plateaued ~28. Diffusion loss volatile (3.9-4.4). S1 accuracy stagnant 25-29%. AUROC stable 0.87. ECE well controlled.
+| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
+|------|---------|-----------|---------|-------|-----|
+| 41k  | 28.30   | 3.949     | 27.8%   | 0.866 | 0.011 |
+| 42k  | 28.33   | 3.892     | 29.1%   | 0.870 | 0.013 |
+| 43k  | 28.14   | 4.196     | 25.9%   | 0.869 | 0.010 |
+| 44k  | 28.07   | 4.404     | 24.9%   | 0.867 | 0.010 |
+| 45k  | 27.95   | 4.159     | 26.5%   | 0.870 | 0.011 |
+| 46k  | 28.13   | 3.943     | 28.1%   | 0.866 | 0.016 |
+| 47k  | 28.09   | 3.883     | 29.3%   | 0.870 | 0.014 |
+| **48k** | **28.04** | **4.192** | **26.1%** | **0.870** | **0.012** |
+
+**Trends**: AR PPL stable ~28, slight improvement. Diffusion loss volatile (3.88-4.40). S1 accuracy oscillating 25-29%. AUROC consistent ~0.87. ECE well-controlled <0.016.
 
 ## Target Scorecard
+
 | Metric | Target | Current | Status |
 |--------|--------|---------|--------|
-| AR PPL | < 40 | **28.04** | ✅ **PASS** |
-| AUROC | > 0.75 | **0.870** | ✅ **PASS** |
-| ECE | < 0.05 | **0.012** | ✅ **PASS** |
-| Diff Loss | → 4.0 | **4.192** | ❌ Close |
-| S1 Accuracy | → 40% | **26.1%** | ❌ **Underperforming** |
+| AR PPL | < 40   | **28.04** | ✅ **Met** |
+| AUROC  | > 0.75 | **0.870** | ✅ **Met** |  
+| ECE    | < 0.05 | **0.012** | ✅ **Met** |
+| Diff Loss | → 4.0 | **4.192** | 🟡 **Close** |
+| S1 Acc | → 40%  | **26.1%** | ❌ **Gap** |
+
+**3/5 targets met**. S1 accuracy significantly below 40% target.
 
 ## v1 Benchmark Baseline
-v1 (step 50k): LAMBADA 94.26%/PPL 1.46, WikiText PPL 43.86, S1 loss 4.12  
-GPT-2 baseline: LAMBADA 95.08%, WikiText PPL 29.07  
-**Current v3 AR performance better than v1** (28.04 vs 43.86 PPL). S1 token accuracy concerning - v1 achieved much lower loss.
+v1 final: LAMBADA 94.26% acc/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12. GPT-2: LAMBADA 95.08%/WikiText 29.07 PPL. **Current v3 AR performance (28.04 PPL) exceeds both v1 and approaching GPT-2 baseline**.
 
-## Infrastructure
-**22 spot sessions**, total cost **$39.00** across 3 days  
-Current session: 6h uptime, g6.2xlarge us-east-1a, stable  
-**Spot interruption history:** Severe instability 3/9 (11 reclaims in 4h), stabilized on g6.2xlarge instances since 3/10
+## Infrastructure  
+**22 spot sessions**, total cost **$39.23**. Current L4 instance stable 6.5hrs. Previous session volatility 3/9-3/10 with multiple reclaims, but **stable since 3/11**. Strong cost efficiency vs on-demand.
 
 ## What's Next
-**1,600 steps to completion** - monitoring S1 accuracy plateau. Post-v3: comprehensive benchmark suite vs v1/v2, confidence calibration analysis, investigate S1 underperformance root cause.
+Training completes in ~8hrs. **Immediate**: final checkpoint, comprehensive benchmarking vs v1/GPT-2. **Analysis focus**: S1 accuracy deficit investigation, confidence calibration assessment, diffusion convergence analysis.
