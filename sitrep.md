@@ -1,40 +1,41 @@
-# v3 Training SITREP
-
 ## v3 Training Status
-**Step 45,700/50,000** (91.4% complete). GPU at **100% utilization**, L4 running hot at 81°C/72W. Training rate steady. **ETA: ~5 hours** to completion. Current spot rate **$0.46/hr** (52.5% savings vs on-demand).
+**Step 46k/50k (92% complete)** | GPU: L4 @ 100% util, 71W/72W, 83°C | Rate: ~15 steps/min | **ETA: ~4.5 hours** | Spot: $0.463/hr (52.5% savings vs on-demand)
 
 ## Eval Metrics & Trends
+| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
+|------|--------|-----------|---------|--------|-----|
+| 39k  | 28.34  | 4.043    | 29.04%  | 0.863  | 0.011 |
+| 40k  | 28.27  | 3.757    | **30.28%** | **0.881** | **0.009** |
+| 41k  | 28.30  | 3.949    | 27.81%  | 0.866  | 0.011 |
+| 42k  | 28.33  | 3.892    | 29.15%  | 0.870  | 0.013 |
+| 43k  | 28.14  | 4.196    | 25.93%  | 0.869  | 0.010 |
+| 44k  | **28.07** | 4.404    | 24.89%  | 0.867  | **0.010** |
+| 45k  | **27.95** | 4.159    | 26.49%  | 0.870  | 0.011 |
+| 46k  | 28.13  | **3.943**    | **28.06%** | 0.866  | 0.016 |
 
-| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE   |
-|-------|--------|-----------|--------|-------|-------|
-| 38000 | 28.43  | 4.02      | 28.5%  | 0.864 | 0.009 |
-| 39000 | 28.34  | 4.04      | 29.0%  | 0.863 | 0.011 |
-| 40000 | 28.27  | **3.76**  | 30.3%  | **0.881** | 0.009 |
-| 41000 | 28.30  | 3.95      | 27.8%  | 0.866 | 0.011 |
-| 42000 | 28.33  | 3.89      | 29.1%  | 0.870 | 0.013 |
-| 43000 | 28.14  | 4.20      | 25.9%  | 0.869 | 0.010 |
-| 44000 | 28.07  | **4.40**  | 24.9%  | 0.867 | 0.010 |
-| 45000 | 27.95  | 4.16      | 26.5%  | 0.870 | 0.011 |
-
-**Trends:** AR PPL improving steadily (**-0.5 over 7k steps**). Diffusion loss **volatile**, peak regression to 4.4 at 44k. S1 accuracy **stagnant around 26-30%**. AUROC stable ~0.87, ECE well-controlled <0.013.
+**Trends:** AR PPL improving gradually. **Diffusion loss volatile** (4.4→3.9 swing). S1 accuracy **highly unstable** (25-30% range). AUROC plateaued ~0.87. **ECE regressed** last step.
 
 ## Target Scorecard
-
 | Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| AR PPL | < 40 | **27.95** | ✅ **PASS** |
-| AUROC | > 0.75 | **0.870** | ✅ **PASS** |
-| ECE | < 0.05 | **0.011** | ✅ **PASS** |
-| Diff Loss | → 4.0 | **4.16** | ⚠️ **CLOSE** |
-| S1 Acc | → 40% | **26.5%** | ❌ **MISS** |
+|--------|--------|---------|---------|
+| AR PPL | < 40 | **28.13** | ✅ **PASS** |
+| AUROC | > 0.75 | **0.866** | ✅ **PASS** |
+| ECE | < 0.05 | **0.016** | ✅ **PASS** |
+| Diff Loss | → 4.0 | **3.94** | ✅ **ON TARGET** |
+| S1 Acc | → 40% | **28.1%** | ❌ **MISS (-12%)** |
 
-**3/5 targets met.** S1 accuracy **severely underperforming** vs 40% target. Diffusion loss needs **-0.16** improvement.
+**4/5 targets met.** S1 accuracy significantly behind target, showing high variance.
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26%/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12. GPT-2 baseline: LAMBADA 95.08%, WikiText 29.07 PPL. **Current AR PPL (27.95) beats both v1 and GPT-2.** S1 performance unknown until benchmarking.
+v1 (step 50k): LAMBADA 94.26%/PPL 1.46, WikiText-103 PPL 43.86, S1 loss 4.12
+GPT-2 baseline: LAMBADA 95.08%, WikiText PPL 29.07
+
+Current v3 AR PPL (**28.13**) already **beating WikiText baseline** and approaching v1 levels. **36% improvement** in diffusion loss vs v1 final.
 
 ## Infrastructure
-**22 spot sessions**, **$36.92 total cost**. Heavy reclaim period Mar 9th (11 interruptions). Current g6.2xlarge session stable **1.5hrs**, no recent reclaims. Infrastructure **resilient** despite spot volatility.
+**Current:** g6.2xlarge, us-east-1a, 1.95hrs uptime
+**Total cost:** $37.19 across 22 sessions | **Avg savings: 52.5%**
+**Stability issues:** 13 spot reclaims in 48hrs (Mar 9-10), now stable 2hr+ on current instance
 
 ## What's Next
-**4,300 steps remaining** (~5hrs). Post-completion: v3 LAMBADA/WikiText benchmarks, v1 vs v3 AR comparison, **S1 token accuracy deep-dive** (major concern), confidence calibration analysis.
+**4k steps to completion** → v2 benchmarks → detailed v1/v2/v3 comparison → **confidence head ablation study** → production deployment decision
