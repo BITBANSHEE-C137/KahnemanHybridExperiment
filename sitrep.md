@@ -1,38 +1,37 @@
-# SITREP: v3 Training Progress
-
 ## v3 Training Status
-**Step 44,300/50,000** (88.6% complete) | **GPU: 98% util** on L4 @ 82°C | **Rate:** ~7.6 steps/min | **ETA:** ~12.3 hrs | **Spot cost:** $0.43/hr (56.5% savings vs on-demand)
+**Step 44,600/50,000 (89.2%)** - **ETA: ~3.5 hrs**. L4 GPU at **100% util**, 69W/72W, 78°C. Training rate ~1.57 steps/sec. Current spot: **$0.43/hr** (56% savings vs on-demand). **8.1 hrs uptime** on current instance.
 
 ## Eval Metrics & Trends
-| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE    |
-|-------|--------|-----------|---------|--------|--------|
-| 37000 | 28.51  | 4.52      | 24.1%  | 0.856  | 0.0065 |
-| 38000 | 28.43  | 4.02      | 28.5%  | 0.864  | 0.0092 |
-| 39000 | 28.34  | 4.04      | 29.0%  | 0.863  | 0.0113 |
-| 40000 | 28.27  | 3.76      | 30.3%  | 0.881  | 0.0094 |
-| 41000 | 28.30  | 3.95      | 27.8%  | 0.866  | 0.0105 |
-| 42000 | 28.33  | 3.89      | 29.1%  | 0.870  | 0.0126 |
-| 43000 | 28.14  | 4.20      | 25.9%  | 0.869  | 0.0103 |
-| **44000** | **28.07** | **4.40** | **24.9%** | **0.867** | **0.0096** |
 
-**Key trends:** AR PPL gradually improving. **Diffusion loss regressed** from 3.76→4.40 (last 4k steps). S1 accuracy **volatile**, dropping from 30.3%→24.9%. AUROC stable ~0.87. ECE well-controlled.
+| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE   |
+|-------|--------|-----------|--------|-------|-------|
+| 37k   | 28.51  | 4.52      | 24.1%  | 0.856 | 0.006 |
+| 38k   | 28.43  | 4.02      | 28.5%  | 0.864 | 0.009 |
+| 39k   | 28.34  | 4.04      | 29.0%  | 0.863 | 0.011 |
+| 40k   | 28.27  | 3.76      | 30.3%  | 0.881 | 0.009 |
+| 41k   | 28.30  | 3.95      | 27.8%  | 0.866 | 0.011 |
+| 42k   | 28.33  | 3.89      | 29.1%  | 0.870 | 0.013 |
+| 43k   | 28.14  | 4.20      | 25.9%  | 0.869 | 0.010 |
+| **44k** | **28.07** | **4.40** | **24.9%** | **0.867** | **0.010** |
+
+**Trends**: AR PPL steady decline (good). Diff loss **volatile** around 4.0 target. S1 accuracy **regressing** from 30% peak. AUROC stable ~0.87. ECE well-controlled.
 
 ## Target Scorecard
-| Metric | Target | Current | Status |
-|--------|--------|---------|---------|
-| AR PPL | < 40 | **28.07** | ✅ **MET** |
-| AUROC | > 0.75 | **0.867** | ✅ **MET** |
-| ECE | < 0.05 | **0.0096** | ✅ **MET** |
-| Diff Loss | → 4.0 | **4.40** | ❌ **Regressing** |
-| S1 Accuracy | → 40% | **24.9%** | ❌ **Far from target** |
+| Target | Current | Status |
+|--------|---------|--------|
+| AR PPL < 40 | **28.07** | ✅ **MET** |
+| AUROC > 0.75 | **0.867** | ✅ **MET** |  
+| ECE < 0.05 | **0.010** | ✅ **MET** |
+| Diff loss → 4.0 | **4.40** | ❌ **10% over** |
+| S1 accuracy → 40% | **24.9%** | ❌ **38% short** |
+
+**3/5 targets met**. S1 accuracy concerning - **peaked at 30% then declined**. Diff loss needs stabilization.
 
 ## v1 Benchmark Baseline
-v1 (step 50k): LAMBADA 94.26% acc, PPL 1.46 | WikiText-103 PPL 43.86 | S1 loss 4.12
-Pretrained GPT-2: LAMBADA 95.08%, WikiText PPL 29.07
-**Current v3 AR performance exceeds v1** (28.07 vs 43.86 PPL). S1 performance **needs major improvement** vs v1's effective 4.12 loss.
+v1 final: LAMBADA 94.26%/1.46 PPL, WikiText 43.86 PPL, S1 4.12. GPT-2 baseline: LAMBADA 95.08%, WikiText 29.07 PPL. **Current v3 AR PPL (28.07) beating v1 (43.86) by 36%** and approaching GPT-2 baseline.
 
 ## Infrastructure
-**Current session:** 7.6hrs uptime on g6.2xlarge spot @ $0.43/hr | **Total cost:** $35.61 across 21 sessions | **Major instability** March 9th (12 reclaims in 4hrs) | **Stable since March 10th** with only 2 longer sessions
+**21 spot sessions**, **$35.79 total cost**. Current g6.2xlarge stable 8h. Previous: 10 spot reclaims 3/9, mostly brief interruptions. **Cost efficiency excellent** - projected $7.39 vs $17 on-demand.
 
-## What's Next
-**5,700 steps remaining** (~12hrs). **Critical:** Monitor diffusion loss regression and S1 accuracy volatility. Post-completion: v3 benchmarks, detailed v1→v3 comparison, confidence calibration analysis. **Diffusion head may need architectural review** if regression continues.
+## What's Next  
+**5.4k steps remaining** (~3.5 hrs). Focus: **stabilize diff loss**, investigate S1 accuracy regression. Post-completion: v3 benchmarks vs v1/GPT-2, confidence calibration analysis, cost/performance comparison.
