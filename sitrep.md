@@ -1,46 +1,38 @@
-# v3 Training SITREP
+# v3 Training Status SITREP
 
 ## v3 Training Status
-**Progress:** 46.9k/50k steps (**93.8%** complete)  
-**GPU:** L4 @ **98%** util, 73W/72W, 78°C, 16.6/23GB VRAM  
-**Rate:** ~300 steps/hr | **ETA:** ~10 hours  
-**Spot:** $0.463/hr (52.6% savings) | Current session cost: **$1.60**
+**Step 47,200/50,000** (94.4% complete). L4 GPU at **100% utilization**, 72W power draw, 82°C. Current rate ~7 steps/min. **ETA: 6.7 hours**. Spot instance (g6.2xlarge) running $0.463/hr vs $0.978 on-demand (**52.6% savings**). Current session cost: $1.83.
 
 ## Eval Metrics & Trends
-| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
-|------|--------|-----------|--------|-------|-----|
-| 39k  | 28.34  | 4.04      | 29.0%  | 0.863 | 0.011 |
-| 40k  | 28.27  | 3.76      | 30.3%  | **0.881** | **0.009** |
-| 41k  | 28.30  | 3.95      | 27.8%  | 0.866 | 0.011 |
-| 42k  | 28.33  | 3.89      | 29.1%  | 0.870 | 0.013 |
-| 43k  | 28.14  | 4.20      | 25.9%  | 0.869 | 0.010 |
-| 44k  | 28.07  | **4.40**  | **24.9%** | 0.867 | **0.010** |
-| 45k  | **27.95** | 4.16   | 26.5%  | 0.870 | 0.011 |
-| 46k  | 28.13  | **3.94**  | **28.1%** | 0.866 | 0.016 |
 
-**Trends:** AR PPL improving slowly (**-0.2** over 7k steps). Diffusion loss volatile but trending down. S1 accuracy recovering from 44k dip. **AUROC peaked at 40k**, now plateaued. ECE slightly degrading.
+| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE    |
+|-------|---------|-----------|---------|--------|--------|
+| 40000 | 28.27   | 3.76      | 30.3%   | 0.881  | 0.0094 |
+| 42000 | 28.33   | 3.89      | 29.1%   | 0.870  | 0.0126 |
+| 44000 | 28.07   | 4.40      | 24.9%   | 0.867  | 0.0096 |
+| 46000 | 28.13   | 3.94      | 28.1%   | 0.866  | 0.0155 |
+| **47000** | **28.09** | **3.88** | **29.3%** | **0.870** | **0.0144** |
+
+**Trends**: AR perplexity stable ~28. Diffusion loss volatile (3.76→4.40→3.88). S1 accuracy recovering from 44k dip. **AUROC plateau at 0.87**. ECE degrading slightly.
 
 ## Target Scorecard
-| Metric | Target | Current | Status |
-|--------|--------|---------|---------|
-| AR PPL | < 40 | **28.13** | ✅ **MET** |
-| AUROC | > 0.75 | **0.866** | ✅ **MET** |
-| ECE | < 0.05 | **0.016** | ✅ **MET** |
-| Diff Loss | → 4.0 | **3.94** | ✅ **CLOSE** |
-| S1 Accuracy | → 40% | **28.1%** | ❌ **MISS** |
+| Target | Current | Status |
+|--------|---------|--------|
+| AR PPL < 40 | **28.09** | ✅ **MET** |
+| AUROC > 0.75 | **0.870** | ✅ **MET** |
+| ECE < 0.05 | **0.0144** | ✅ **MET** |
+| Diff loss → 4.0 | **3.88** | ✅ **MET** |
+| S1 accuracy → 40% | **29.3%** | ❌ **MISS** |
 
-**4/5 targets met.** S1 accuracy **30% below target** but recovering.
+**4/5 targets met**. S1 accuracy stuck at ~29%, **11% below target**.
 
 ## v1 Benchmark Baseline
-v1 @ 50k: LAMBADA 94.26%/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12  
-GPT-2 baseline: LAMBADA 95.08%, WikiText 29.07 PPL  
-**Current v3 AR PPL (28.13) already beats v1 (43.86) and approaching GPT-2 baseline**
+v1 final: LAMBADA 94.26%/PPL 1.46, WikiText-103 PPL 43.86, S1 loss 4.12. Pretrained GPT-2: LAMBADA 95.08%, WikiText PPL 29.07. 
+
+**Current v3 shows improvement**: AR PPL **28.09 vs 43.86** (36% better than v1). Diffusion loss **3.88 vs 4.12** (6% better). Joint training working.
 
 ## Infrastructure
-**Current:** g6.2xlarge us-east-1a, 3.5hr uptime, stable  
-**Total cost:** $37.84 across **22 sessions** (many spot reclaims 3/9-3/10)  
-**Reclaim history:** 21 previous instances terminated, mostly g5/g6 in us-east-1b  
-**Stability improved:** Current session longest since 3/10
+**22 spot sessions**, $38.11 total cost vs $84.95 on-demand (**55% savings**). Current session stable 3.9hrs, no interruptions. Previous session: 9.1hr run (45.3k steps). **Spot reclaim rate manageable** - longest continuous runs on g6.2xlarge instances.
 
 ## What's Next
-**3.1k steps remaining** (~10hrs). Post-completion: v3 benchmarks on LAMBADA/WikiText, comprehensive v1→v3 comparison, confidence calibration analysis. **S1 accuracy unlikely to reach 40%** - investigate if joint training trade-offs acceptable.
+**2,800 steps remaining** (~6.7hrs). After completion: full v3 benchmarks on LAMBADA/WikiText, detailed v1→v3 progression analysis, **confidence head investigation** for AUROC plateau, S1 accuracy deep-dive.
