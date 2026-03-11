@@ -1,40 +1,38 @@
 # v3 Training SITREP
 
 ## v3 Training Status
-**Step 48,700/50,000** (97.4% complete). L4 GPU at **98% util**, 71W/72W power, 75°C. Training rate ~164 steps/hr. **ETA: 8 hours**. Current spot cost **$0.463/hr** (53% savings vs on-demand). Projected total: **$4.01**.
+**Step 49,000/50,000** (98.0% complete). GPU maxed at **100% util**, 72W/72W, 82°C. Current L4 spot rate **$0.46/hr** (52.6% savings vs on-demand). **ETA: ~1 hour** to completion.
 
 ## Eval Metrics & Trends
+| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE   |
+|-------|--------|-----------|---------|-------|-------|
+| 42000 | 28.33  | 3.89      | 29.1%   | 0.870 | 0.013 |
+| 43000 | 28.14  | 4.20      | 25.9%   | 0.869 | 0.010 |
+| 44000 | 28.07  | 4.40      | 24.9%   | 0.867 | 0.010 |
+| 45000 | 27.95  | 4.16      | 26.5%   | 0.870 | 0.011 |
+| 46000 | 28.13  | 3.94      | 28.1%   | 0.866 | 0.016 |
+| 47000 | 28.09  | 3.88      | 29.3%   | 0.870 | 0.014 |
+| 48000 | 28.04  | 4.19      | 26.1%   | 0.870 | 0.012 |
+| 49000 | 28.05  | 4.41      | 24.9%   | 0.867 | 0.012 |
 
-| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
-|------|---------|-----------|---------|-------|-----|
-| 41k  | 28.30   | 3.949     | 27.8%   | 0.866 | 0.011 |
-| 42k  | 28.33   | 3.892     | 29.1%   | 0.870 | 0.013 |
-| 43k  | 28.14   | 4.196     | 25.9%   | 0.869 | 0.010 |
-| 44k  | 28.07   | 4.404     | 24.9%   | 0.867 | 0.010 |
-| 45k  | 27.95   | 4.159     | 26.5%   | 0.870 | 0.011 |
-| 46k  | 28.13   | 3.943     | 28.1%   | 0.866 | 0.016 |
-| 47k  | 28.09   | 3.883     | 29.3%   | 0.870 | 0.014 |
-| **48k** | **28.04** | **4.192** | **26.1%** | **0.870** | **0.012** |
-
-**Trends**: AR PPL stable ~28, slight improvement. Diffusion loss volatile (3.88-4.40). S1 accuracy oscillating 25-29%. AUROC consistent ~0.87. ECE well-controlled <0.016.
+**AR PPL stalled** around 28 (good). **Diffusion loss unstable** (3.8-4.4 range, trending up). **S1 accuracy declining** (29.3% → 24.9%). **AUROC stable** ~0.867-0.870. **ECE excellent** <0.02.
 
 ## Target Scorecard
+| Metric      | Target | Current | Status |
+|-------------|--------|---------|---------|
+| AR PPL      | <40    | **28.05** | ✅ |
+| AUROC       | >0.75  | **0.867** | ✅ |
+| ECE         | <0.05  | **0.012** | ✅ |
+| Diff Loss   | →4.0   | **4.41**  | ❌ (trending away) |
+| S1 Accuracy | →40%   | **24.9%** | ❌ (declining) |
 
-| Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| AR PPL | < 40   | **28.04** | ✅ **Met** |
-| AUROC  | > 0.75 | **0.870** | ✅ **Met** |  
-| ECE    | < 0.05 | **0.012** | ✅ **Met** |
-| Diff Loss | → 4.0 | **4.192** | 🟡 **Close** |
-| S1 Acc | → 40%  | **26.1%** | ❌ **Gap** |
-
-**3/5 targets met**. S1 accuracy significantly below 40% target.
+**3/5 targets met**. Diffusion & S1 components underperforming.
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26% acc/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12. GPT-2: LAMBADA 95.08%/WikiText 29.07 PPL. **Current v3 AR performance (28.04 PPL) exceeds both v1 and approaching GPT-2 baseline**.
+v1 final: LAMBADA 94.26%/1.46 PPL, WikiText 43.86 PPL, S1 loss 4.12. GPT-2: LAMBADA 95.08%, WikiText 29.07 PPL. **v3 AR matching v1 performance** (28 vs 43.86 PPL improvement). **S1 loss comparable** to v1 baseline.
 
-## Infrastructure  
-**22 spot sessions**, total cost **$39.23**. Current L4 instance stable 6.5hrs. Previous session volatility 3/9-3/10 with multiple reclaims, but **stable since 3/11**. Strong cost efficiency vs on-demand.
+## Infrastructure
+**22 spot sessions**, $39.46 total cost. Current g6.2xlarge stable 7h runtime. **Heavy reclaim period** on 3/9 (11 short-lived instances). Switched to us-east-1a for better availability. **No recent interruptions**.
 
 ## What's Next
-Training completes in ~8hrs. **Immediate**: final checkpoint, comprehensive benchmarking vs v1/GPT-2. **Analysis focus**: S1 accuracy deficit investigation, confidence calibration assessment, diffusion convergence analysis.
+**1000 steps to completion**. Monitor diffusion loss drift and S1 accuracy decline. Post-completion: full benchmark suite, confidence calibration analysis, compare joint training vs separate AR/diffusion losses.
