@@ -1,43 +1,38 @@
-# ML Ops SITREP - v3 Training
+# v3 Training SITREP
 
 ## v3 Training Status
-**Step 36,300/50,000 (72.6%)** | GPU: L4 100% util, 82°C, 16.6GB/23GB VRAM | **Rate**: ~480 steps/hr | **ETA**: 29 hours | **Spot cost**: $0.46/hr (53% savings)
+**Step 36,600/50,000 (73.2%)** | GPU: **100% util** L4 @ 83°C | Rate: ~6.2 steps/min | **ETA: 36hrs** | Spot: **$0.46/hr** (53% savings vs on-demand $0.98/hr)
 
 ## Eval Metrics & Trends
 | Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
-|------|--------|-----------|---------|-------|-----|
-| 29000 | 29.36 | 4.27 | 25.5% | 0.867 | 0.0118 |
-| 30000 | 29.16 | 4.34 | 24.6% | 0.868 | 0.0046 |
-| 31000 | 28.95 | 4.47 | 23.3% | 0.871 | 0.0031 |
-| 32000 | 29.04 | 4.35 | 24.2% | 0.865 | 0.0089 |
-| 33000 | 28.93 | 4.09 | 26.6% | 0.861 | 0.0086 |
-| 34000 | 28.85 | 4.15 | 25.6% | 0.871 | 0.0069 |
-| 35000 | 28.73 | 4.26 | 25.0% | 0.863 | 0.0057 |
-| **36000** | **28.59** | **4.46** | **23.5%** | **0.864** | **0.0109** |
+|------|--------|-----------|---------|--------|-----|
+| 29k  | 29.36  | 4.27     | 25.5%   | 0.867  | 0.012 |
+| 30k  | 29.16  | 4.34     | 24.6%   | 0.868  | 0.005 |
+| 31k  | 28.95  | 4.47     | 23.3%   | 0.871  | 0.003 |
+| 32k  | 29.04  | 4.35     | 24.2%   | 0.865  | 0.009 |
+| 33k  | 28.93  | 4.09     | 26.6%   | 0.861  | 0.009 |
+| 34k  | 28.85  | 4.15     | 25.6%   | 0.871  | 0.007 |
+| 35k  | 28.73  | 4.26     | 25.0%   | 0.863  | 0.006 |
+| 36k  | **28.59** | **4.46** | **23.5%** | **0.864** | **0.011** |
 
-**Trends**: AR PPL steady improvement (~29.4→28.6). Diffusion loss oscillating 4.1-4.5. S1 accuracy volatile, declining trend. AUROC stable ~0.86. ECE erratic but generally improving.
+**Trends:** AR PPL improving steadily (-2.7% over 7k steps). S1 accuracy volatile, currently regressing. Diffusion loss unstable around 4.3±0.15. AUROC plateau ~0.86. ECE well-controlled.
 
 ## Target Scorecard
-| Metric | Target | Current | Status |
-|--------|--------|---------|---------|
-| AR PPL | < 40 | **28.59** | ✅ **MET** |
-| AUROC | > 0.75 | **0.864** | ✅ **MET** |
-| ECE | < 0.05 | **0.0109** | ✅ **MET** |
-| Diff Loss | → 4.0 | **4.46** | ⚠️ **ABOVE** |
-| S1 Accuracy | → 40% | **23.5%** | ❌ **BELOW** |
+| Target | Current | Status |
+|--------|---------|---------|
+| AR PPL < 40 | **28.59** | ✅ **BEAT** |
+| AUROC > 0.75 | **0.864** | ✅ **BEAT** |
+| ECE < 0.05 | **0.011** | ✅ **BEAT** |
+| Diff loss → 4.0 | **4.46** | ❌ Miss by 0.46 |
+| S1 accuracy → 40% | **23.5%** | ❌ Miss by 16.5pp |
 
-**3/5 targets met**. Diffusion loss needs 0.46 improvement. S1 accuracy 16.5% short of target.
+**3/5 targets met.** S1 accuracy severely underperforming (41% below target). Diffusion loss needs 10% improvement.
 
 ## v1 Benchmark Baseline
-v1 (step 50k): LAMBADA 94.26%/1.46 PPL, WikiText-103 43.86 PPL, S1 loss 4.12
-GPT-2 baseline: LAMBADA 95.08%, WikiText 29.07 PPL
-
-Current v3 AR PPL (**28.59**) already **beats v1** (43.86) and approaches GPT-2 baseline (29.07). Diffusion loss (4.46) similar to v1 S1 loss (4.12).
+v1 final: LAMBADA 94.26%/PPL 1.46, WikiText PPL 43.86, S1 loss 4.12. **v3 AR already 35% better than v1 WikiText PPL** (28.6 vs 43.9). Current diffusion loss 4.46 vs v1's 4.12 - slight regression but marginal.
 
 ## Infrastructure
-**Current**: g6.2xlarge, 21hr uptime, $9.68 session cost
-**History**: 19 sessions, extreme spot volatility 3/9 (13 reclaims in 6hrs), stabilized since 3/10
-**Total cost**: $29.67 across 75k training seconds
+**19 sessions, $29.90 total cost.** Current g6.2xlarge stable **21.5hrs** uptime. Heavy spot churn Mar 9 (12 reclaims in 4hrs) cost $1.65 in restarts. Switched to us-east-1a for stability. Last checkpoint: step_36000.pt (1.5GB, synced).
 
 ## What's Next
-**13.7k steps remaining** (~29hr). Monitor S1 accuracy regression - may need learning rate adjustment. Post-v3: comprehensive benchmarks, v1→v3 comparison, confidence calibration analysis on final checkpoints.
+**13,400 steps remaining (~36hrs).** Focus: S1 head analysis - accuracy plateau suggests architectural bottleneck or training instability. Post-completion: comprehensive v1 vs v3 benchmarks, confidence calibration deep-dive.
