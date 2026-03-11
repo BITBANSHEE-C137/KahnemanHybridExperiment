@@ -1,40 +1,38 @@
-# v3 Training Status SITREP
+# SITREP: v3 Training Progress
 
 ## v3 Training Status
-**Step 44,000/50,000 (88%)** | GPU: 100% util, 82°C, L4 | Rate: ~200 steps/hr | **ETA: 30hrs** | Spot: $0.43/hr (-57% vs on-demand) | Current session: 7.1hr uptime
+**Step 44,300/50,000** (88.6% complete) | **GPU: 98% util** on L4 @ 82°C | **Rate:** ~7.6 steps/min | **ETA:** ~12.3 hrs | **Spot cost:** $0.43/hr (56.5% savings vs on-demand)
 
 ## Eval Metrics & Trends
-| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
-|------|--------|-----------|--------|-------|-----|
-| 37k  | 28.51  | 4.52      | 24.1%  | 0.856 | 0.006 |
-| 38k  | 28.43  | 4.02      | 28.5%  | 0.864 | 0.009 |
-| 39k  | 28.34  | 4.04      | 29.0%  | 0.863 | 0.011 |
-| 40k  | 28.27  | 3.76      | 30.3%  | **0.881** | 0.009 |
-| 41k  | 28.30  | 3.95      | 27.8%  | 0.866 | 0.011 |
-| 42k  | 28.33  | 3.89      | 29.1%  | 0.870 | 0.013 |
-| 43k  | 28.14  | 4.20      | 25.9%  | 0.869 | 0.010 |
-| **44k** | **28.07** | **4.40** | **24.9%** | **0.867** | **0.010** |
+| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE    |
+|-------|--------|-----------|---------|--------|--------|
+| 37000 | 28.51  | 4.52      | 24.1%  | 0.856  | 0.0065 |
+| 38000 | 28.43  | 4.02      | 28.5%  | 0.864  | 0.0092 |
+| 39000 | 28.34  | 4.04      | 29.0%  | 0.863  | 0.0113 |
+| 40000 | 28.27  | 3.76      | 30.3%  | 0.881  | 0.0094 |
+| 41000 | 28.30  | 3.95      | 27.8%  | 0.866  | 0.0105 |
+| 42000 | 28.33  | 3.89      | 29.1%  | 0.870  | 0.0126 |
+| 43000 | 28.14  | 4.20      | 25.9%  | 0.869  | 0.0103 |
+| **44000** | **28.07** | **4.40** | **24.9%** | **0.867** | **0.0096** |
 
-**Trends**: AR PPL **improving steadily** (-1.6% over 7k steps). Diff loss **volatile**, recent uptick concerning. S1 accuracy **stalled** around 25-30%, down from 40k peak. AUROC stable ~0.87. ECE well-controlled <0.015.
+**Key trends:** AR PPL gradually improving. **Diffusion loss regressed** from 3.76→4.40 (last 4k steps). S1 accuracy **volatile**, dropping from 30.3%→24.9%. AUROC stable ~0.87. ECE well-controlled.
 
 ## Target Scorecard
-| Target | Current | Status |
-|--------|---------|--------|
-| AR PPL < 40 | **28.07** | ✅ **BEAT** |
-| AUROC > 0.75 | **0.867** | ✅ **BEAT** |
-| ECE < 0.05 | **0.010** | ✅ **BEAT** |
-| Diff loss → 4.0 | **4.40** | ❌ **+10% over target** |
-| S1 accuracy → 40% | **24.9%** | ❌ **38% below target** |
-
-**3/5 targets met**. Diffusion loss regressed +17% from step 40k minimum. S1 accuracy concerning—peaked at 30% but trending down.
+| Metric | Target | Current | Status |
+|--------|--------|---------|---------|
+| AR PPL | < 40 | **28.07** | ✅ **MET** |
+| AUROC | > 0.75 | **0.867** | ✅ **MET** |
+| ECE | < 0.05 | **0.0096** | ✅ **MET** |
+| Diff Loss | → 4.0 | **4.40** | ❌ **Regressing** |
+| S1 Accuracy | → 40% | **24.9%** | ❌ **Far from target** |
 
 ## v1 Benchmark Baseline
-v1 final: LAMBADA 94.26%/PPL 1.46, WikiText-103 PPL 43.86, S1 loss 4.12. GPT-2 baseline: LAMBADA 95.08%, WikiText PPL 29.07. 
-
-**Current AR performance superior to v1** (28.07 vs 43.86 PPL). Diffusion component underperforming vs v1's S1 equivalent.
+v1 (step 50k): LAMBADA 94.26% acc, PPL 1.46 | WikiText-103 PPL 43.86 | S1 loss 4.12
+Pretrained GPT-2: LAMBADA 95.08%, WikiText PPL 29.07
+**Current v3 AR performance exceeds v1** (28.07 vs 43.86 PPL). S1 performance **needs major improvement** vs v1's effective 4.12 loss.
 
 ## Infrastructure
-**21 spot sessions**, total cost **$35.36**. Major reclaims on 3/9 (10+ instances in 4hrs). Current session stable 7.1hr on g6.2xlarge. **57% savings** vs on-demand ($17 saved). No recent interruptions.
+**Current session:** 7.6hrs uptime on g6.2xlarge spot @ $0.43/hr | **Total cost:** $35.61 across 21 sessions | **Major instability** March 9th (12 reclaims in 4hrs) | **Stable since March 10th** with only 2 longer sessions
 
 ## What's Next
-Target completion **~48hrs**. Post-v3: comprehensive benchmarks vs v1/v2, confidence calibration deep-dive, **investigate S1 accuracy plateau**—may need architectural tweaks for v4.
+**5,700 steps remaining** (~12hrs). **Critical:** Monitor diffusion loss regression and S1 accuracy volatility. Post-completion: v3 benchmarks, detailed v1→v3 comparison, confidence calibration analysis. **Diffusion head may need architectural review** if regression continues.
