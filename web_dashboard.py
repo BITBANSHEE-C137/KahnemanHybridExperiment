@@ -1032,7 +1032,10 @@ def telegram_webhook():
 
 @app.route("/")
 def index():
-    return HTML_PAGE
+    from flask import make_response
+    resp = make_response(HTML_PAGE)
+    resp.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+    return resp
 
 
 # ── Inline HTML/CSS/JS ────────────────────────────────────────────────────────
