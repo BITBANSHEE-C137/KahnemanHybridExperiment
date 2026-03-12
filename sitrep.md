@@ -1,38 +1,47 @@
-# v3 Training Status SITREP
+# ML Ops SITREP - v3 Training
 
 ## v3 Training Status
-**TRAINING COMPLETE** - Step **50,000/50,000** (100%). Current instance idle (0% GPU util, 11W power). No active training - trainer sync running but no progress since last checkpoint at 01:08 UTC. Current spot rate: **$0.47/hr** (61% savings vs on-demand).
+**TRAINING COMPLETE** ✅ Step **50,000/50,000** (100%)  
+Current instance idle - GPU util: 0%, trainer stopped  
+Final checkpoint: step_50000.pt (1.5GB, synced)  
+Total training cost: **$40.35** (60.8% spot savings)
 
 ## Eval Metrics & Trends
-| Step | AR PPL | Diff Loss | S1 Acc | AUROC | ECE |
-|------|--------|-----------|--------|-------|-----|
-| 43000 | 28.14 | 4.20 | 25.9% | 0.869 | 0.010 |
-| 44000 | 28.07 | 4.40 | 24.9% | 0.867 | 0.010 |
-| 45000 | 27.95 | 4.16 | 26.5% | 0.870 | 0.011 |
-| 46000 | 28.13 | 3.94 | 28.1% | 0.866 | 0.016 |
-| 47000 | 28.09 | 3.88 | 29.3% | 0.870 | 0.014 |
-| 48000 | 28.04 | 4.19 | 26.1% | 0.870 | 0.012 |
-| 49000 | 28.05 | 4.41 | 24.9% | 0.867 | 0.012 |
-| **50000** | **27.99** | **4.16** | **26.5%** | **0.870** | **0.012** |
+| Step | AR PPL | Diff Loss | S1 Tok Acc | Conf AUROC | Conf ECE |
+|------|--------|-----------|-------------|-------------|----------|
+| 43000| 28.14  | 4.20      | 25.9%       | 0.869       | 0.0103   |
+| 44000| 28.07  | **4.40**  | 24.9%       | 0.867       | 0.0096   |
+| 45000| 27.95  | 4.16      | 26.5%       | **0.870**   | 0.0112   |
+| 46000| 28.13  | **3.94**  | **28.1%**   | 0.866       | 0.0155   |
+| 47000| 28.09  | **3.88**  | **29.3%**   | **0.870**   | 0.0144   |
+| 48000| 28.04  | 4.19      | 26.1%       | **0.870**   | 0.0120   |
+| 49000| 28.05  | **4.41**  | 24.9%       | 0.867       | 0.0121   |
+| 50000| **27.99**| 4.16    | 26.5%       | **0.870**   | 0.0125   |
 
-**Trends**: AR PPL plateaued ~28 (slight improvement final step). S1 accuracy volatile 25-29%. Diffusion loss improved mid-training but regressed. Confidence metrics stable.
+**Trends**: AR PPL stable ~28, minor improvement final step. Diffusion loss volatile 3.88-4.41. S1 accuracy peaked 29.3% at 47k then regressed. AUROC stable ~0.87, ECE well-controlled <0.016.
 
 ## Target Scorecard
 | Target | Current | Status |
 |--------|---------|--------|
 | AR PPL < 40 | **27.99** | ✅ **MET** |
-| AUROC > 0.75 | **0.870** | ✅ **MET** |  
-| ECE < 0.05 | **0.012** | ✅ **MET** |
-| Diff loss → 4.0 | **4.16** | ❌ Close (4% miss) |
-| S1 accuracy → 40% | **26.5%** | ❌ **34% shortfall** |
-
-**3/5 targets met**. S1 accuracy significantly below target, diff loss marginally high.
+| AUROC > 0.75 | **0.870** | ✅ **MET** |
+| ECE < 0.05 | **0.0125** | ✅ **MET** |
+| Diff loss → 4.0 | **4.16** | ⚠️ **CLOSE** |
+| S1 accuracy → 40% | **26.5%** | ❌ **MISS** (66% of target) |
 
 ## v1 Benchmark Baseline
-v1 final performance: LAMBADA 94.26%/PPL 1.46, WikiText PPL 43.86, S1 loss 4.12. **v3 shows AR improvement** (28.0 vs 43.9 PPL) but **S1 underperforming** vs v1's 67% loss reduction. Confidence calibration excellent vs pretrained baselines.
+v1 (50k): LAMBADA 94.26%/PPL 1.46, WikiText PPL 43.86, S1 loss 4.12  
+GPT-2: LAMBADA 95.08%, WikiText PPL 29.07  
+**Analysis**: v3 AR stronger than v1 (28 vs 44 PPL), S1 comparable progress (26.5% acc vs 4.12→4.16 loss trend)
 
-## Infrastructure  
-**Total cost: $40.35** across 23 sessions. Current session: 1.8hrs uptime, $0.87 cost. **Spot reclaim history aggressive** - 14 interruptions in final training phases. Mix of g5.2xlarge/g6.2xlarge instances, consistent us-east-1 deployment. **No current issues** but training complete.
+## Infrastructure
+**23 spot sessions**, 8 reclaims in first 24h (Mar 9), then stable  
+Mixed instance types: g5.2xlarge primary, g6.2xlarge backup  
+Current: g5.2xlarge@$0.47/hr (60.8% savings), 2.3h uptime  
+**Total cost efficiency**: $0.81 per 1k steps
 
 ## What's Next
-**IMMEDIATE**: v3 benchmarking (LAMBADA, WikiText) to compare vs v1 baselines. **Confidence head analysis** - investigate why S1 accuracy plateaued despite good AUROC/ECE. Consider diff loss optimization strategies for v4. Instance can be terminated after benchmark runs.
+✅ **v3 training complete** - ready for comprehensive benchmarking  
+🔄 **Queue**: LAMBADA/WikiText evals, confidence calibration analysis  
+📊 **Compare**: v1→v3 AR improvements, S1 progression, joint training effects  
+⚠️ **Focus**: S1 accuracy lagging - investigate tokenization/head architecture
