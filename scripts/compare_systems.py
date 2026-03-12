@@ -232,7 +232,7 @@ def compare_quality(
     # System 1
     total_ppl = 0.0
     for _ in range(num_samples):
-        ids = generate_system1(model, seq_len, mask_token_id, num_steps=10, device=device)
+        ids, _ = generate_system1(model, seq_len, mask_token_id, num_steps=10, device=device)
         total_ppl += score_perplexity(ids)
     results["System 1"] = total_ppl / num_samples
 
