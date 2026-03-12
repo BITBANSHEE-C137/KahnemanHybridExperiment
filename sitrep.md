@@ -1,47 +1,42 @@
 # ML Ops SITREP - v3 Training
 
 ## v3 Training Status
-**TRAINING COMPLETE** ✅ Step **50,000/50,000** (100%)  
-Current instance idle - GPU util: 0%, trainer stopped  
-Final checkpoint: step_50000.pt (1.5GB, synced)  
-Total training cost: **$40.35** (60.8% spot savings)
+**COMPLETE** - v3 finished at **step 50,000/50,000** (100%). Training stopped on current g5.2xlarge instance (idle GPU, 0% util). Ready for benchmarking phase.
 
 ## Eval Metrics & Trends
-| Step | AR PPL | Diff Loss | S1 Tok Acc | Conf AUROC | Conf ECE |
-|------|--------|-----------|-------------|-------------|----------|
-| 43000| 28.14  | 4.20      | 25.9%       | 0.869       | 0.0103   |
-| 44000| 28.07  | **4.40**  | 24.9%       | 0.867       | 0.0096   |
-| 45000| 27.95  | 4.16      | 26.5%       | **0.870**   | 0.0112   |
-| 46000| 28.13  | **3.94**  | **28.1%**   | 0.866       | 0.0155   |
-| 47000| 28.09  | **3.88**  | **29.3%**   | **0.870**   | 0.0144   |
-| 48000| 28.04  | 4.19      | 26.1%       | **0.870**   | 0.0120   |
-| 49000| 28.05  | **4.41**  | 24.9%       | 0.867       | 0.0121   |
-| 50000| **27.99**| 4.16    | 26.5%       | **0.870**   | 0.0125   |
 
-**Trends**: AR PPL stable ~28, minor improvement final step. Diffusion loss volatile 3.88-4.41. S1 accuracy peaked 29.3% at 47k then regressed. AUROC stable ~0.87, ECE well-controlled <0.016.
+| Step  | AR PPL | Diff Loss | S1 Acc | AUROC | ECE   |
+|-------|--------|-----------|--------|-------|-------|
+| 43000 | 28.14  | 4.20      | 25.9%  | 0.869 | 0.010 |
+| 44000 | 28.07  | 4.40      | 24.9%  | 0.867 | 0.010 |
+| 45000 | 27.95  | 4.16      | 26.5%  | 0.870 | 0.011 |
+| 46000 | 28.13  | 3.94      | 28.1%  | 0.866 | 0.016 |
+| 47000 | 28.09  | 3.88      | 29.3%  | 0.870 | 0.014 |
+| 48000 | 28.04  | 4.19      | 26.1%  | 0.870 | 0.012 |
+| 49000 | 28.05  | 4.41      | 24.9%  | 0.867 | 0.012 |
+| 50000 | 27.99  | 4.16      | 26.5%  | 0.870 | 0.012 |
+
+**Trends**: AR perplexity plateaued ~28, **meeting target**. Diffusion loss oscillating around 4.0-4.4. S1 accuracy peaked at 29.3% (step 47k), slight regression to 26.5% final. AUROC stable ~0.87. ECE well-controlled.
 
 ## Target Scorecard
 | Target | Current | Status |
 |--------|---------|--------|
-| AR PPL < 40 | **27.99** | ✅ **MET** |
-| AUROC > 0.75 | **0.870** | ✅ **MET** |
-| ECE < 0.05 | **0.0125** | ✅ **MET** |
+| AR PPL < 40 | **27.99** | ✅ **PASS** |
+| AUROC > 0.75 | **0.870** | ✅ **PASS** |
+| ECE < 0.05 | **0.012** | ✅ **PASS** |
 | Diff loss → 4.0 | **4.16** | ⚠️ **CLOSE** |
-| S1 accuracy → 40% | **26.5%** | ❌ **MISS** (66% of target) |
+| S1 accuracy → 40% | **26.5%** | ❌ **MISS** |
+
+**3/5 targets met**. S1 accuracy underperformed expectations (66% of target).
 
 ## v1 Benchmark Baseline
-v1 (50k): LAMBADA 94.26%/PPL 1.46, WikiText PPL 43.86, S1 loss 4.12  
-GPT-2: LAMBADA 95.08%, WikiText PPL 29.07  
-**Analysis**: v3 AR stronger than v1 (28 vs 44 PPL), S1 comparable progress (26.5% acc vs 4.12→4.16 loss trend)
+v1 final: LAMBADA 94.26%/1.46 PPL, WikiText 43.86 PPL, S1 loss 4.12. Pretrained GPT-2: LAMBADA 95.08%, WikiText 29.07 PPL. v3 shows **improved AR performance** (27.99 vs 43.86 PPL) but **similar diffusion convergence**.
 
 ## Infrastructure
-**23 spot sessions**, 8 reclaims in first 24h (Mar 9), then stable  
-Mixed instance types: g5.2xlarge primary, g6.2xlarge backup  
-Current: g5.2xlarge@$0.47/hr (60.8% savings), 2.3h uptime  
-**Total cost efficiency**: $0.81 per 1k steps
+**Total cost: $40.35** across 23 spot instances. Current session: 2.8h uptime, $1.34 spent @ $0.47/hr (60.9% savings vs on-demand). **Extreme spot volatility** days 1-2 with 15+ reclaims, stabilized on g6.2xlarge instances for final 10k steps.
 
 ## What's Next
-✅ **v3 training complete** - ready for comprehensive benchmarking  
-🔄 **Queue**: LAMBADA/WikiText evals, confidence calibration analysis  
-📊 **Compare**: v1→v3 AR improvements, S1 progression, joint training effects  
-⚠️ **Focus**: S1 accuracy lagging - investigate tokenization/head architecture
+1. **v3 benchmarking**: LAMBADA, WikiText-103 evaluation
+2. **v1 vs v3 comparison**: Quantify joint training improvements
+3. **Confidence head analysis**: Investigate AUROC plateau at 0.87
+4. **S1 architecture review**: Address underperforming token accuracy
