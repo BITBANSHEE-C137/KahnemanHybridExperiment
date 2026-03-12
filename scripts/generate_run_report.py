@@ -196,7 +196,7 @@ def generate_html(
         total_cost = sum(s.get("cost_usd", s.get("spot_cost", 0)) for s in sessions)
         dates = []
         for s in sessions:
-            for key in ("start_time", "started"):
+            for key in ("start_time", "started", "boot_time"):
                 if key in s:
                     dates.append(s[key][:10])
                     break
@@ -241,10 +241,10 @@ def generate_html(
 
     # Chart data from evals
     chart_labels = json.dumps([f"{e.get('step', 0) // 1000}k" for e in evals])
-    chart_ar_ppl = json.dumps([e.get("ar_ppl", 0) for e in evals])
-    chart_diff_loss = json.dumps([e.get("diff_loss", 0) for e in evals])
-    chart_s1_acc = json.dumps([e.get("s1_accuracy", 0) for e in evals])
-    chart_auroc = json.dumps([e.get("auroc", 0) for e in evals])
+    chart_ar_ppl = json.dumps([round(e.get("ar_ppl", 0), 2) for e in evals])
+    chart_diff_loss = json.dumps([round(e.get("diff_loss", 0), 2) for e in evals])
+    chart_s1_acc = json.dumps([round(e.get("s1_accuracy", 0), 1) for e in evals])
+    chart_auroc = json.dumps([round(e.get("auroc", 0), 3) for e in evals])
 
     # v2 comparison data
     v2_labels = json.dumps(V2_DATA["labels"])
