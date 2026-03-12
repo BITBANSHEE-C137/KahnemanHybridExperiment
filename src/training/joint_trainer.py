@@ -238,6 +238,8 @@ def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> N
         (f"{data_dir}/benchmarks/", f"s3://{s3_bucket}/benchmarks/"),
         (f"{data_dir}/logs/", f"s3://{s3_bucket}/logs/"),
         (f"{data_dir}/cost/", f"s3://{s3_bucket}/cost/"),
+        # Reports to CloudFront fallback bucket (accessible when GPU is offline)
+        (f"{project_dir}/infra/reports/", "s3://train-bitbanshee-fallback/reports/"),
     ]
     for local_path, s3_path in sync_pairs:
         try:
