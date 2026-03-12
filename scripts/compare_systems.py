@@ -449,7 +449,7 @@ def main() -> None:
             "timestamp": timestamp,
             "escalation": {str(k): v for k, v in escalation.items()},
             "speed": {
-                mode: {"mean": stats["mean"], "std": stats["std"]}
+                mode: {"mean": stats[0], "std": stats[1]}
                 for mode, stats in speed.items()
             },
             "quality": {mode: ppl for mode, ppl in quality.items()},
