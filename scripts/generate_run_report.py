@@ -34,6 +34,25 @@ V2_DATA = {
 }
 
 
+def _normalize_eval(d: dict) -> dict:
+    """Normalize eval metric field names to canonical short form."""
+    mapping = {
+        "ar_perplexity": "ar_ppl",
+        "s1_token_accuracy": "s1_accuracy",
+        "conf_auroc": "auroc",
+        "conf_ece": "ece",
+        "conf_accuracy": "conf_accuracy",
+    }
+    out = dict(d)
+    for long_name, short_name in mapping.items():
+        if long_name in out and short_name not in out:
+            out[short_name] = out[long_name]
+    # Convert s1_accuracy from fraction to percentage if needed
+    if "s1_accuracy" in out and out["s1_accuracy"] < 1.0:
+        out["s1_accuracy"] = round(out["s1_accuracy"] * 100, 1)
+    return out
+
+
 def load_eval_metrics(data_dir: str) -> list[dict]:
     """Load all eval_step_*.json files, sorted by step number."""
     pattern = os.path.join(data_dir, "eval_metrics", "**", "eval_step_*.json")
@@ -43,7 +62,7 @@ def load_eval_metrics(data_dir: str) -> list[dict]:
         try:
             with open(f) as fh:
                 d = json.load(fh)
-                evals.append(d)
+                evals.append(_normalize_eval(d))
         except Exception:
             pass
     evals.sort(key=lambda x: x.get("step", 0))
