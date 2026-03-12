@@ -164,9 +164,12 @@ def compute_targets(final_eval: dict) -> list[dict]:
                 status = "near"
             else:
                 status = "missed"
-        fmt = f"{val:.1%}" if t["key"] == "s1_accuracy" and val < 1.0 else f"{val}"
-        if t["key"] == "s1_accuracy" and val > 1:
-            fmt = f"{val:.1f}%"
+        if t["key"] == "s1_accuracy":
+            fmt = f"{val:.1f}%" if val > 1 else f"{val:.1%}"
+        elif t["key"] in ("auroc", "ece"):
+            fmt = f"{val:.3f}"
+        else:
+            fmt = f"{val:.2f}"
         results.append({**t, "value": val, "formatted": fmt, "status": status})
     return results
 
@@ -204,6 +207,9 @@ def generate_html(
     met_count = sum(1 for t in targets if t["status"] == "met")
 
     # Build eval table rows
+    def _fmt(val, decimals=2):
+        return f"{val:.{decimals}f}" if isinstance(val, (int, float)) else str(val)
+
     eval_rows = ""
     for e in evals:
         step = e.get("step", 0)
@@ -213,11 +219,11 @@ def generate_html(
         es = "</strong>" if is_final else ""
         eval_rows += f"""<tr{cls}>
           <td>{s}{step:,}{es}</td>
-          <td class="num">{s}{e.get('ar_ppl', 'N/A')}{es}</td>
-          <td class="num">{s}{e.get('diff_loss', 'N/A')}{es}</td>
-          <td class="num">{s}{e.get('s1_accuracy', 'N/A')}%{es}</td>
-          <td class="num">{s}{e.get('auroc', 'N/A')}{es}</td>
-          <td class="num">{s}{e.get('ece', 'N/A')}{es}</td>
+          <td class="num">{s}{_fmt(e.get('ar_ppl', 'N/A'))}{es}</td>
+          <td class="num">{s}{_fmt(e.get('diff_loss', 'N/A'))}{es}</td>
+          <td class="num">{s}{_fmt(e.get('s1_accuracy', 'N/A'), 1)}%{es}</td>
+          <td class="num">{s}{_fmt(e.get('auroc', 'N/A'), 3)}{es}</td>
+          <td class="num">{s}{_fmt(e.get('ece', 'N/A'), 3)}{es}</td>
         </tr>"""
 
     # Target boxes
@@ -273,9 +279,9 @@ def generate_html(
         if "confidence" in compare:
             c = compare["confidence"]
             compare_html += f"""<div class="config-grid">
-            <div class="config-item"><div class="c-label">ECE</div><div class="c-value">{c.get('ece', 'N/A')}</div></div>
-            <div class="config-item"><div class="c-label">AUROC</div><div class="c-value">{c.get('auroc', 'N/A')}</div></div>
-            <div class="config-item"><div class="c-label">Mean Confidence</div><div class="c-value">{c.get('mean_confidence', 'N/A')}</div></div>
+            <div class="config-item"><div class="c-label">ECE</div><div class="c-value">{_fmt(c.get('ece', 'N/A'), 3)}</div></div>
+            <div class="config-item"><div class="c-label">AUROC</div><div class="c-value">{_fmt(c.get('auroc', 'N/A'), 3)}</div></div>
+            <div class="config-item"><div class="c-label">Mean Confidence</div><div class="c-value">{_fmt(c.get('mean_confidence', 'N/A'), 3)}</div></div>
             </div>"""
         if "quality" in compare:
             compare_html += '<table style="margin-top:16px"><thead><tr><th>System</th><th class="num">Perplexity</th></tr></thead><tbody>'
