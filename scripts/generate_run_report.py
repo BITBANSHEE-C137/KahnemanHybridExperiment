@@ -193,7 +193,7 @@ def generate_html(
     if cost_ledger and "sessions" in cost_ledger:
         sessions = cost_ledger["sessions"]
         num_sessions = len(sessions)
-        total_cost = sum(s.get("cost_usd", 0) for s in sessions)
+        total_cost = sum(s.get("cost_usd", s.get("spot_cost", 0)) for s in sessions)
         dates = []
         for s in sessions:
             for key in ("start_time", "started"):
@@ -260,16 +260,27 @@ def generate_html(
         <thead><tr><th>Benchmark</th><th class="num">Metric</th><th class="num">Value</th></tr></thead><tbody>"""
         if "lambada" in benchmarks:
             lb = benchmarks["lambada"]
-            acc = lb.get("accuracy", "N/A")
-            acc_fmt = f"{acc:.1%}" if isinstance(acc, (int, float)) else acc
-            benchmark_html += f'<tr><td>LAMBADA</td><td class="num">Accuracy</td><td class="num">{acc_fmt}</td></tr>'
-            if "perplexity" in lb:
-                benchmark_html += f'<tr><td>LAMBADA</td><td class="num">Perplexity</td><td class="num">{lb["perplexity"]:.2f}</td></tr>'
+            acc = lb.get("s2_accuracy", lb.get("accuracy", "N/A"))
+            if isinstance(acc, (int, float)):
+                acc_fmt = f"{acc:.2f}%" if acc > 1 else f"{acc:.1%}"
+            else:
+                acc_fmt = acc
+            benchmark_html += f'<tr><td>LAMBADA</td><td class="num">S2 Accuracy</td><td class="num">{acc_fmt}</td></tr>'
+            ppl = lb.get("s2_perplexity", lb.get("perplexity"))
+            if ppl is not None:
+                benchmark_html += f'<tr><td>LAMBADA</td><td class="num">S2 Perplexity</td><td class="num">{ppl:.2f}</td></tr>'
+            s1_acc = lb.get("s1_accuracy")
+            if s1_acc is not None:
+                s1_fmt = f"{s1_acc:.2f}%" if s1_acc > 1 else f"{s1_acc:.1%}"
+                benchmark_html += f'<tr><td>LAMBADA</td><td class="num">S1 Accuracy</td><td class="num">{s1_fmt}</td></tr>'
         if "wikitext" in benchmarks:
             wt = benchmarks["wikitext"]
-            ppl = wt.get("perplexity", "N/A")
+            ppl = wt.get("s2_perplexity", wt.get("perplexity", "N/A"))
             ppl_fmt = f"{ppl:.2f}" if isinstance(ppl, (int, float)) else ppl
-            benchmark_html += f'<tr><td>WikiText-103</td><td class="num">Perplexity</td><td class="num">{ppl_fmt}</td></tr>'
+            benchmark_html += f'<tr><td>WikiText-103</td><td class="num">S2 Perplexity</td><td class="num">{ppl_fmt}</td></tr>'
+            s1_loss = wt.get("s1_loss")
+            if s1_loss is not None:
+                benchmark_html += f'<tr><td>WikiText-103</td><td class="num">S1 Loss</td><td class="num">{s1_loss:.2f}</td></tr>'
         benchmark_html += "</tbody></table></div>"
 
     # Compare systems section
@@ -304,7 +315,7 @@ def generate_html(
         for i, s in enumerate(cost_ledger["sessions"], 1):
             inst_type = s.get("instance_type", "?")
             az = s.get("availability_zone", s.get("az", "?"))
-            cost = s.get("cost_usd", 0)
+            cost = s.get("cost_usd", s.get("spot_cost", 0))
             fin = "Yes" if s.get("finalized") else "No"
             fin_color = "var(--green)" if s.get("finalized") else "var(--yellow)"
             cost_html += f'<tr><td>{i}</td><td>{inst_type}</td><td>{az}</td><td class="num">${cost:.2f}</td><td style="color:{fin_color}">{fin}</td></tr>'
@@ -314,8 +325,8 @@ def generate_html(
     model_name = config.get("model", {}).get("name", "GPT-2")
     total_steps = config.get("training", {}).get("max_steps", "?")
     precision = config.get("training", {}).get("precision", "bfloat16")
-    lambda_ar = config.get("training", {}).get("lambda_ar", 1.0)
-    lambda_diff = config.get("training", {}).get("lambda_diff", 1.0)
+    lambda_ar = config.get("training", {}).get("ar_loss_weight", config.get("training", {}).get("lambda_ar", 1.0))
+    lambda_diff = config.get("training", {}).get("diff_loss_weight", config.get("training", {}).get("lambda_diff", 1.0))
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
