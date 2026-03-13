@@ -258,9 +258,30 @@ DNSJSON
     aws route53 change-resource-record-sets \
         --hosted-zone-id Z03629483MIHQSCG59T8J \
         --change-batch "$CHANGE_BATCH" \
-        --region "$REGION" 2>&1 || echo "WARNING: DNS origin update failed"
-    echo "  origin.train.bitbanshee.com -> $INSTANCE_IP"
-    echo "  console.bitbanshee.com -> $INSTANCE_IP (SSH)"
+        --region "$REGION" 2>&1 || echo "WARNING: Route53 DNS update failed"
+    echo "  Route53: origin.train.bitbanshee.com -> $INSTANCE_IP"
+    echo "  Route53: console.bitbanshee.com -> $INSTANCE_IP"
+
+    # Update Cloudflare DNS (zone is now managed by Cloudflare)
+    CF_API_KEY=$(aws secretsmanager get-secret-value \
+        --secret-id ml-lab/cloudflare-api-key \
+        --query 'SecretString' --output text --region "$REGION" 2>/dev/null \
+        | python3 -c "import sys,json; print(json.load(sys.stdin).get('cloudflare-api-key',''))" 2>/dev/null || echo "")
+    CF_ZONE_ID="917e7955f5288f7580fe0d5130b2309b"
+    CF_RECORD_ID="6578c3ebe01bbd37028821d3e52ef9e9"
+    if [ -n "$CF_API_KEY" ]; then
+        curl -s -X PATCH "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$CF_RECORD_ID" \
+            -H "Authorization: Bearer $CF_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data "{\"content\":\"$INSTANCE_IP\"}" 2>&1 | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+if d.get('success'): print('  Cloudflare: origin.train.bitbanshee.com ->', d['result']['content'])
+else: print('  WARNING: Cloudflare DNS update failed:', d.get('errors',''))
+" 2>/dev/null || echo "  WARNING: Cloudflare DNS update failed"
+    else
+        echo "  WARNING: Could not fetch Cloudflare API key from Secrets Manager"
+    fi
 else
     echo "  WARNING: Could not determine instance public IP"
 fi
