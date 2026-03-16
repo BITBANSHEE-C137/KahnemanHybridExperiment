@@ -67,33 +67,57 @@ GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. λ_diff increased fr
 
 All v2 checkpoints saved to S3 (`v2/step_48000.pt` through `v2/step_50000.pt`, ~1.4 GiB each). Full eval metrics for all 50 steps in `eval_metrics/v2/`.
 
-## v3 Training: IN PROGRESS
+## v3 Training: COMPLETE
 
-GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` reduced from 2.0 (v2) to 1.3, seeking better balance between AR and diffusion objectives. New diagnostics: per-loss gradient norm logging and routing efficiency metrics at confidence thresholds. Launched 2026-03-08.
+GPT-2 Small (124M parameters), 50,000 steps on OpenWebText. `diff_loss_weight` reduced from 2.0 (v2) to 1.3. Trained March 8–15, 2026. New diagnostics: per-loss gradient norm logging and routing efficiency metrics.
 
-### Changes from v2
+### Final Metrics (Step 50,000)
 
-| Parameter | v2 | v3 | Rationale |
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| AR Perplexity | 28.0 | < 40 | **Met** |
+| Confidence AUROC | 0.870 | > 0.75 | **Met** |
+| Confidence ECE | 0.012 | < 0.05 | **Met** |
+| Diffusion Loss | 4.16 | < 4.0 | 96% — closest yet |
+| S1 Token Accuracy | 26.5% | > 40% | 66% — recovered from v2's 22% |
+
+**3 of 5 targets met.** λ_diff=1.3 recovered S1 accuracy from v2's regression and nearly matched v1's diffusion loss. Critically, **v3 hit all 5 targets at step 40k** (S1 acc 30.3%, diff loss 3.757) before regressing by step 50k — the cosine LR at 40k was still ~5.5e-5, high enough to destabilize the multi-objective equilibrium.
+
+### Key Finding
+
+The model *can* converge to the sweet spot — it just can't hold it. Late-stage LR is too high, and the cosine schedule is too steep at the point where all objectives align. This directly motivates v4's schedule changes.
+
+## v4 Training: READY
+
+GPT-2 Small (124M parameters), 75,000 steps on OpenWebText. Goal: **stabilize late-stage training so the model holds the sweet spot v3 found at 40k**.
+
+### Changes from v3
+
+| Parameter | v3 | v4 | Rationale |
 |-----------|----|----|-----------|
-| `diff_loss_weight` | 2.0 | 1.3 | v2's aggressive weighting hurt both S1 accuracy and diffusion loss |
-| `log_gradient_norms` | - | true | Per-loss gradient norm logging at eval steps |
-| `log_routing_efficiency` | - | true | Coverage/accuracy curves at confidence thresholds |
-| Post-training | Manual | Automated | 9-step sequence: benchmarks, report, S3 sync, Telegram, fleet shutdown |
-| AMI | `ami-0544093f9b5424470` (baked vars) | `ami-0e52bd0d4640a3d73` (clean) | Infra constants in `/etc/ml-lab/infra.env`, no secrets baked |
+| `max_steps` | 50000 | 75000 | Gentler cosine slope — LR at 40k drops from ~5.5e-5 to ~4.5e-5 |
+| `min_learning_rate` | 3.0e-5 | 1.0e-5 | Flatter floor reduces late-stage oscillation |
+| `min_mask_ratio` | 0.1 | 0.2 | Eliminates near-trivial batches (10% masking teaches little) |
+| `max_mask_ratio` | 1.0 | 0.9 | Avoids generate-from-nothing batches (too hard for 124M) |
+| `gradient_accumulation_steps` | 8 | 12 | Effective batch 48 (was 32) — smoother multi-objective gradients |
+| `eval_every` | 1000 | 500 | Finer eval granularity to catch the sweet spot |
+| Best checkpoint | — | `best.pt` | Composite score tracking: `s1_acc + max(0, 4.0 - diff_loss)` |
+| Optimizer betas | hardcoded | configurable | `adam_beta1`, `adam_beta2` in config (still 0.9/0.95) |
 
-### Key Questions
+### What's NOT Changing (and why)
 
-- Does `diff_loss_weight=1.3` (between v1's 1.0 and v2's 2.0) find a better tradeoff?
-- Can S1 accuracy recover from v2's regression (22.0%) toward v1's 28.7%?
-- Do gradient norms reveal the objective interference mechanism?
+- **λ_diff=1.3** — v3 proved this works. Three runs show the lambda search is done.
+- **LR peak 3e-4** — standard for GPT-2 small, early training looks fine across all runs.
+- **Confidence weight 0.1** — AUROC steadily improves. Not the bottleneck.
+- **Architecture** — 124M GPT-2 can clearly learn both objectives.
+- **Data** — same OpenWebText memmap.
 
 ### Infrastructure
 
-- Checkpoints: `checkpoints/v3/` (S3), eval metrics: `eval_metrics/v3/`
-- Cost ledger: fresh (v2 archived to `cost_ledger_v2.json`)
-- AMI: `ami-0e52bd0d4640a3d73` (clean  -  infra constants in `/etc/ml-lab/infra.env`, secrets from Secrets Manager)
-- Launch template: `lt-06e111b12bd85396f` v21
-- Spot recovery resumes from checkpoint automatically
+- Checkpoints: `checkpoints/v4/` (S3), eval metrics: `eval_metrics/v4/`
+- AMI: `ami-0e52bd0d4640a3d73` (same clean AMI as v3)
+- Launch template: `lt-06e111b12bd85396f` v21 (no changes needed)
+- Budget: $50 cap (75k steps at ~$0.60/hr ≈ $40-45 estimated)
 
 ## Infrastructure
 

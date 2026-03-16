@@ -143,6 +143,7 @@ def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> N
     fleet_id = os.environ.get("FLEET_ID", "")
     region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
     ckpt_dir_str = os.environ.get("CHECKPOINT_DIR", str(checkpoint_dir))
+    run_version = checkpoint_dir.name  # e.g. "v4" from "checkpoints/v4"
 
     # Explicit env for all subprocesses — don't rely on inherited env
     sub_env = {
@@ -197,8 +198,8 @@ def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> N
             ["python3", "-m", "scripts.generate_run_report",
              "--data-dir", data_dir,
              "--config", "configs/tiny.yaml",
-             "--output-dir", str(project_dir / "infra" / "reports" / "v3"),
-             "--run-version", "v3"],
+             "--output-dir", str(project_dir / "infra" / "reports" / run_version),
+             "--run-version", run_version],
             cwd=str(project_dir), env=sub_env,
             timeout=120, check=True,
         )
@@ -233,13 +234,13 @@ def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> N
     # Step 6/9: Explicit S3 sync (ALL artifacts)
     print("[post-training] 6/9 Syncing all artifacts to S3...")
     sync_pairs = [
-        (f"{data_dir}/checkpoints/v3/", f"s3://{s3_bucket}/checkpoints/v3/"),
-        (f"{data_dir}/eval_metrics/v3/", f"s3://{s3_bucket}/eval_metrics/v3/"),
+        (f"{data_dir}/checkpoints/{run_version}/", f"s3://{s3_bucket}/checkpoints/{run_version}/"),
+        (f"{data_dir}/eval_metrics/{run_version}/", f"s3://{s3_bucket}/eval_metrics/{run_version}/"),
         (f"{data_dir}/benchmarks/", f"s3://{s3_bucket}/benchmarks/"),
         (f"{data_dir}/logs/", f"s3://{s3_bucket}/logs/"),
         (f"{data_dir}/cost/", f"s3://{s3_bucket}/cost/"),
         # Reports to CloudFront fallback bucket (accessible when GPU is offline)
-        (f"{project_dir}/infra/reports/", "s3://train-bitbanshee-fallback/reports/"),
+        (f"{project_dir}/infra/reports/{run_version}/", f"s3://train-bitbanshee-fallback/reports/{run_version}/"),
     ]
     for local_path, s3_path in sync_pairs:
         try:
@@ -258,11 +259,11 @@ def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> N
     print("[post-training] 7/9 Git commit + push...")
     try:
         _subprocess.run(
-            ["git", "add", "infra/reports/v3/", "sitrep.md"],
+            ["git", "add", f"infra/reports/{run_version}/", "sitrep.md"],
             cwd=str(project_dir), env=sub_env, timeout=30,
         )
         _subprocess.run(
-            ["git", "commit", "-m", f"v3 run report + sitrep (step {final_step})"],
+            ["git", "commit", "-m", f"{run_version} run report + sitrep (step {final_step})"],
             cwd=str(project_dir), env=sub_env, timeout=30,
         )
         _subprocess.run(
@@ -275,7 +276,7 @@ def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> N
 
     # Step 8/9: Telegram notification (with benchmark summary)
     print("[post-training] 8/9 Sending completion Telegram...")
-    _send_completion_telegram(final_step, data_dir)
+    _send_completion_telegram(final_step, data_dir, run_version)
 
     # Step 9/9: Fleet zero
     if fleet_id:
@@ -297,7 +298,7 @@ def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> N
         print("[post-training] 9/9 No FLEET_ID set, skipping fleet shutdown.")
 
 
-def _send_completion_telegram(final_step: int, data_dir: str) -> None:
+def _send_completion_telegram(final_step: int, data_dir: str, run_version: str = "v4") -> None:
     """Send training completion notification via Telegram with benchmark summary.
 
     Args:
@@ -340,7 +341,7 @@ def _send_completion_telegram(final_step: int, data_dir: str) -> None:
         except Exception:
             pass
 
-        report_url = "https://train.bitbanshee.com/reports/v3/"
+        report_url = f"https://train.bitbanshee.com/reports/{run_version}/"
 
         msg = (
             f"TRAINING COMPLETE\n"
@@ -454,11 +455,12 @@ def train(
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Optimizer
+    betas = (train_cfg.get("adam_beta1", 0.9), train_cfg.get("adam_beta2", 0.95))
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=train_cfg["learning_rate"],
         weight_decay=train_cfg["weight_decay"],
-        betas=(0.9, 0.95),
+        betas=betas,
     )
 
     # Checkpoint dir (needed for resume logic below)
@@ -544,6 +546,9 @@ def train(
 
     # Gradient scaler for mixed precision
     scaler = torch.amp.GradScaler("cuda", enabled=(dtype == torch.bfloat16))
+
+    # Best-checkpoint tracking (composite = s1_accuracy + max(0, 4.0 - diff_loss))
+    best_composite = -float('inf')
 
     model.train()
     step = start_step
@@ -654,6 +659,30 @@ def train(
                     f"eval/{k}": v for k, v in eval_metrics.items()
                 }, step=step)
             upload_metrics(eval_metrics, step)
+
+            # Best-checkpoint tracking
+            composite = eval_metrics['s1_token_accuracy'] + max(0, 4.0 - eval_metrics['diff_loss'])
+            if composite > best_composite:
+                best_composite = composite
+                best_ckpt_path = checkpoint_dir / "best.pt"
+                torch.save({
+                    "step": step,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "config": config,
+                    "best_composite": best_composite,
+                }, best_ckpt_path)
+                print(
+                    f"[best] New best at step {step}: composite={best_composite:.4f} "
+                    f"(s1_acc={eval_metrics['s1_token_accuracy']:.4f}, diff_loss={eval_metrics['diff_loss']:.4f})"
+                )
+                if wandb_run:
+                    wandb_run.log({
+                        "best/step": step,
+                        "best/composite": best_composite,
+                        "best/s1_token_accuracy": eval_metrics['s1_token_accuracy'],
+                        "best/diff_loss": eval_metrics['diff_loss'],
+                    }, step=step)
 
             # Gradient norm logging (separate forward/backward passes)
             if config["training"].get("log_gradient_norms", False):

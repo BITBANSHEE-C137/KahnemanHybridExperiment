@@ -14,12 +14,12 @@ model:
 training:
   # Optimization
   batch_size: 4
-  gradient_accumulation_steps: 8  # effective batch = 32
-  max_steps: 50000
+  gradient_accumulation_steps: 12  # effective batch = 48 (was 32) — smoother multi-objective gradients
+  max_steps: 75000                 # gentler cosine slope — LR at 40k: ~4.5e-5 vs v3's ~5.5e-5
   learning_rate: 3.0e-4
   weight_decay: 0.1
   warmup_steps: 2000
-  min_learning_rate: 3.0e-5       # cosine decay floor
+  min_learning_rate: 1.0e-5        # flatter floor reduces late-stage oscillation (was 3e-5)
   max_grad_norm: 1.0
   dtype: "bfloat16"
 
@@ -28,27 +28,27 @@ training:
 
   # Loss weighting
   ar_loss_weight: 1.0
-  diff_loss_weight: 1.3           # v3: reduced from 2.0 (v2) — seeking balance between AR and diffusion
+  diff_loss_weight: 1.3           # v3 proved this works — keep for v4
   conf_loss_weight: 0.1
 
   # Diffusion
   mask_token_id: 50256             # GPT-2 <|endoftext|> repurposed as [MASK]
-  min_mask_ratio: 0.1
-  max_mask_ratio: 1.0
+  min_mask_ratio: 0.2              # eliminates near-trivial batches (was 0.1)
+  max_mask_ratio: 0.9              # avoids generate-from-nothing batches (was 1.0)
 
   # Confidence
   confidence_threshold: 0.8       # escalate to System 2 below this
 
   # Checkpointing
   checkpoint_every: 1000
-  checkpoint_dir: "checkpoints/v3"
+  checkpoint_dir: "checkpoints/v4"
 
   # Logging
   log_every: 100
-  eval_every: 1000
+  eval_every: 500                  # finer eval granularity to catch the sweet spot (was 1000)
   eval_steps: 50
   wandb_project: "dual-process-lm"
-  wandb_run_name: "tiny-v3"
+  wandb_run_name: "tiny-v4"
   log_gradient_norms: true        # per-loss gradient norm logging at eval steps
   log_routing_efficiency: true    # coverage/accuracy curve at eval steps
 
