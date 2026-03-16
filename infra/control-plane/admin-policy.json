@@ -7,7 +7,17 @@
       "Action": "s3:*",
       "Resource": [
         "arn:aws:s3:::ml-lab-004507070771",
-        "arn:aws:s3:::ml-lab-004507070771/*"
+        "arn:aws:s3:::ml-lab-004507070771/*",
+        "arn:aws:s3:::train-bitbanshee-fallback",
+        "arn:aws:s3:::train-bitbanshee-fallback/*",
+        "arn:aws:s3:::bitbanshee-landing",
+        "arn:aws:s3:::bitbanshee-landing/*",
+        "arn:aws:s3:::deadcatsociety-frontend-004507070771",
+        "arn:aws:s3:::deadcatsociety-frontend-004507070771/*",
+        "arn:aws:s3:::deadcatsociety-images-004507070771",
+        "arn:aws:s3:::deadcatsociety-images-004507070771/*",
+        "arn:aws:s3:::siliconstrategy.ai",
+        "arn:aws:s3:::siliconstrategy.ai/*"
       ]
     },
     {
@@ -22,15 +32,161 @@
       }
     },
     {
+      "Sid": "EC2Describe",
+      "Effect": "Allow",
+      "Action": "ec2:Describe*",
+      "Resource": "*"
+    },
+    {
       "Sid": "Route53ChangeRecords",
       "Effect": "Allow",
       "Action": "route53:ChangeResourceRecordSets",
-      "Resource": "arn:aws:route53:::hostedzone/Z03629483MIHQSCG59T8J"
+      "Resource": [
+        "arn:aws:route53:::hostedzone/Z03629483MIHQSCG59T8J",
+        "arn:aws:route53:::hostedzone/Z00579198NL9W3UYHIBJ",
+        "arn:aws:route53:::hostedzone/Z0208081WIX1N705RK88"
+      ]
     },
     {
-      "Sid": "IAMPassRole",
+      "Sid": "Route53Read",
       "Effect": "Allow",
-      "Action": "iam:PassRole",
+      "Action": [
+        "route53:GetHostedZone",
+        "route53:ListHostedZones",
+        "route53:ListResourceRecordSets"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudFrontManage",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetDistribution",
+        "cloudfront:ListDistributions",
+        "cloudfront:UpdateDistribution"
+      ],
+      "Resource": [
+        "arn:aws:cloudfront::004507070771:distribution/E1UPCMC2NBOK2W",
+        "arn:aws:cloudfront::004507070771:distribution/EGWW28IMM7U2T",
+        "arn:aws:cloudfront::004507070771:distribution/EY5UFHVVBMYNF",
+        "arn:aws:cloudfront::004507070771:distribution/E3GB8IMF5A8JMK"
+      ]
+    },
+    {
+      "Sid": "LambdaManage",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetFunction",
+        "lambda:ListFunctions",
+        "lambda:ListTags",
+        "lambda:InvokeFunction",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:lambda:us-east-1:004507070771:function:ml-lab-*",
+        "arn:aws:lambda:us-east-1:004507070771:function:dcs-*"
+      ]
+    },
+    {
+      "Sid": "ApiGatewayManage",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET",
+        "apigateway:PATCH",
+        "apigateway:POST",
+        "apigateway:PUT"
+      ],
+      "Resource": [
+        "arn:aws:apigateway:us-east-1::/apis/poemtdqibf",
+        "arn:aws:apigateway:us-east-1::/apis/poemtdqibf/*",
+        "arn:aws:apigateway:us-east-1::/apis/m1ffezgo70",
+        "arn:aws:apigateway:us-east-1::/apis/m1ffezgo70/*"
+      ]
+    },
+    {
+      "Sid": "DynamoDBManage",
+      "Effect": "Allow",
+      "Action": "dynamodb:*",
+      "Resource": "arn:aws:dynamodb:us-east-1:004507070771:table/dcs-main"
+    },
+    {
+      "Sid": "CognitoManage",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminUpdateUserAttributes",
+        "cognito-idp:AdminDisableUser",
+        "cognito-idp:AdminEnableUser",
+        "cognito-idp:ListUsers",
+        "cognito-idp:DescribeUserPool"
+      ],
+      "Resource": "arn:aws:cognito-idp:us-east-1:004507070771:userpool/us-east-1_H9GHrVZKH"
+    },
+    {
+      "Sid": "SQSManage",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:ListQueues",
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:PurgeQueue"
+      ],
+      "Resource": "arn:aws:sqs:us-east-1:004507070771:dcs-*"
+    },
+    {
+      "Sid": "SecretsManagerRead",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:ListSecrets",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:UpdateSecret"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:us-east-1:004507070771:secret:ml-lab/*",
+        "arn:aws:secretsmanager:us-east-1:004507070771:secret:dcs-*",
+        "arn:aws:secretsmanager:us-east-1:004507070771:secret:admin/*"
+      ]
+    },
+    {
+      "Sid": "CostExplorerRead",
+      "Effect": "Allow",
+      "Action": [
+        "ce:GetCostAndUsage",
+        "ce:GetCostForecast"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchLogsRead",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "cloudwatch:DescribeAlarms",
+        "logs:GetLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:FilterLogEvents"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IAMManageLabRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole",
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies"
+      ],
       "Resource": "arn:aws:iam::004507070771:role/ml-lab-*"
     }
   ]
