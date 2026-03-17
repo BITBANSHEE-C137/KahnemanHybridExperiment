@@ -32,14 +32,34 @@
       }
     },
     {
-      "Sid": "EC2CreateTagScoped",
+      "Sid": "EC2CreateFromTaggedSources",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateImage",
+        "ec2:CreateSnapshot"
+      ],
+      "Resource": [
+        "arn:aws:ec2:us-east-1:004507070771:instance/*",
+        "arn:aws:ec2:us-east-1:004507070771:volume/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "ml-lab"
+        }
+      }
+    },
+    {
+      "Sid": "EC2CreateOutputResources",
       "Effect": "Allow",
       "Action": [
         "ec2:CreateImage",
         "ec2:CreateSnapshot",
         "ec2:CreateTags"
       ],
-      "Resource": "*",
+      "Resource": [
+        "arn:aws:ec2:us-east-1::image/*",
+        "arn:aws:ec2:us-east-1:004507070771:snapshot/*"
+      ],
       "Condition": {
         "StringEquals": {
           "aws:RequestTag/Project": "ml-lab"
