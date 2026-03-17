@@ -32,6 +32,21 @@
       }
     },
     {
+      "Sid": "EC2CreateTagScoped",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateImage",
+        "ec2:CreateSnapshot",
+        "ec2:CreateTags"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Project": "ml-lab"
+        }
+      }
+    },
+    {
       "Sid": "EC2Describe",
       "Effect": "Allow",
       "Action": "ec2:Describe*",
