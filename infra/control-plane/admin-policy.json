@@ -185,9 +185,36 @@
         "iam:GetRole",
         "iam:GetRolePolicy",
         "iam:ListAttachedRolePolicies",
-        "iam:ListRolePolicies"
+        "iam:ListRolePolicies",
+        "iam:PutRolePolicy"
       ],
-      "Resource": "arn:aws:iam::004507070771:role/ml-lab-*"
+      "Resource": [
+        "arn:aws:iam::004507070771:role/ml-lab-*",
+        "arn:aws:iam::004507070771:role/LabOperatorRole"
+      ]
+    },
+    {
+      "Sid": "SSMRootAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:SendCommand",
+        "ssm:GetCommandInvocation",
+        "ssm:DescribeInstanceInformation"
+      ],
+      "Resource": [
+        "arn:aws:ec2:us-east-1:004507070771:instance/i-0cc7ed7e0fec1190f",
+        "arn:aws:ssm:us-east-1::document/AWS-RunShellScript",
+        "arn:aws:ssm:us-east-1:004507070771:*"
+      ]
+    },
+    {
+      "Sid": "SecretsManagerCreate",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:TagResource"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-1:004507070771:secret:ml-lab/*"
     }
   ]
 }

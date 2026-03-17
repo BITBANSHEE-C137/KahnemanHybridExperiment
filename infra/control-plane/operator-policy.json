@@ -7,11 +7,14 @@
       "Action": [
         "s3:GetObject",
         "s3:ListBucket",
-        "s3:GetBucketLocation"
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:ListBucketVersions"
       ],
       "Resource": [
         "arn:aws:s3:::ml-lab-004507070771",
-        "arn:aws:s3:::ml-lab-004507070771/*"
+        "arn:aws:s3:::ml-lab-004507070771/*",
+        "arn:aws:s3:::bitbanshee-landing"
       ]
     },
     {
@@ -101,6 +104,37 @@
       "Sid": "Route53ListZones",
       "Effect": "Allow",
       "Action": "route53:ListHostedZones",
+      "Resource": "*"
+    },
+    {
+      "Sid": "SSMAgentCore",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:UpdateInstanceInformation",
+        "ssm:GetDocument",
+        "ssm:DescribeDocument",
+        "ssm:GetManifest",
+        "ssm:ListInstanceAssociations",
+        "ssm:PutInventory",
+        "ssm:PutComplianceItems",
+        "ssm:UpdateAssociationStatus",
+        "ssm:UpdateInstanceAssociationStatus"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SSMMessaging",
+      "Effect": "Allow",
+      "Action": [
+        "ec2messages:GetMessages",
+        "ec2messages:AcknowledgeMessage",
+        "ec2messages:SendReply",
+        "ec2messages:GetEndpoint",
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel"
+      ],
       "Resource": "*"
     }
   ]
