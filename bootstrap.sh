@@ -390,7 +390,7 @@ step_done 13
 step_start 14
 echo "Setting up cost tracker..."
 sudo -u ubuntu bash -c "cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' bash cost-tracker.sh init >> /tmp/cost-tracker.log 2>&1" || true
-COST_CRON="*/5 * * * * cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_BUDGET=50 TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' bash cost-tracker.sh update >> /tmp/cost-tracker.log 2>&1"
+COST_CRON="*/5 * * * * cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_BUDGET=75 TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' bash cost-tracker.sh update >> /tmp/cost-tracker.log 2>&1"
 EXISTING=$(sudo -u ubuntu crontab -l 2>/dev/null || true)
 echo "$EXISTING" | grep -v cost-tracker | { cat; echo "$COST_CRON"; } | sudo -u ubuntu crontab -
 echo "  cost tracker: initialized + cron installed (every 5 min)"
