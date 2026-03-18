@@ -18,7 +18,7 @@ LEDGER_DIR="$DATA_DIR/cost"
 LEDGER_FILE="$LEDGER_DIR/cost_ledger.json"
 S3_LEDGER="s3://$S3_BUCKET/cost/cost_ledger.json"
 SPOT_PRICE_FILE="/tmp/spot_price.json"
-TRAINING_RUN="tiny-v3"
+TRAINING_RUN="tiny-v4"
 
 mkdir -p "$LEDGER_DIR"
 
