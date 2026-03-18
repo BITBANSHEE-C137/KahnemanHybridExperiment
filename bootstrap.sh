@@ -10,7 +10,7 @@ DATA_DIR="$NVME/ml-lab"
 # ── Bootstrap status tracking ──
 BOOTSTRAP_STATUS="/tmp/bootstrap_status.json"
 
-STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install Flask","Start web dashboard","Setup spot price updater","Setup cost tracker","Setup auto-sitrep","Register Telegram webhook","Launch training"]'
+STEP_LABELS='["NVMe ephemeral storage","Fetch secrets","Configure environment","Pull latest code","Restore artifacts from S3","Sync preprocessed data","Fix file ownership","Update CloudFront DNS","Start sync daemon","Install nginx","Configure nginx","Install dependencies","Start web dashboard","Setup spot price updater","Setup cost tracker","Setup auto-sitrep","Register Telegram webhook","Launch training"]'
 
 init_bootstrap_status() {
     python3 -c "
@@ -145,9 +145,14 @@ BASHRC
 sudo -u ubuntu bash -c "echo 'https://x-access-token:$GH_TOKEN@github.com' > ~/.git-credentials && git config --global credential.helper store"
 step_done 2
 
-# ── Step 3: Pull latest code ──
+# ── Step 3: Pull latest code (clone if not present) ──
 step_start 3
-sudo -u ubuntu bash -c "cd $PROJECT && git checkout -- . && git clean -fd && git pull --ff-only" || true
+if [ ! -d "$PROJECT/.git" ]; then
+    echo "Repo not found — cloning from GitHub..."
+    sudo -u ubuntu git clone "https://x-access-token:$GH_TOKEN@github.com/BITBANSHEE-C137/KahnemanHybridExperiment.git" "$PROJECT"
+else
+    sudo -u ubuntu bash -c "cd $PROJECT && git checkout -- . && git clean -fd && git pull --ff-only" || true
+fi
 step_done 3
 
 # ── Step 4: Restore prior artifacts from S3 ──
@@ -351,10 +356,16 @@ nginx -t 2>&1 && systemctl reload nginx
 echo "  nginx: CONFIGURED (HTTP-only, CloudFront terminates TLS)"
 step_done 10
 
-# ── Step 11: Install Flask if missing ──
+# ── Step 11: Install Python dependencies ──
 step_start 11
+echo "Installing Python dependencies..."
+# Install project requirements (torch is pre-installed on DLAMI, pip will skip it)
+if [ -f "$PROJECT/requirements.txt" ]; then
+    sudo -u ubuntu pip install --user -r "$PROJECT/requirements.txt" 2>&1 | tail -5
+fi
+# Flask for web dashboard (not in requirements.txt)
 sudo -u ubuntu python3 -c "import flask" 2>/dev/null || sudo -u ubuntu pip install --user flask > /dev/null 2>&1
-sudo -u ubuntu pip install --user anthropic > /dev/null 2>&1
+echo "  dependencies: INSTALLED"
 step_done 11
 
 # ── Step 12: Start web dashboard ──
