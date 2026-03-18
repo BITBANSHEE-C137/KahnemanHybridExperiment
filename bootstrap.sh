@@ -128,9 +128,9 @@ sudo -u ubuntu sed -i '/^export GH_TOKEN/d; /^export CLAUDE_CODE_OAUTH_TOKEN/d; 
 # Inject secrets + version-derived paths (infra constants come from /etc/ml-lab/infra.env)
 cat >> /home/ubuntu/.bashrc << BASHRC
 export GH_TOKEN="$GH_TOKEN"
-export CHECKPOINT_DIR=$DATA_DIR/checkpoints/v3
-export CHECKPOINT_S3_PREFIX=checkpoints/v3
-export EVAL_S3_PREFIX=eval_metrics/v3
+export CHECKPOINT_DIR=$DATA_DIR/checkpoints/v4
+export CHECKPOINT_S3_PREFIX=checkpoints/v4
+export EVAL_S3_PREFIX=eval_metrics/v4
 export WANDB_API_KEY="$WANDB_API_KEY"
 export HF_TOKEN="$HF_TOKEN"
 export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
@@ -447,9 +447,6 @@ cat > /tmp/train_env.sh << TRAINENV
 export WANDB_API_KEY='$WANDB_API_KEY'
 export HF_TOKEN='$HF_TOKEN'
 export PREPROCESSED_DATA_DIR='$DATA_DIR/preprocessed'
-export CHECKPOINT_DIR='$DATA_DIR/checkpoints/v3'
-export CHECKPOINT_S3_PREFIX='checkpoints/v3'
-export EVAL_S3_PREFIX='eval_metrics/v3'
 export DATA_DIR='$DATA_DIR'
 export PROJECT_DIR='$PROJECT'
 export S3_BUCKET='$S3_BUCKET'
@@ -461,7 +458,8 @@ TRAINENV
 chmod 600 /tmp/train_env.sh
 chown ubuntu:ubuntu /tmp/train_env.sh
 sudo -u ubuntu setsid tmux new-session -d -s training -c "$PROJECT"
-sudo -u ubuntu tmux send-keys -t training "source /tmp/train_env.sh && python3 -m src.training.joint_trainer --config configs/tiny.yaml --checkpoint_dir '$DATA_DIR/checkpoints/v3' --checkpoint_s3_prefix 'checkpoints/v3'" Enter
+# Let the config (tiny.yaml) control checkpoint_dir and s3 prefix — no CLI overrides
+sudo -u ubuntu tmux send-keys -t training "source /tmp/train_env.sh && python3 -m src.training.joint_trainer --config configs/tiny.yaml" Enter
 echo "  training: LAUNCHED in tmux (v3, resumes from checkpoint if available)"
 step_done 17
 
