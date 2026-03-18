@@ -39,7 +39,7 @@ DATA_DIR = "/opt/dlami/nvme/ml-lab"
 EVAL_DIR = os.path.join(DATA_DIR, "eval_metrics")
 CONFIG_PATH = os.path.join(PROJECT_DIR, "configs/tiny.yaml")
 WANDB_DIR = os.path.join(PROJECT_DIR, "wandb")
-CHECKPOINT_DIR = os.environ.get("CHECKPOINT_DIR", os.path.join(DATA_DIR, "checkpoints", "v3"))
+CHECKPOINT_DIR = os.environ.get("CHECKPOINT_DIR", os.path.join(DATA_DIR, "checkpoints", "v4"))
 SPOT_PRICE_FILE = "/tmp/spot_price.json"
 BOOTSTRAP_STATUS_FILE = "/tmp/bootstrap_status.json"
 COST_LEDGER_FILE = os.path.join(DATA_DIR, "cost", "cost_ledger.json")
@@ -702,6 +702,14 @@ def build_status():
             "max_steps": max_steps,
             "checkpoint_every": ckpt_every,
             "eval_every": eval_every,
+            "diff_loss_weight": tcfg.get("diff_loss_weight"),
+            "ar_loss_weight": tcfg.get("ar_loss_weight"),
+            "conf_loss_weight": tcfg.get("conf_loss_weight"),
+            "wandb_run_name": tcfg.get("wandb_run_name"),
+            "checkpoint_dir": tcfg.get("checkpoint_dir"),
+            "min_mask_ratio": tcfg.get("min_mask_ratio"),
+            "max_mask_ratio": tcfg.get("max_mask_ratio"),
+            "min_learning_rate": tcfg.get("min_learning_rate"),
         },
     }
 

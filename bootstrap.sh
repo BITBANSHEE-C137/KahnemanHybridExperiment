@@ -371,7 +371,7 @@ step_done 11
 # ── Step 12: Start web dashboard ──
 step_start 12
 echo "Starting web dashboard..."
-sudo -u ubuntu bash -c "cd $PROJECT && TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' TELEGRAM_WEBHOOK_SECRET='$TELEGRAM_WEBHOOK_SECRET' nohup python3 web_dashboard.py --port 5000 --spot-token '$SPOT_TOKEN' --telegram-webhook-secret '$TELEGRAM_WEBHOOK_SECRET' > /tmp/dashboard.log 2>&1 &"
+sudo -u ubuntu bash -c "cd $PROJECT && TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' TELEGRAM_WEBHOOK_SECRET='$TELEGRAM_WEBHOOK_SECRET' FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_BUDGET=75 MAX_SPOT_PRICE=0.75 CHECKPOINT_DIR='$DATA_DIR/checkpoints/v4' CHECKPOINT_S3_PREFIX='checkpoints/v4' EVAL_S3_PREFIX='eval_metrics/v4' nohup python3 web_dashboard.py --port 5000 --spot-token '$SPOT_TOKEN' --telegram-webhook-secret '$TELEGRAM_WEBHOOK_SECRET' > /tmp/dashboard.log 2>&1 &"
 sleep 3
 curl -sf http://127.0.0.1:5000/api/status > /dev/null && echo "  web dashboard: RUNNING" || echo "  WARNING: web dashboard failed to start"
 step_done 12
