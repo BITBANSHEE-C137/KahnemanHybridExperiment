@@ -259,13 +259,13 @@ python dashboard.py --job test   # Launch pytest
 ### AMI Snapshots
 
 The training environment is baked into an AMI to avoid lengthy setup on each spot instance launch:
-- AMI: `ami-0e52bd0d4640a3d73` (`ml-lab-clean-20260308`)
-- Launch template: `lt-06e111b12bd85396f`, v21
-- Pre-installed: Python 3.12, PyTorch 2.6, CUDA 12.4, full ML stack
+- AMI: `ami-03afc8bc139b6249f` (`ml-lab-gpu-v4-20260318`) — **tagged `do-not-delete=true`**
+- Launch template: `lt-06e111b12bd85396f`, v24
+- Pre-installed: Python 3.10, PyTorch 2.10, transformers 5.2.0, CUDA 12.8, full ML stack
 - Fleet ID: `fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a`
-- Infrastructure constants baked into `/etc/ml-lab/infra.env` (S3_BUCKET, DATA_DIR, REGION, FLEET_ID, etc.)
+- Bootstrap handles cold start on stock DLAMIs too (clone repo + pip install if not baked)
 - No secrets or version-specific vars in the AMI  -  all injected at boot by bootstrap.sh
-- Previous AMI: `ami-0544093f9b5424470` (`dual-system-v2-complete-20260307`, launch template v20)
+- Previous AMIs deleted in audit (2026-03-17). Do NOT delete tagged AMIs without checking fleet dependency.
 
 ### Secrets Management
 
