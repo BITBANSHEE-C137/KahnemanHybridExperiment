@@ -212,6 +212,30 @@ if [ -n "$RUN_VERSION" ]; then
     sudo chown ubuntu:ubuntu "$DATA_DIR/checkpoints/$RUN_VERSION"
 fi
 
+# Publish current_run.json so the Lambda dashboard picks up the active run automatically
+python3 -c "
+import json, yaml
+run = {'run': '$RUN_VERSION'}
+try:
+    with open('$PROJECT/${RUN_CONFIG_FILE:-configs/tiny.yaml}') as f:
+        cfg = yaml.safe_load(f)
+    t = cfg.get('training', {})
+    run['max_steps'] = t.get('max_steps', 75000)
+    run['batch_size'] = t.get('batch_size', 4)
+    run['grad_accum'] = t.get('gradient_accumulation_steps', 8)
+    run['lr'] = t.get('learning_rate', 3e-4)
+    run['warmup_steps'] = t.get('warmup_steps', 2000)
+    run['eval_every'] = t.get('eval_every', 1000)
+    run['checkpoint_every'] = t.get('checkpoint_every', 1000)
+except Exception as e:
+    print(f'  Warning: could not read config for current_run.json: {e}')
+print(json.dumps(run))
+" > /tmp/current_run.json
+aws s3 cp /tmp/current_run.json "s3://$S3_BUCKET/current_run.json" \
+    --region "$REGION" --content-type "application/json" --cache-control "no-cache" 2>/dev/null \
+    && echo "  Published current_run.json ($RUN_VERSION)" \
+    || echo "  Warning: failed to publish current_run.json"
+
 # ── Step 4: Restore prior artifacts from S3 ──
 step_start 4
 echo "Restoring prior artifacts from S3..."

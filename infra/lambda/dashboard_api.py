@@ -42,7 +42,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
 FLEET_ID = os.environ.get("FLEET_ID", "fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a")
-TRAINING_RUN = os.environ.get("TRAINING_RUN", "v3")
+_TRAINING_RUN_DEFAULT = "v4"
 
 # Control plane config (for elevation commands via Cloudflare tunnel)
 CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "https://lab.bitbanshee.com")
@@ -53,15 +53,16 @@ CF_SERVICE_SECRET = os.environ.get("CF_SERVICE_TOKEN_SECRET", "")
 # Cache TTLs (seconds) — Lambda containers are reused across invocations
 _CACHE_TTL_EVAL = 60   # eval metrics change rarely
 _CACHE_TTL_FAST = 30   # cost/sitrep may be updated more often
+_CACHE_TTL_RUN = 120   # current_run.json changes only at run start
 
-# Static config summary (matches tiny.yaml used for v3 training)
-CONFIG_SUMMARY = {
+# Fallback config summary (used if current_run.json is missing from S3)
+_CONFIG_SUMMARY_DEFAULT = {
     "model": "gpt2",
     "batch_size": 4,
     "grad_accum": 8,
     "lr": 3e-4,
     "warmup_steps": 2000,
-    "max_steps": 50000,
+    "max_steps": 75000,
     "checkpoint_every": 1000,
     "eval_every": 1000,
 }
@@ -132,6 +133,29 @@ def _read_s3_text(key: str, ttl: float = _CACHE_TTL_FAST) -> tuple[str | None, s
         raise
 
 
+def _get_current_run() -> dict:
+    """Read current_run.json from S3. Returns {"run": str, "max_steps": int, "config": dict}."""
+    cached = _cache_get("_current_run", _CACHE_TTL_RUN)
+    if cached is not None:
+        return cached
+
+    data = _read_s3_json(PREFIX + "current_run.json", ttl=_CACHE_TTL_RUN)
+    if data and "run" in data:
+        result = {
+            "run": data["run"],
+            "max_steps": data.get("max_steps", _CONFIG_SUMMARY_DEFAULT["max_steps"]),
+            "config": {**_CONFIG_SUMMARY_DEFAULT, **{k: v for k, v in data.items() if k in _CONFIG_SUMMARY_DEFAULT}},
+        }
+    else:
+        result = {
+            "run": _TRAINING_RUN_DEFAULT,
+            "max_steps": _CONFIG_SUMMARY_DEFAULT["max_steps"],
+            "config": _CONFIG_SUMMARY_DEFAULT,
+        }
+    _cache_set("_current_run", result)
+    return result
+
+
 def _list_eval_keys() -> list[str]:
     """List all eval_step_*.json keys under the eval_metrics/ prefix."""
     cache_key = "_eval_keys"
@@ -139,7 +163,8 @@ def _list_eval_keys() -> list[str]:
     if cached is not None:
         return cached
 
-    prefix = PREFIX + f"eval_metrics/{TRAINING_RUN}/"
+    run = _get_current_run()
+    prefix = PREFIX + f"eval_metrics/{run['run']}/"
     keys: list[str] = []
     paginator = _s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
@@ -232,7 +257,8 @@ def _handle_status() -> dict:
                 "finalized": sess.get("finalized", False),
             })
 
-    max_steps = CONFIG_SUMMARY["max_steps"]
+    run_info = _get_current_run()
+    max_steps = run_info["max_steps"]
     progress_pct = round((current_step / max_steps) * 100, 1) if max_steps else 0.0
 
     status = {
@@ -269,7 +295,7 @@ def _handle_status() -> dict:
         },
         "bootstrap": None,
         "log_tail": [],
-        "config_summary": CONFIG_SUMMARY,
+        "config_summary": run_info["config"],
     }
 
     return _response(200, status)
@@ -494,14 +520,15 @@ def _telegram_status_ml(chat_id: str) -> None:
         if latest_eval:
             current_step = latest_eval.get("step", 0)
 
-    max_steps = CONFIG_SUMMARY["max_steps"]
+    run_info = _get_current_run()
+    max_steps = run_info["max_steps"]
     progress_pct = round((current_step / max_steps) * 100, 1) if max_steps else 0.0
 
     total_cost = ledger.get("total_cost", 0.0) if ledger else 0.0
     total_sessions = len(ledger.get("sessions", [])) if ledger else 0
 
     lines = [
-        f"*ML Training — {TRAINING_RUN}*",
+        f"*ML Training — {run_info['run']}*",
         f"Step: `{current_step:,}` / `{max_steps:,}` ({progress_pct}%)",
         f"Cost: `${total_cost:.2f}` ({total_sessions} sessions)",
     ]
