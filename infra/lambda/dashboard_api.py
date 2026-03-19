@@ -675,6 +675,10 @@ def _telegram_help(chat_id: str, args: list[str]) -> None:
         "/skip — Check pending skip request\n"
         "/skip approve — Approve Bit's skip\n"
         "/skip deny — Deny (require full review)\n\n"
+        "*Chat*\n"
+        "Just type — plain text goes to Bit\n"
+        "/esc — Interrupt Bit (Ctrl+C)\n"
+        "/esc <msg> — Interrupt + send message\n\n"
         "/help — This message"
     )
     _send_telegram_reply(chat_id, text)
@@ -899,6 +903,23 @@ def _telegram_task(chat_id: str, args: list[str]) -> None:
         _send_telegram_reply(chat_id, "Failed to create task")
 
 
+def _telegram_esc(chat_id: str, args: list[str]) -> None:
+    """Handle /esc — interrupt Claude (Ctrl+C), optionally send follow-up message."""
+    follow_up = " ".join(args).strip() if args else ""
+    payload = {"interrupt": True}
+    if follow_up:
+        payload["text"] = f"[telegram] {follow_up}"
+
+    result = _call_control_plane("POST", "/api/chat/inject", payload)
+    if result and result.get("success"):
+        if follow_up:
+            _send_telegram_reply(chat_id, f"⚡ Interrupted + sent: _{follow_up[:60]}_")
+        else:
+            _send_telegram_reply(chat_id, "⚡ Interrupted (Ctrl+C)")
+    else:
+        _send_telegram_reply(chat_id, "Failed to reach Bit's session")
+
+
 _TELEGRAM_COMMANDS: dict[str, callable] = {
     "/status": _telegram_status,
     "/gpu": _telegram_gpu,
@@ -910,6 +931,7 @@ _TELEGRAM_COMMANDS: dict[str, callable] = {
     "/elev": _telegram_elev,
     "/skip": _telegram_skip,
     "/task": _telegram_task,
+    "/esc": _telegram_esc,
 }
 
 
@@ -1061,6 +1083,13 @@ def _handle_telegram_webhook(event: dict) -> dict:
     handler_fn = _TELEGRAM_COMMANDS.get(command)
     if handler_fn:
         handler_fn(chat_id, args)
+    elif not command.startswith("/"):
+        # Plain text: forward to Claude as chat input
+        result = _call_control_plane("POST", "/api/chat/inject", {"text": f"[telegram] {text.strip()}"})
+        if result and result.get("success"):
+            _send_telegram_reply(chat_id, "→ sent to Bit")
+        else:
+            _send_telegram_reply(chat_id, "Failed to reach Bit's session")
     else:
         _send_telegram_reply(chat_id, f"Unknown command: `{command}`\nTry /help")
 
