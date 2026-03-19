@@ -471,7 +471,7 @@ if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_WEBHOOK_SECRET" ]; then
         -d "url=${WEBHOOK_URL}" \
         -d "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
         -d "drop_pending_updates=true" \
-        -d "allowed_updates=[\"message\"]" > /dev/null 2>&1 \
+        -d "allowed_updates=[\"message\",\"callback_query\"]" > /dev/null 2>&1 \
         && echo "  Telegram webhook: REGISTERED ($WEBHOOK_URL)" \
         || echo "  WARNING: Telegram webhook registration failed"
 else

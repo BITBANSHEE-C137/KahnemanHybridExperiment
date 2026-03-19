@@ -451,7 +451,7 @@ curl -sf "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
     -d "url=https://train.bitbanshee.com/api/telegram/webhook" \
     -d "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
     -d "drop_pending_updates=true" \
-    -d 'allowed_updates=["message"]'
+    -d 'allowed_updates=["message","callback_query"]'
 ```
 
 The webhook secret is generated deterministically from the bot token (`sha256sum`) during bootstrap Step 1, ensuring consistency across spot instance recoveries without storing an additional secret.
