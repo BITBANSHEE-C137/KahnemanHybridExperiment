@@ -13,6 +13,7 @@ Trigger: API Gateway HTTP API
 """
 
 import base64
+import hmac
 import json
 import logging
 import os
@@ -1026,7 +1027,7 @@ def _handle_telegram_webhook(event: dict) -> dict:
     # Validate webhook secret via X-Telegram-Bot-Api-Secret-Token header
     headers = event.get("headers", {})
     secret_token = headers.get("x-telegram-bot-api-secret-token", "")
-    if TELEGRAM_WEBHOOK_SECRET and secret_token != TELEGRAM_WEBHOOK_SECRET:
+    if TELEGRAM_WEBHOOK_SECRET and not hmac.compare_digest(secret_token, TELEGRAM_WEBHOOK_SECRET):
         logger.warning("Telegram webhook secret mismatch")
         return _response(403, {"error": "forbidden"})
 
