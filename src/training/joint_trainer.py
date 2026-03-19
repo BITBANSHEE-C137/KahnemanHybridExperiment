@@ -34,6 +34,8 @@ from src.utils.s3_sync import (
     upload_checkpoint,
     upload_metrics,
     upload_training_log,
+    upload_run_status,
+    check_cancellation,
     SpotTerminationHandler,
     DATA_DIR,
 )
@@ -144,6 +146,11 @@ def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> N
     region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
     ckpt_dir_str = os.environ.get("CHECKPOINT_DIR", str(checkpoint_dir))
     run_version = checkpoint_dir.name  # e.g. "v4" from "checkpoints/v4"
+
+    # Upload post-training status
+    run_id = os.environ.get("RUN_ID", "")
+    if run_id:
+        upload_run_status(run_id, final_step, {}, state="post_training")
 
     # Explicit env for all subprocesses — don't rely on inherited env
     sub_env = {
@@ -277,6 +284,21 @@ def _run_post_training(config: dict, checkpoint_dir: Path, final_step: int) -> N
     # Step 8/9: Telegram notification (with benchmark summary)
     print("[post-training] 8/9 Sending completion Telegram...")
     _send_completion_telegram(final_step, data_dir, run_version)
+
+    # Upload completion status
+    if run_id:
+        upload_run_status(run_id, final_step, {}, state="complete")
+        # Delete active pointer
+        try:
+            _subprocess.run(
+                ["aws", "s3", "rm",
+                 f"s3://{s3_bucket}/deploy/active.json",
+                 "--region", region],
+                env=sub_env, timeout=30, capture_output=True,
+            )
+            print("[post-training] Deleted deploy/active.json")
+        except Exception as e:
+            print(f"[post-training] Failed to delete active.json: {e}")
 
     # Step 9/9: Fleet zero
     if fleet_id:
@@ -659,6 +681,31 @@ def train(
                     f"eval/{k}": v for k, v in eval_metrics.items()
                 }, step=step)
             upload_metrics(eval_metrics, step)
+
+            # Upload run status for control plane poller
+            run_id = os.environ.get("RUN_ID", "")
+            if run_id:
+                upload_run_status(run_id, step, {
+                    "ar_loss": eval_metrics.get("ar_perplexity", 0),
+                    "diff_loss": eval_metrics.get("diff_loss", 0),
+                    "s1_accuracy": eval_metrics.get("s1_token_accuracy", 0),
+                    "auroc": eval_metrics.get("conf_auroc", 0),
+                })
+                # Check for cancellation
+                if check_cancellation(run_id):
+                    print(f"[cancel] Cancellation detected at step {step}. Exiting gracefully.")
+                    # Save final checkpoint before exit
+                    ckpt_path = checkpoint_dir / f"step_{step}.pt"
+                    torch.save({
+                        "step": step,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "config": config,
+                    }, ckpt_path)
+                    upload_checkpoint(ckpt_path, step)
+                    if wandb_run:
+                        wandb_run.finish()
+                    return
 
             # Best-checkpoint tracking
             composite = eval_metrics['s1_token_accuracy'] + max(0, 4.0 - eval_metrics['diff_loss'])

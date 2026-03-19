@@ -125,6 +125,58 @@ def upload_training_log(log_path: str | Path) -> None:
         print(f"[s3_sync] Failed to upload training log: {e}")
 
 
+def upload_run_status(run_id: str, step: int, metrics: dict, state: str = "training") -> bool:
+    """Write training-runs/{run_id}/status.json to S3 for the control plane poller.
+
+    Args:
+        run_id: The training run UUID.
+        step: Current training step.
+        metrics: Dict of metric values (ar_loss, diff_loss, etc.).
+        state: Run state — "training", "post_training", or "complete".
+
+    Returns:
+        True if upload succeeded.
+    """
+    import socket
+    from datetime import datetime, timezone
+
+    status = {
+        "run_id": run_id,
+        "state": state,
+        "step": step,
+        "instance_id": os.environ.get("INSTANCE_ID", socket.gethostname()),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        **metrics,
+    }
+
+    status_json = json.dumps(status, indent=2)
+    tmp_path = Path("/tmp/run_status.json")
+    tmp_path.write_text(status_json)
+
+    s3_key = f"training-runs/{run_id}/status.json"
+    return upload_file(tmp_path, s3_key)
+
+
+def check_cancellation(run_id: str) -> bool:
+    """Check if training-runs/{run_id}/cancel.json exists in S3.
+
+    Args:
+        run_id: The training run UUID.
+
+    Returns:
+        True if cancellation was requested.
+    """
+    s3_uri = f"s3://{S3_BUCKET}/training-runs/{run_id}/cancel.json"
+    try:
+        result = subprocess.run(
+            ["aws", "s3", "ls", s3_uri, "--region", AWS_REGION],
+            capture_output=True, text=True, timeout=15,
+        )
+        return result.returncode == 0 and "cancel.json" in result.stdout
+    except Exception:
+        return False
+
+
 class SpotTerminationHandler:
     """Handles SIGTERM for spot instance termination.
 

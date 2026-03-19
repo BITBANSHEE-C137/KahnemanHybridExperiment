@@ -155,19 +155,76 @@ else
 fi
 step_done 3
 
+# ── Step 3.5: Read active training run config from S3 ──
+echo "Checking for active training run..."
+ACTIVE_JSON=$(aws s3 cp "s3://$S3_BUCKET/deploy/active.json" - --region "$REGION" 2>/dev/null || echo "")
+if [ -n "$ACTIVE_JSON" ] && [ "$ACTIVE_JSON" != "" ]; then
+    RUN_ID=$(echo "$ACTIVE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['run_id'])")
+    RUN_CONFIG_KEY=$(echo "$ACTIVE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['config_key'])")
+    RUN_VERSION=$(echo "$ACTIVE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['version'])")
+    echo "  Active run: $RUN_VERSION (ID: $RUN_ID)"
+
+    # Download immutable config
+    RUN_CONFIG=$(aws s3 cp "s3://$S3_BUCKET/$RUN_CONFIG_KEY" - --region "$REGION" 2>/dev/null || echo "")
+    if [ -z "$RUN_CONFIG" ]; then
+        echo "FATAL: Could not download config for run $RUN_ID. Idling."
+        sleep infinity
+        exit 1
+    fi
+
+    # Write config as YAML for the trainer
+    python3 -c "
+import sys, json, yaml
+config = json.loads('''$RUN_CONFIG''')
+# Extract run meta
+meta = config.pop('_run_meta', {})
+with open('$PROJECT/configs/active_run.yaml', 'w') as f:
+    yaml.dump(config, f, default_flow_style=False)
+print('  Config written to configs/active_run.yaml')
+# Export meta as env vars
+print('RUN_VERSION=' + meta.get('version', '$RUN_VERSION'))
+print('RUN_MAX_BUDGET=' + str(meta.get('max_budget', 50)))
+print('RUN_MAX_SPOT_PRICE=' + str(meta.get('max_spot_price', 0.75)))
+print('RUN_ID=' + meta.get('run_id', '$RUN_ID'))
+" > /tmp/run_meta.env
+    source /tmp/run_meta.env 2>/dev/null || true
+    RUN_CONFIG_FILE="configs/active_run.yaml"
+    echo "  Run version: $RUN_VERSION"
+else
+    echo "No active run found. Idling (fail-closed)."
+    # Publish idle beacon
+    python3 -c "
+import json
+from datetime import datetime, timezone
+obj = {'status':'idle','reason':'no_active_run','timestamp':datetime.now(timezone.utc).isoformat()}
+print(json.dumps(obj))
+" > /tmp/bootstrap_beacon.json
+    aws s3 cp /tmp/bootstrap_beacon.json "s3://$FALLBACK_BUCKET/bootstrap_beacon.json" \
+        --region "$REGION" --content-type "application/json" --cache-control "no-cache" 2>/dev/null || true
+    sleep infinity
+    exit 0
+fi
+
+# Re-export version-specific paths now that RUN_VERSION is known
+if [ -n "$RUN_VERSION" ]; then
+    sudo -u ubuntu sed -i "s|checkpoints/v4|checkpoints/$RUN_VERSION|g; s|eval_metrics/v4|eval_metrics/$RUN_VERSION|g" /home/ubuntu/.bashrc
+    sudo mkdir -p "$DATA_DIR/checkpoints/$RUN_VERSION"
+    sudo chown ubuntu:ubuntu "$DATA_DIR/checkpoints/$RUN_VERSION"
+fi
+
 # ── Step 4: Restore prior artifacts from S3 ──
 step_start 4
 echo "Restoring prior artifacts from S3..."
 # Restore v2 final checkpoint (needed for v2 benchmarks)
 aws s3 cp "s3://$S3_BUCKET/checkpoints/v2/step_50000.pt" "$DATA_DIR/checkpoints/v2/step_50000.pt" --region "$REGION" 2>/dev/null || true
-# Restore v3 checkpoints (for resume)
-aws s3 sync "s3://$S3_BUCKET/checkpoints/v3/" "$DATA_DIR/checkpoints/v3/" --region "$REGION" || true
+# Restore current version checkpoints (for resume)
+aws s3 sync "s3://$S3_BUCKET/checkpoints/$RUN_VERSION/" "$DATA_DIR/checkpoints/$RUN_VERSION/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/logs/" "$DATA_DIR/logs/" --region "$REGION" || true
-aws s3 sync "s3://$S3_BUCKET/eval_metrics/v3/" "$DATA_DIR/eval_metrics/" --region "$REGION" || true
+aws s3 sync "s3://$S3_BUCKET/eval_metrics/$RUN_VERSION/" "$DATA_DIR/eval_metrics/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/benchmarks/" "$DATA_DIR/benchmarks/" --region "$REGION" || true
 aws s3 sync "s3://$S3_BUCKET/wandb/" "$PROJECT/wandb/" --region "$REGION" || true
-echo "Restored checkpoints (v3):"
-ls -lh "$DATA_DIR/checkpoints/v3/"*.pt 2>/dev/null || echo "  (none)"
+echo "Restored checkpoints ($RUN_VERSION):"
+ls -lh "$DATA_DIR/checkpoints/$RUN_VERSION/"*.pt 2>/dev/null || echo "  (none)"
 echo "v2 final checkpoint:"
 ls -lh "$DATA_DIR/checkpoints/v2/step_50000.pt" 2>/dev/null || echo "  (none)"
 step_done 4
@@ -297,7 +354,7 @@ step_start 8
 echo "Starting sync daemon..."
 sudo touch /var/log/artifact-sync.log
 sudo chown ubuntu:ubuntu /var/log/artifact-sync.log
-sudo -u ubuntu bash -c "cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' EVAL_S3_PREFIX='eval_metrics/v3' CHECKPOINT_S3_PREFIX='checkpoints/v3' nohup bash sync-checkpoints.sh >> /var/log/artifact-sync.log 2>&1 &"
+sudo -u ubuntu bash -c "cd $PROJECT && S3_BUCKET='$S3_BUCKET' DATA_DIR='$DATA_DIR' AWS_DEFAULT_REGION='$REGION' EVAL_S3_PREFIX=\"eval_metrics/$RUN_VERSION\" CHECKPOINT_S3_PREFIX=\"checkpoints/$RUN_VERSION\" nohup bash sync-checkpoints.sh >> /var/log/artifact-sync.log 2>&1 &"
 sleep 1
 pgrep -f sync-checkpoints.sh > /dev/null && echo "  sync daemon: RUNNING" || echo "  WARNING: sync daemon failed to start"
 step_done 8
@@ -371,7 +428,7 @@ step_done 11
 # ── Step 12: Start web dashboard ──
 step_start 12
 echo "Starting web dashboard..."
-sudo -u ubuntu bash -c "cd $PROJECT && TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' TELEGRAM_WEBHOOK_SECRET='$TELEGRAM_WEBHOOK_SECRET' FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_BUDGET=75 MAX_SPOT_PRICE=0.75 CHECKPOINT_DIR='$DATA_DIR/checkpoints/v4' CHECKPOINT_S3_PREFIX='checkpoints/v4' EVAL_S3_PREFIX='eval_metrics/v4' nohup python3 web_dashboard.py --port 5000 --spot-token '$SPOT_TOKEN' --telegram-webhook-secret '$TELEGRAM_WEBHOOK_SECRET' > /tmp/dashboard.log 2>&1 &"
+sudo -u ubuntu bash -c "cd $PROJECT && TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN' TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID' TELEGRAM_WEBHOOK_SECRET='$TELEGRAM_WEBHOOK_SECRET' FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a' MAX_BUDGET=75 MAX_SPOT_PRICE=0.75 CHECKPOINT_DIR=\"$DATA_DIR/checkpoints/$RUN_VERSION\" CHECKPOINT_S3_PREFIX=\"checkpoints/$RUN_VERSION\" EVAL_S3_PREFIX=\"eval_metrics/$RUN_VERSION\" nohup python3 web_dashboard.py --port 5000 --spot-token '$SPOT_TOKEN' --telegram-webhook-secret '$TELEGRAM_WEBHOOK_SECRET' > /tmp/dashboard.log 2>&1 &"
 sleep 3
 curl -sf http://127.0.0.1:5000/api/status > /dev/null && echo "  web dashboard: RUNNING" || echo "  WARNING: web dashboard failed to start"
 step_done 12
@@ -454,12 +511,14 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export FLEET_ID='fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a'
 export TELEGRAM_BOT_TOKEN='$TELEGRAM_BOT_TOKEN'
 export TELEGRAM_CHAT_ID='$TELEGRAM_CHAT_ID'
+export RUN_ID='${RUN_ID:-}'
+export RUN_VERSION='${RUN_VERSION:-v4}'
 TRAINENV
 chmod 600 /tmp/train_env.sh
 chown ubuntu:ubuntu /tmp/train_env.sh
 sudo -u ubuntu setsid tmux new-session -d -s training -c "$PROJECT"
 # Let the config (tiny.yaml) control checkpoint_dir and s3 prefix — no CLI overrides
-sudo -u ubuntu tmux send-keys -t training "source /tmp/train_env.sh && python3 -m src.training.joint_trainer --config configs/tiny.yaml" Enter
+sudo -u ubuntu tmux send-keys -t training "source /tmp/train_env.sh && python3 -m src.training.joint_trainer --config ${RUN_CONFIG_FILE:-configs/tiny.yaml}" Enter
 echo "  training: LAUNCHED in tmux (v3, resumes from checkpoint if available)"
 step_done 17
 
