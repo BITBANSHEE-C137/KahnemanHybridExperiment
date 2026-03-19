@@ -19,11 +19,11 @@ IMDS_TOKEN=$(curl -sf -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 30" \
   http://169.254.169.254/latest/api/token 2>/dev/null || echo "")
 if [ -n "$IMDS_TOKEN" ]; then
   INST=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
-    http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo "g6.xlarge")
+    http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo "g5.xlarge")
   AZ=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
     http://169.254.169.254/latest/meta-data/placement/availability-zone 2>/dev/null || echo "us-east-1b")
 else
-  INST="g6.xlarge"
+  INST="g5.xlarge"
   AZ="us-east-1b"
 fi
 

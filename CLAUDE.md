@@ -122,7 +122,7 @@ KahnemanHybridExperiment/
 ### Infrastructure
 
 - **S3:** `s3://ml-lab-004507070771/dual-system-research-data/`
-- **Instance:** g5.2xlarge / g6.xlarge spot fleet (A10G / L4 GPU)
+- **Instance:** g5.xlarge / g5.2xlarge spot fleet (A10G GPU)
 - **Fleet:** `fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a`
 - **AMI:** `ami-03afc8bc139b6249f` (`ml-lab-gpu-v4-20260318`, Python 3.10, PyTorch 2.10, transformers 5.2.0, CUDA 12.8) — tagged `do-not-delete`
 - **Launch template:** `lt-06e111b12bd85396f` v24

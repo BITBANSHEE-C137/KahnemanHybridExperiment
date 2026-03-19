@@ -19,7 +19,7 @@
 
 | Component | Details |
 |-----------|---------|
-| **Compute** | EC2 Fleet (g5.2xlarge / g6.xlarge)  -  NVIDIA A10G or L4 GPUs, `maintain` type |
+| **Compute** | EC2 Fleet (g5.xlarge / g5.2xlarge)  -  NVIDIA A10G GPU, `maintain` type |
 | **Storage** | Instance NVMe for fast I/O, S3 for persistence (`s3://ml-lab-004507070771/dual-system-research-data/`) |
 | **Secrets** | AWS Secrets Manager  -  7 secrets in `ml-lab/*` prefix (WANDB, HF, Telegram, Claude API, GitHub, dashboard spot token) |
 | **Tracking** | [Weights & Biases](https://wandb.ai) for real-time experiment logging |
@@ -54,7 +54,7 @@ graph TB
             OG2["api-with-lambda-fallback"]
         end
 
-        subgraph EC2["EC2 Spot Fleet (g5/g6)"]
+        subgraph EC2["EC2 Spot Fleet (g5)"]
             subgraph Instance["GPU Instance"]
                 nginx["nginx :80"]
                 Flask["Flask :5000<br/>web_dashboard.py"]
@@ -310,8 +310,8 @@ Spot pricing varies by instance type and availability zone. The `update-spot-pri
 
 | Instance | GPU | On-Demand | Spot (typical) | Savings |
 |----------|-----|-----------|----------------|---------|
+| g5.xlarge | A10G (24GB) | $1.006/hr | ~$0.36/hr | ~64% |
 | g5.2xlarge | A10G (24GB) | $1.212/hr | ~$0.43/hr | ~65% |
-| g6.xlarge | L4 (24GB) | $0.805/hr | ~$0.30/hr | ~63% |
 
 ### Projected Training Cost
 
@@ -357,7 +357,7 @@ A Telegram notification is sent before fleet shutdown, including the current rat
 | Allocation strategy | `capacity-optimized` | Picks AZ with most spare capacity |
 | Capacity rebalance | `launch-before-terminate` (120s delay) | Overlaps old/new instances during rebalance |
 | Max price | Not set (defaults to on-demand ceiling) | Application-level ceiling preferred |
-| Instance pool | 3 types × 3 AZs = 9 pools | `g5.xlarge`, `g5.2xlarge`, `g6.xlarge` across `us-east-1a/b/f` |
+| Instance pool | 2 types × 3 AZs = 6 pools | `g5.xlarge`, `g5.2xlarge` across `us-east-1a/b/f` |
 
 **Note:** The fleet does not set `MaxPrice` at the EC2 level. Cost control is handled at the application layer via the spot price ceiling, which is more flexible (can be changed without recreating the fleet) and provides a single control point with dashboard visibility.
 
