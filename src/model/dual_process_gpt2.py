@@ -61,10 +61,12 @@ class DualProcessGPT2(nn.Module):
 
         # Load GPT-2: pretrained weights or random init
         if pretrained:
-            self.transformer = GPT2LMHeadModel.from_pretrained(model_cfg["name"])
-            # Suppress "loss_type=None is unrecognized" warning in transformers 5.x
-            if not getattr(self.transformer.config, "loss_type", None):
-                self.transformer.config.loss_type = "ForCausalLMLoss"
+            # Pre-set loss_type to suppress transformers 5.x warning during loading
+            override = GPT2Config.from_pretrained(model_cfg["name"])
+            override.loss_type = "ForCausalLMLoss"
+            self.transformer = GPT2LMHeadModel.from_pretrained(
+                model_cfg["name"], config=override
+            )
         else:
             gpt2_config = GPT2Config(
                 vocab_size=self.vocab_size,
@@ -75,6 +77,7 @@ class DualProcessGPT2(nn.Module):
                 resid_pdrop=model_cfg.get("dropout", 0.1),
                 embd_pdrop=model_cfg.get("dropout", 0.1),
                 attn_pdrop=model_cfg.get("dropout", 0.1),
+                loss_type="ForCausalLMLoss",
             )
             self.transformer = GPT2LMHeadModel(gpt2_config)
 
