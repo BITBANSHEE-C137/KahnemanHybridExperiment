@@ -421,7 +421,11 @@ def _edit_telegram_message(chat_id: str, message_id: int, text: str,
 
 
 def _call_control_plane(method: str, path: str, body: dict | None = None, timeout: int = 8) -> dict | None:
-    """Call control plane API via Cloudflare tunnel. Returns JSON or None."""
+    """Call control plane API via Cloudflare tunnel. Returns JSON or None.
+
+    On HTTP errors, returns {"_error": True, "status": <code>, "detail": <msg>}
+    instead of None so callers can surface meaningful feedback.
+    """
     url = f"{CONTROL_PLANE_URL}{path}"
     headers = {"X-Telegram-Secret": TG_ELEV_SECRET, "Content-Type": "application/json", "User-Agent": "BitLabLambda/1.0"}
     if CF_SERVICE_ID:
@@ -432,11 +436,23 @@ def _call_control_plane(method: str, path: str, body: dict | None = None, timeou
     try:
         resp = urllib.request.urlopen(req, timeout=timeout)
         return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        error_body = ""
+        try:
+            error_body = e.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            pass
+        logger.error("Control plane HTTP %d: %s %s -> %s", e.code, method, path, error_body)
+        # Parse JSON error detail if available
+        detail = error_body
+        try:
+            detail = json.loads(error_body).get("detail", error_body)
+        except Exception:
+            pass
+        return {"_error": True, "status": e.code, "detail": detail}
     except Exception as e:
         logger.error("Control plane call failed: %s %s -> %s", method, path, e)
-        if hasattr(e, 'read'):
-            logger.error("Response body: %s", e.read()[:500])
-        return None
+        return {"_error": True, "status": 0, "detail": str(e)}
 
 
 def _forward_to_cp(messages: list[dict]) -> None:
@@ -958,50 +974,75 @@ def _handle_callback_query(callback: dict) -> dict:
 
     if cb_data == "skip_approve":
         result = _call_control_plane("POST", "/api/byte-review/approve")
-        if result and result.get("success"):
+        if result and not result.get("_error") and result.get("success"):
             _answer_callback_query(cb_id, "Skip approved")
             _edit_telegram_message(chat_id, message_id,
                                    original_text + "\n\n*Approved*")
+        elif result and result.get("_error"):
+            _answer_callback_query(cb_id, f"Error: {result.get('detail', '?')[:80]}")
         else:
             _answer_callback_query(cb_id, "Failed")
 
     elif cb_data == "skip_deny":
         result = _call_control_plane("POST", "/api/byte-review/deny")
-        if result and result.get("success"):
+        if result and not result.get("_error") and result.get("success"):
             _answer_callback_query(cb_id, "Skip denied")
             _edit_telegram_message(chat_id, message_id,
                                    original_text + "\n\n*Denied* — full review required")
+        elif result and result.get("_error"):
+            _answer_callback_query(cb_id, f"Error: {result.get('detail', '?')[:80]}")
         else:
             _answer_callback_query(cb_id, "Failed")
 
     elif cb_data.startswith("elev_approve_"):
         id_prefix = cb_data[len("elev_approve_"):]
         result = _call_control_plane("POST", f"/api/tg-elev/approve/{id_prefix}")
-        if result:
+        if result and not result.get("_error"):
             _answer_callback_query(cb_id, "Elevation approved")
             _edit_telegram_message(chat_id, message_id,
                                    original_text + f"\n\n*Approved* `{id_prefix}`")
+        elif result and result.get("_error"):
+            detail = result.get("detail", "Unknown error")
+            # Already approved or no longer pending — show friendly message
+            if result.get("status") == 404:
+                _answer_callback_query(cb_id, "Already handled or expired")
+                _edit_telegram_message(chat_id, message_id,
+                                       original_text + f"\n\n_Already handled or expired_")
+            elif result.get("status") == 400 and "ACTIVE" in str(detail):
+                _answer_callback_query(cb_id, "Already approved")
+                _edit_telegram_message(chat_id, message_id,
+                                       original_text + f"\n\n*Already approved*")
+            else:
+                _answer_callback_query(cb_id, f"Error: {str(detail)[:80]}")
         else:
-            _answer_callback_query(cb_id, "Failed")
+            _answer_callback_query(cb_id, "Failed — no response from control plane")
 
     elif cb_data.startswith("elev_deny_"):
         id_prefix = cb_data[len("elev_deny_"):]
         result = _call_control_plane("POST", f"/api/tg-elev/deny/{id_prefix}")
-        if result:
+        if result and not result.get("_error"):
             _answer_callback_query(cb_id, "Elevation denied")
             _edit_telegram_message(chat_id, message_id,
                                    original_text + f"\n\n*Denied* `{id_prefix}`")
+        elif result and result.get("_error"):
+            detail = result.get("detail", "Unknown error")
+            if result.get("status") == 404:
+                _answer_callback_query(cb_id, "Already handled or expired")
+            else:
+                _answer_callback_query(cb_id, f"Error: {str(detail)[:80]}")
         else:
-            _answer_callback_query(cb_id, "Failed")
+            _answer_callback_query(cb_id, "Failed — no response from control plane")
 
     elif cb_data == "elev_revoke":
         result = _call_control_plane("POST", "/api/tg-elev/revoke")
-        if result:
+        if result and not result.get("_error"):
             _answer_callback_query(cb_id, "Elevation revoked")
             _edit_telegram_message(chat_id, message_id,
                                    original_text + "\n\n*Revoked*")
+        elif result and result.get("_error"):
+            _answer_callback_query(cb_id, f"Error: {result.get('detail', '?')[:80]}")
         else:
-            _answer_callback_query(cb_id, "Failed")
+            _answer_callback_query(cb_id, "Failed — no response from control plane")
 
     else:
         _answer_callback_query(cb_id, "Unknown action")
