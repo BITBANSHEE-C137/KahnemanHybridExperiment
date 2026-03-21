@@ -463,6 +463,6 @@ The webhook secret is generated deterministically from the bot token (`sha256sum
 | File | Role |
 |------|------|
 | `web_dashboard.py` | EC2 webhook route, command handlers (`/status`, `/sitrep`, `/help`), rate limiter, `_send_telegram_reply()` |
-| `infra/lambda/dashboard_api.py` | Lambda webhook handler, all 5 commands (`/status`, `/sitrep`, `/help`, `/start`, `/stop`), fleet management via EC2 API |
+| `infra/lambda/dashboard_api.py` | **Moved to [bitbanshee-lab-assistant](https://github.com/BITBANSHEE-C137/bitbanshee-lab-assistant) repo** at `infra/lambda/dashboard_api.py`. Lambda webhook handler, all 5 commands (`/status`, `/sitrep`, `/help`, `/start`, `/stop`), fleet management via EC2 API |
 | `auto_sitrep.py` | `--force-telegram` flag for on-demand sitrep generation with file lock |
 | `bootstrap.sh` | Webhook secret generation (Step 1), dashboard env var plumbing (Step 12), webhook registration (Step 16) |
