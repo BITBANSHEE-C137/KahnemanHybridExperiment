@@ -25,6 +25,11 @@ HISTORY_FILE = "/tmp/auto-sitrep-eval-history.json"
 TELEGRAM_STEP_INTERVAL = 10_000  # only send Telegram every N training steps
 SITREP_PATH = os.path.join(PROJECT, "sitrep.md")
 
+try:
+    from auto_sitrep_pulse import write_sitrep_event
+except ImportError:
+    write_sitrep_event = None
+
 ET = ZoneInfo("America/New_York")  # handles EST/EDT automatically
 
 
@@ -801,24 +806,36 @@ def main(force_telegram: bool = False):
         f.write(md)
     print(f"Wrote {SITREP_PATH}")
 
-    # 9. Send Telegram notification BEFORE git (so push failures don't block it)
+    # 9. Write sitrep event to S3 for Pulse ingestion (replaces direct Telegram)
     last_tg_step = history.get("last_telegram_step", 0)
-    should_send_telegram = force_telegram or (current_step - last_tg_step >= TELEGRAM_STEP_INTERVAL)
-    if should_send_telegram:
+    should_send = force_telegram or (current_step - last_tg_step >= TELEGRAM_STEP_INTERVAL)
+    if should_send:
         try:
             summary = generate_telegram_summary(status, trajectory_rows, prev_metrics, prev_step, ledger)
-            img_bytes = generate_metrics_image(status, latest_eval, ledger)
-            if img_bytes:
-                send_telegram_photo(img_bytes, caption=summary)
+            run_id = os.environ.get("RUN_ID", "")
+            metrics = {
+                "ar_loss": latest_eval.get("ar_ppl", 0),
+                "diff_loss": latest_eval.get("diff_loss", 0),
+                "s1_accuracy": latest_eval.get("s1_tok_acc", 0),
+                "auroc": latest_eval.get("conf_auroc", 0),
+            }
+            if write_sitrep_event and run_id:
+                ok = write_sitrep_event(run_id, current_step, metrics, md, summary)
+                if ok:
+                    print(f"[auto_sitrep] Sitrep event sent to Pulse via S3")
+                else:
+                    # Fallback: send Telegram directly if S3 fails
+                    print(f"[auto_sitrep] S3 event write failed, sending Telegram directly", file=sys.stderr)
+                    send_telegram(summary)
             else:
+                # No Pulse integration or no RUN_ID — send directly
                 send_telegram(summary)
-            # Don't update last_telegram_step on forced sends so scheduled sends stay on track
             if not force_telegram:
                 history["last_telegram_step"] = current_step
         except Exception as e:
-            print(f"[auto_sitrep] Telegram notification failed: {e}", file=sys.stderr)
+            print(f"[auto_sitrep] Sitrep event failed: {e}", file=sys.stderr)
     else:
-        print(f"[auto_sitrep] Telegram skipped (last at {last_tg_step}, next at {last_tg_step + TELEGRAM_STEP_INTERVAL})")
+        print(f"[auto_sitrep] Sitrep skipped (last at {last_tg_step}, next at {last_tg_step + TELEGRAM_STEP_INTERVAL})")
 
     # 10. Git commit and push (non-fatal — sitrep already sent)
     git_commit_push()
