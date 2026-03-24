@@ -488,19 +488,10 @@ step_done 15
 
 # ── Step 16: Register Telegram webhook ──
 step_start 16
-echo "Registering Telegram webhook..."
-if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_WEBHOOK_SECRET" ]; then
-    WEBHOOK_URL="https://train.bitbanshee.com/api/telegram/webhook"
-    curl -sf "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
-        -d "url=${WEBHOOK_URL}" \
-        -d "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
-        -d "drop_pending_updates=true" \
-        -d "allowed_updates=[\"message\",\"callback_query\"]" > /dev/null 2>&1 \
-        && echo "  Telegram webhook: REGISTERED ($WEBHOOK_URL)" \
-        || echo "  WARNING: Telegram webhook registration failed"
-else
-    echo "  Telegram webhook: SKIPPED (no bot token)"
-fi
+# Webhook is now owned by lab.bitbanshee.com (control plane).
+# GPU instances should NOT register the webhook - it causes ownership conflicts.
+# Outgoing notifications (auto_sitrep, cost alerts, bootstrap) use the Bot API directly.
+echo "  Telegram webhook: SKIPPED (owned by lab.bitbanshee.com)"
 step_done 16
 
 # ── Run v2 benchmarks if v2 checkpoint exists and no v2 benchmark results yet ──
