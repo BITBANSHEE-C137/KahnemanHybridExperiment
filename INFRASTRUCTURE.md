@@ -259,8 +259,9 @@ python dashboard.py --job test   # Launch pytest
 ### AMI Snapshots
 
 The training environment is baked into an AMI to avoid lengthy setup on each spot instance launch:
-- AMI: `ami-03afc8bc139b6249f` (`ml-lab-gpu-v4-20260318`) — **tagged `do-not-delete=true`**
-- Launch template: `lt-06e111b12bd85396f`, v24
+- AMI: `ami-0261f8aa8f363f00d` (`bitbanshee-lab-2026-03-25-v4-train-step54600`) — **tagged `do-not-delete=true`** — v4 step 54600, budget fix
+- AMI (prev): `ami-03afc8bc139b6249f` (`ml-lab-gpu-v4-20260318`)
+- Launch template: `lt-06e111b12bd85396f`, v25 (default)
 - Pre-installed: Python 3.10, PyTorch 2.10, transformers 5.2.0, CUDA 12.8, full ML stack
 - Fleet ID: `fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a`
 - Bootstrap handles cold start on stock DLAMIs too (clone repo + pip install if not baked)
