@@ -579,24 +579,11 @@ def build_status():
         elif spot_rate:
             spot_cost = round(spot_rate * uptime_s / 3600, 4)
 
-    # Projected totals: total_run_cost + (remaining_steps / sps * rate)
     remaining_steps = max(0, max_steps - current_step) if current_step else max_steps
-    od_projected = None
-    spot_projected = None
-    if sps and sps > 0 and remaining_steps > 0:
-        remaining_hours = remaining_steps / sps / 3600
-        if od_rate:
-            od_remaining_cost = od_rate * remaining_hours
-            od_projected = round((od_cost or 0) + od_remaining_cost, 2)
-        if spot_rate:
-            spot_remaining_cost = spot_rate * remaining_hours
-            spot_projected = round((spot_cost or 0) + spot_remaining_cost, 2)
 
     inst["ondemand_cost"] = od_cost
-    inst["ondemand_projected"] = od_projected
     inst["spot_rate"] = spot_rate
     inst["spot_cost"] = spot_cost
-    inst["spot_projected"] = spot_projected
     inst["spot_updated"] = spot_data.get("updated") if spot_data else None
     if od_cost and spot_cost:
         inst["savings"] = round(od_cost - spot_cost, 2)
@@ -649,6 +636,18 @@ def build_status():
     else:
         inst["total_run_cost"] = spot_cost
         inst["total_sessions"] = 1 if spot_cost else 0
+
+    # Projected totals: total_run_cost + (remaining_steps / sps * rate)
+    od_projected = None
+    spot_projected = None
+    if sps and sps > 0 and remaining_steps > 0:
+        remaining_hours = remaining_steps / sps / 3600
+        if od_rate:
+            od_projected = round((inst.get("total_run_cost") or od_cost or 0) + (od_rate * remaining_hours), 2)
+        if spot_rate:
+            spot_projected = round((inst.get("total_run_cost") or spot_cost or 0) + (spot_rate * remaining_hours), 2)
+    inst["ondemand_projected"] = od_projected
+    inst["spot_projected"] = spot_projected
 
     # Training time — use total across all instances, not just current
     elapsed_s = latest["elapsed_s"] if latest else None
