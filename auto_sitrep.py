@@ -24,8 +24,11 @@ COST_LEDGER = "/opt/dlami/nvme/ml-lab/cost/cost_ledger.json"
 HISTORY_FILE = "/tmp/auto-sitrep-eval-history.json"
 TELEGRAM_STEP_INTERVAL = 10_000  # only send Telegram every N training steps
 SITREP_PATH = os.path.join(PROJECT, "sitrep.md")
-S3_BUCKET = "ml-lab-004507070771"
-S3_SITREP_PREFIX = "dual-system-research-data/sitrep-events/"
+
+try:
+    from auto_sitrep_pulse import write_sitrep_event
+except ImportError:
+    write_sitrep_event = None
 
 ET = ZoneInfo("America/New_York")  # handles EST/EDT automatically
 
@@ -54,67 +57,6 @@ def send_telegram(message, parse_mode="Markdown"):
         print(f"[auto_sitrep] Telegram sent ({resp.status})", file=sys.stderr)
     except Exception as e:
         print(f"[auto_sitrep] Telegram send failed: {e}", file=sys.stderr)
-
-
-def write_sitrep_event_s3(status: dict, summary: str, sitrep_md: str) -> bool:
-    """Write an immutable sitrep event to S3 for Pulse ingestion.
-
-    Writes to: s3://{S3_BUCKET}/{S3_SITREP_PREFIX}sitrep-{step}.json
-    The control plane TrainingWatcher polls this prefix and injects
-    training.sitrep Pulse events, which handle Telegram delivery.
-    """
-    step = status.get("current_step", 0)
-    if step == 0:
-        return False
-
-    latest_eval = status.get("latest_eval") or {}
-    inst = status.get("instance") or {}
-    gpu = status.get("gpu") or {}
-    config_summary = status.get("config_summary") or {}
-    version = (config_summary.get("checkpoint_dir") or "").split("/")[-1] or "unknown"
-
-    event = {
-        "step": step,
-        "version": version,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "max_steps": status.get("max_steps", 0),
-        "progress_pct": status.get("progress_pct", 0),
-        "metrics": {
-            "ar_ppl": latest_eval.get("ar_ppl"),
-            "diff_loss": latest_eval.get("diff_loss"),
-            "s1_tok_acc": latest_eval.get("s1_tok_acc"),
-            "conf_auroc": latest_eval.get("conf_auroc"),
-            "conf_ece": latest_eval.get("conf_ece"),
-        },
-        "gpu": {
-            "util_pct": gpu.get("gpu_util"),
-            "vram_used_mb": gpu.get("vram_used_mb"),
-            "temp_c": gpu.get("temp_c"),
-        },
-        "cost": {
-            "spot_rate": inst.get("spot_rate"),
-            "session_cost": inst.get("spot_cost"),
-            "total_run_cost": inst.get("total_run_cost"),
-        },
-        "summary": summary,
-        "sitrep_md": sitrep_md,
-    }
-
-    key = f"{S3_SITREP_PREFIX}sitrep-{step}.json"
-    try:
-        import boto3
-        s3 = boto3.client("s3", region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
-        s3.put_object(
-            Bucket=S3_BUCKET,
-            Key=key,
-            Body=json.dumps(event, indent=2).encode(),
-            ContentType="application/json",
-        )
-        print(f"[auto_sitrep] Wrote sitrep event to s3://{S3_BUCKET}/{key}", file=sys.stderr)
-        return True
-    except Exception as e:
-        print(f"[auto_sitrep] S3 sitrep event write failed: {e}", file=sys.stderr)
-        return False
 
 
 def fetch_status():
@@ -865,22 +807,35 @@ def main(force_telegram: bool = False):
     print(f"Wrote {SITREP_PATH}")
 
     # 9. Write sitrep event to S3 for Pulse ingestion (replaces direct Telegram)
-    # Pulse polls S3 for new sitrep events, triages them, and sends Telegram
     last_tg_step = history.get("last_telegram_step", 0)
     should_send = force_telegram or (current_step - last_tg_step >= TELEGRAM_STEP_INTERVAL)
     if should_send:
         try:
             summary = generate_telegram_summary(status, trajectory_rows, prev_metrics, prev_step, ledger)
-            if write_sitrep_event_s3(status, summary, md):
-                if not force_telegram:
-                    history["last_telegram_step"] = current_step
+            run_id = os.environ.get("RUN_ID", "")
+            metrics = {
+                "ar_loss": latest_eval.get("ar_ppl", 0),
+                "diff_loss": latest_eval.get("diff_loss", 0),
+                "s1_accuracy": latest_eval.get("s1_tok_acc", 0),
+                "auroc": latest_eval.get("conf_auroc", 0),
+            }
+            if write_sitrep_event and run_id:
+                ok = write_sitrep_event(run_id, current_step, metrics, md, summary)
+                if ok:
+                    print(f"[auto_sitrep] Sitrep event sent to Pulse via S3")
+                else:
+                    # Fallback: send Telegram directly if S3 fails
+                    print(f"[auto_sitrep] S3 event write failed, sending Telegram directly", file=sys.stderr)
+                    send_telegram(summary)
             else:
-                # S3 write failed — log locally and retry on next cron run
-                print("[auto_sitrep] S3 event write failed, will retry next run", file=sys.stderr)
+                # No Pulse integration or no RUN_ID — send directly
+                send_telegram(summary)
+            if not force_telegram:
+                history["last_telegram_step"] = current_step
         except Exception as e:
-            print(f"[auto_sitrep] Sitrep event write failed: {e}", file=sys.stderr)
+            print(f"[auto_sitrep] Sitrep event failed: {e}", file=sys.stderr)
     else:
-        print(f"[auto_sitrep] Sitrep event skipped (last at {last_tg_step}, next at {last_tg_step + TELEGRAM_STEP_INTERVAL})")
+        print(f"[auto_sitrep] Sitrep skipped (last at {last_tg_step}, next at {last_tg_step + TELEGRAM_STEP_INTERVAL})")
 
     # 10. Git commit and push (non-fatal — sitrep already sent)
     git_commit_push()
