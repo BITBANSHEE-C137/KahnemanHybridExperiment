@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v4 Run Report — Dual-Process LM</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2a2d3a;
+  --text: #e0e0e0;
+  --dim: #888;
+  --accent: #60a5fa;
+  --green: #34d399;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --orange: #fb923c;
+  --purple: #a78bfa;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 32px 16px;
+  line-height: 1.6;
+}
+.container { max-width: 700px; margin: 0 auto; }
+h1 { font-size: 24px; margin-bottom: 8px; }
+.subtitle { color: var(--dim); font-size: 13px; margin-bottom: 32px; }
+.status-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(251,191,36,0.15);
+  color: var(--yellow);
+  border: 1px solid rgba(251,191,36,0.3);
+  margin-bottom: 16px;
+}
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--purple));
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+.metric {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+.metric-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.metric-value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+.metric-target { font-size: 10px; color: var(--dim); margin-top: 2px; }
+.met { color: var(--green); }
+.close { color: var(--yellow); }
+.miss { color: var(--red); }
+.config-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.config-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.config-table td:first-child { color: var(--dim); width: 45%; }
+.back-link {
+  display: inline-block;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+.back-link:hover { text-decoration: underline; }
+.note {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(96,165,250,0.06);
+  border: 1px solid rgba(96,165,250,0.15);
+  border-radius: 6px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="/reports/" class="back-link">&larr; All Reports</a>
+  <h1>v4 Run Report</h1>
+  <div class="subtitle">Dual-Process Language Model &mdash; Training In Progress</div>
+
+  <div class="status-card">
+    <div class="status-badge">Training Active</div>
+    <p style="font-size:13px;margin-bottom:12px">
+      v4 is currently training. This report will be generated with full charts, benchmarks,
+      and analysis once the run completes. Live metrics are available on the
+      <a href="/" style="color:var(--accent)">training dashboard</a>.
+    </p>
+
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dim)">
+      <span>Step 42,000</span><span>75,000</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:56%"></div></div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">AR Perplexity</div>
+        <div class="metric-value met">28.8</div>
+        <div class="metric-target">Target: &lt; 40 &check;</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">S1 Token Accuracy</div>
+        <div class="metric-value miss">30.2%</div>
+        <div class="metric-target">Target: &gt; 40%</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Diffusion Loss</div>
+        <div class="metric-value close">4.02</div>
+        <div class="metric-target">Target: &lt; 4.0</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Confidence AUROC</div>
+        <div class="metric-value met">0.861</div>
+        <div class="metric-target">Target: &gt; 0.75 &check;</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Cost</div>
+        <div class="metric-value">$69.88</div>
+        <div class="metric-target">Budget: $75</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Instances</div>
+        <div class="metric-value">77</div>
+        <div class="metric-target">g6.2xlarge spot</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-card">
+    <h2 style="font-size:14px;margin-bottom:12px">Configuration</h2>
+    <table class="config-table">
+      <tr><td>Model</td><td>GPT-2 Small (124M params)</td></tr>
+      <tr><td>Max Steps</td><td>75,000</td></tr>
+      <tr><td>Batch Size</td><td>4 &times; 12 grad accum (eff. 48)</td></tr>
+      <tr><td>Learning Rate</td><td>3e-4 &rarr; 1e-5 (cosine)</td></tr>
+      <tr><td>Loss Weights</td><td>AR=1.0, Diff=1.3, Conf=0.1</td></tr>
+      <tr><td>Masking</td><td>[0.2, 0.9]</td></tr>
+      <tr><td>Eval Every</td><td>500 steps</td></tr>
+      <tr><td>Checkpoint Every</td><td>1,000 steps</td></tr>
+    </table>
+  </div>
+
+  <div class="status-card">
+    <h2 style="font-size:14px;margin-bottom:12px">v4 Hypothesis</h2>
+    <p style="font-size:12px">
+      v3 hit all 5 targets at step 40K but regressed by 50K &mdash; late-stage LR was too high.
+      v4 extends to 75K steps with a flatter LR floor (1e-5 vs 3e-5) and larger effective batch
+      (48 vs 32) to stabilize the sweet spot. Min mask ratio raised 0.1&rarr;0.2 to eliminate
+      trivial batches.
+    </p>
+  </div>
+
+  <div class="note">
+    This is an interim page. The full report with training trajectory charts, benchmark results
+    (LAMBADA, WikiText-103), System 1 vs System 2 comparisons, and cost analysis will be
+    generated when v4 completes using <code>scripts/generate_run_report.py</code>.
+  </div>
+</div>
+</body>
+</html>
