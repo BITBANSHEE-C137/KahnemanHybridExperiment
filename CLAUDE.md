@@ -136,7 +136,7 @@ KahnemanHybridExperiment/
 - **Notifications:** Telegram bot for spot reclaims, budget alerts, price ceiling, sitreps
 - **IAM:** `ml-lab-ec2-bootstrap` role (S3, Secrets Manager, EC2, Route53, EBS)
 - **Bootstrap:** `s3://.../deploy/bootstrap.sh` → pulled on every boot (18 autonomous steps)
-- **Cost controls:** $50 budget cap + $0.75/hr spot ceiling, both with Telegram alerts
+- **Cost controls:** $100 budget cap + $0.75/hr spot ceiling, both with Telegram alerts
 
 ### Secrets & Credentials
 
@@ -158,7 +158,7 @@ Telegram bot sends alerts for: bootstrap complete, spot reclaim, budget exceeded
 ### Cost Controls
 
 Two automated circuit breakers:
-- **Budget cap** ($50): `cost-tracker.sh` checks every 5 min. Sends Telegram alert + sets fleet capacity to 0.
+- **Budget cap** ($100): `cost-tracker.sh` checks every 5 min. Sends Telegram alert + sets fleet capacity to 0.
 - **Spot price ceiling** ($0.75/hr): `update-spot-price.sh` checks every 5 min. Sends Telegram alert + sets fleet capacity to 0.
 
 Both thresholds configurable via env vars (`MAX_BUDGET`, `MAX_SPOT_PRICE`).

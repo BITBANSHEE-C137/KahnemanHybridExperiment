@@ -211,7 +211,7 @@ PYEOF
     # Budget circuit breaker
     local total_cost max_budget fleet_id
     total_cost=$(python3 -c "import json; print(json.load(open('$LEDGER_FILE'))['total_cost'])")
-    max_budget="${MAX_BUDGET:-75}"
+    max_budget="${MAX_BUDGET:-100}"
     fleet_id="${FLEET_ID:-fleet-2840fcd1-6c2d-44c0-ad17-7f3799ca6c9a}"
     if python3 -c "import sys; sys.exit(0 if float('$total_cost') >= float('$max_budget') else 1)" 2>/dev/null; then
         echo "[cost-tracker] BUDGET EXCEEDED: \$$total_cost >= \$$max_budget — shutting down fleet"

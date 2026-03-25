@@ -29,7 +29,7 @@
 | **Failover** | Origin groups: `ec2-with-s3-fallback` (default), `api-with-lambda-fallback` (/api/\*, /stream)  -  automatic failover on 500/502/503/504 |
 | **Dashboard** | [train.bitbanshee.com](https://train.bitbanshee.com)  -  live web UI with training progress, GPU stats, loss curves, and cost tracking |
 | **Notifications** | Telegram Bot  -  training alerts, spot reclaims, budget warnings, sitrep delivery |
-| **IAM** | `ml-lab-ec2-bootstrap` role  -  S3, Secrets Manager, EC2 (fleet, EBS, describe), Route53 |
+| **IAM** | `ml-lab-ec2-bootstrap` role  -  S3, Secrets Manager, EC2 (fleet including `ec2:ModifyFleet`, EBS, describe), Route53 |
 
 ### Architecture Diagram
 
@@ -333,7 +333,7 @@ Three automated circuit breakers protect against runaway spend. All thresholds a
 
 | Parameter | Default | Script | Frequency |
 |-----------|---------|--------|-----------|
-| `MAX_BUDGET` | $50 | `cost-tracker.sh` | Every 5 min (cron) |
+| `MAX_BUDGET` | $100 | `cost-tracker.sh` | Every 5 min (cron) |
 
 The cost tracker maintains a persistent ledger across spot instance sessions (`cost/cost_ledger.json` in S3). On each `update` cycle, it compares accumulated `total_cost` against `MAX_BUDGET`. If the budget is exceeded, the fleet is automatically shut down via `aws ec2 modify-fleet --target-capacity-specification TotalTargetCapacity=0`. Training resumes from the latest checkpoint when the fleet is manually restarted.
 
@@ -345,7 +345,7 @@ A Telegram notification is sent before fleet shutdown, including the total cost 
 |-----------|---------|--------|-----------|
 | `MAX_SPOT_PRICE` | $0.75/hr | `update-spot-price.sh` | Every 5 min (cron) |
 
-The spot price updater queries `aws ec2 describe-spot-price-history` for the current instance type and AZ. If the current market price meets or exceeds `MAX_SPOT_PRICE`, the fleet is shut down before the next billing interval at the elevated rate. At the default ceiling of $0.75/hr (67% above typical g5.2xlarge spot of ~$0.45/hr, 38% below on-demand at $1.21/hr), the worst-case full-run cost is ~$41  -  still below the $50 budget cap.
+The spot price updater queries `aws ec2 describe-spot-price-history` for the current instance type and AZ. If the current market price meets or exceeds `MAX_SPOT_PRICE`, the fleet is shut down before the next billing interval at the elevated rate. At the default ceiling of $0.75/hr (67% above typical g5.2xlarge spot of ~$0.45/hr, 38% below on-demand at $1.21/hr), the worst-case full-run cost is ~$41  -  well below the $100 budget cap.
 
 A Telegram notification is sent before fleet shutdown, including the current rate and ceiling.
 
@@ -381,7 +381,7 @@ Telegram bot integration provides real-time alerts for critical events. The bot 
 | Training complete | `web_dashboard.py` | Step reaches `max_steps` |
 | Training complete (post-training) | `joint_trainer.py` | Post-training sequence sends benchmark summary + report link |
 | Trainer crash | `web_dashboard.py` | Trainer PID gone while step < max_steps |
-| Budget exceeded | `cost-tracker.sh` | `total_cost >= MAX_BUDGET` ($50 default) |
+| Budget exceeded | `cost-tracker.sh` | `total_cost >= MAX_BUDGET` ($100 default) |
 | Spot price ceiling hit | `update-spot-price.sh` | `current_price >= MAX_SPOT_PRICE` ($0.75/hr default) |
 | Sitrep delivery | `auto_sitrep.py` | Every 30 min (includes formatted SITREP) |
 | Training milestone | `auto_sitrep.py` | Key step thresholds reached |
